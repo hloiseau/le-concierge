@@ -1,0 +1,53 @@
+# Template for TrueNAS SCALE Install via YAML. Replace example values.
+# Verify the chosen GHCR tag exists before deployment; pin a tested sha tag.
+services:
+  api:
+    image: ghcr.io/hloiseau/le-concierge:edge
+    environment:
+      APP_ENV: production
+      PUBLIC_ORIGIN: https://hub.example.com
+      DATABASE_PATH: /app/data/concierge.db
+      DISCORD_CLIENT_ID: ''
+      DISCORD_CLIENT_SECRET: ''
+      DISCORD_GUILD_ID: ''
+      DISCORD_PUBLIC_KEY: ''
+      BOT_API_SECRET: ''
+      PLEX_URL: ''
+      PLEX_SERVER_ID: ''
+      SEERR_URL: ''
+      SEERR_API_KEY: ''
+      SERVICE_LINKS_JSON: '{"plex":"https://app.plex.tv","seerr":"","downloadarr":"","torrent-watch":"","shelfmark":"","grimmory":""}'
+    volumes:
+      - /mnt/POOL/apps/concierge:/app/data
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /app/api, --healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  hub:
+    image: ghcr.io/hloiseau/le-hub:edge
+    environment:
+      NUXT_API_BASE: http://api:8080
+      NUXT_PUBLIC_DEMO: 'false'
+      NUXT_PUBLIC_DISCORD_URL: ''
+    # Replace the example IP with the NAS LAN address reachable by Caddy.
+    ports: ['192.0.2.10:3000:3000']
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+# Add the bot service below once Discord is configured (see docs/deployment.md).
+# It uses the same Concierge image, entrypoint /app/bot, its own env values,
+# BOT_API_URL=http://api:8080 and a LAN port 8081 routed by Caddy.

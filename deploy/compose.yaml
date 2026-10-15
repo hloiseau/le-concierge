@@ -1,0 +1,66 @@
+# Place the two repositories side by side, then run from le-concierge:
+# docker compose --env-file .env -f deploy/compose.yaml up -d --build
+services:
+  api:
+    build: ..
+    image: le-concierge:local
+    env_file: ../.env
+    environment:
+      LISTEN_ADDR: ':8080'
+      DATABASE_PATH: /app/data/concierge.db
+    volumes:
+      - concierge-data:/app/data
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, /app/api, --healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  hub:
+    build: ../../le-hub
+    image: le-hub:local
+    environment:
+      NUXT_API_BASE: http://api:8080
+      NUXT_PUBLIC_DEMO: 'false'
+      NUXT_PUBLIC_DISCORD_URL: ${DISCORD_INVITE_URL:-}
+    ports:
+      - '${BIND_IP:-127.0.0.1}:3000:3000'
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  bot:
+    profiles: [discord]
+    image: le-concierge:local
+    build: ..
+    entrypoint: [/app/bot]
+    env_file: ../.env
+    environment:
+      BOT_API_URL: http://api:8080
+      BOT_LISTEN_ADDR: ':8081'
+    ports:
+      - '${BIND_IP:-127.0.0.1}:8081:8081'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, /app/bot, --healthcheck]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  concierge-data:
