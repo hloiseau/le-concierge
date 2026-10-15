@@ -2,12 +2,18 @@
 
 Bot Discord et API Go commune pour un écosystème multimédia auto-hébergé.
 
-**Statut : projet initialisé, développement à venir.** Le dépôt contient la documentation et le suivi de la roadmap. Il n’y a pas encore d’application exécutable, d’image publiée ni de déploiement prêt à installer.
+**Statut : première version exécutable en validation.** Les fondations et premiers parcours sont implémentés et testés localement. La configuration et la validation sur les services réels restent nécessaires ; aucune installation NAS n’a été effectuée.
 
 - [Roadmap et tickets](docs/roadmap.md)
 - [Architecture commune](docs/architecture.md)
 - [Contribuer](CONTRIBUTING.md)
 - [Projet complémentaire : le-hub](https://github.com/hloiseau/le-hub)
+
+## Démarrer
+
+Voir le [guide de déploiement](docs/deployment.md) pour Go, Discord, Plex, Seerr, Docker, TrueNAS et Caddy. `make test`, `make build`, puis `./bin/api` après chargement de `.env` permettent de tester le backend. Le bot est un second processus : `./bin/bot`.
+
+Le [contrat HTTP](api/openapi.json) décrit l’API du portail. La [politique de rappels avant retrait](docs/removal-reminders.md) est codée et testée, mais ses connecteurs et envois ne sont pas encore actifs.
 
 ## Périmètre
 

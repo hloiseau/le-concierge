@@ -2,7 +2,7 @@
 
 ## État du projet
 
-Les dépôts publics et le backlog sont initialisés. Les fonctionnalités ci-dessous constituent la cible de développement ; aucune application n’est encore livrée ou déployée. Les versions V0–V5 désignent des jalons fonctionnels, pas des releases disponibles.
+Le socle Go, le bot HTTP signé et le Hub Nuxt sont implémentés en première version et testés localement. Les intégrations réelles restent à valider sur l’installation cible. Les fonctionnalités ci-dessous incluent la cible à terme ; les versions V0–V5 désignent des jalons, pas des releases toutes disponibles.
 
 ## Répartition
 
@@ -26,13 +26,13 @@ flowchart TD
     API --> Ops["Métriques · diagnostics · conversions"]
 ```
 
-Le mode d’interaction Discord sera arrêté à l’implémentation. Ce schéma ne suppose pas que le trafic Gateway Discord passe par Caddy. Les routes HTTP, cookies et en-têtes du reverse proxy seront documentés avec le déploiement.
+Le bot utilise les interactions HTTP signées Discord : Caddy expose son endpoint /interactions. L’API commune revérifie la signature originale et le secret de service. Il n’y a pas de connexion Gateway dans cette version. Les routes HTTP et cookies sont décrits dans le guide de déploiement.
 
 ## Identité et droits
 
 Connexion Discord pour le portail, puis liaison vérifiée des comptes Plex et Seerr. Une présence dans Discord ne constitue pas une autorisation d’accès à toutes les bibliothèques. Les associations utilisent des identifiants stables et une preuve de contrôle, jamais un simple nom ou email.
 
-Le brief mentionne « Plex OAuth2 » ; le projet de référence Torrent Watch utilise un flux PIN. Le protocole effectif sera validé dans [Concierge #4](https://github.com/hloiseau/le-concierge/issues/4). Les tokens restent côté serveur ; contrôles d’accès, révocation, cookies et protection CSRF font partie de ce ticket.
+Le brief mentionne « Plex OAuth2 » ; le projet de référence Torrent Watch utilise un flux PIN. Le flux PIN est implémenté et le parcours réel reste à valider dans [Concierge #4](https://github.com/hloiseau/le-concierge/issues/4). Les tokens restent côté serveur ; contrôles d’accès, révocation, cookies et protection CSRF font partie de ce ticket.
 
 Le bot transmet une identité issue d’une interaction Discord authentifiée. Son identité de service ne doit pas permettre l’usurpation arbitraire d’un utilisateur. Les demandes personnelles et les contenus restreints sont filtrés côté API. Les diagnostics et les détails nominatifs des sessions Plex sont réservés aux administrateurs.
 
@@ -67,7 +67,7 @@ Le monitoring exposera une vue utilisateur agrégée et une vue administrateur p
 ## Ordre de livraison
 
 1. API, identités, persistance, intégrations Seerr/Plex et commandes du bot V1.
-2. Hub V0/V1 : accueil, liens, connexion et demandes personnelles.
+2. Hub V0/V1 : accueil, liens, connexion et demandes personnelles, puis rappels avant retrait via Maintainerr/Tautulli (nouvelle priorité).
 3. Livres : audit des API, catalogue, demandes/imports, collections et Kobo selon capacités.
 4. Monitoring : collecte, historique et graphiques système/Plex.
 5. Abonnements et notifications, communauté, Downloadarr et diagnostics administrateur.

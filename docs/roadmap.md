@@ -1,6 +1,6 @@
 # Roadmap — Le Concierge
 
-24 issues ouvertes à l’initialisation. Le statut actuel est celui de chaque issue GitHub ; cette page organise le périmètre, sans échéances promises.
+26 issues de développement, dont 2 priorités ajoutées pour les retraits. Le statut actuel est celui de chaque issue GitHub ; cette page organise le périmètre, sans échéances promises.
 
 Les dépendances sont des liens vers les issues des deux dépôts. Les références Cxx/Hxx permettent de relier le découpage initial aux numéros GitHub.
 
@@ -48,3 +48,11 @@ Les dépendances sont des liens vers les issues des deux dépôts. Les référen
 | [#23 — Synchroniser les forums Discord et la roadmap publique](https://github.com/hloiseau/le-concierge/issues/23) | Communauté | P2 | [C04](https://github.com/hloiseau/le-concierge/issues/4), [C07](https://github.com/hloiseau/le-concierge/issues/7) |
 | [#24 — Intégrer le fork Downloadarr et ses conversions](https://github.com/hloiseau/le-concierge/issues/24) | Téléchargements | P1 | [C04](https://github.com/hloiseau/le-concierge/issues/4) |
 
+
+## Priorité ajoutée — après le socle, en phase 2
+
+- [#25 — Sources Maintainerr/Tautulli](https://github.com/hloiseau/le-concierge/issues/25) : versions, échéances et historique individuel.
+- [#26 — Rappels personnalisés avant retrait](https://github.com/hloiseau/le-concierge/issues/26) : moteur de décision local livré dans cette branche ; connecteurs, outbox et envois à réaliser.
+- [Hub #16](https://github.com/hloiseau/le-hub/issues/16) : vue personnelle et réglages.
+
+Le mécanisme d’outbox prévu en #20 passe en amont pour servir cette priorité ; les abonnements communautaires complets peuvent rester en phase 5.
