@@ -37,6 +37,10 @@ services:
       PLEX_SERVER_ID: ''
       SEERR_URL: ''
       SEERR_API_KEY: ''
+      # Facultatif : diagnostic en lecture seule, rappels encore inactifs.
+      MAINTAINERR_URL: ''
+      TAUTULLI_URL: ''
+      TAUTULLI_API_KEY: ''
       # Liens publics HTTPS des boutons ; aucun secret ici.
       SERVICE_LINKS_JSON: >-
         {"plex":"https://app.plex.tv","seerr":"","downloadarr":"","torrent-watch":"","shelfmark":"","grimmory":""}
