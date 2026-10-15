@@ -1,0 +1,24 @@
+# A AJOUTER au Caddyfile existant. Conserver son bloc global et les autres sites.
+# Remplacer 192.0.2.10 par l'IP LAN du NAS accessible depuis le conteneur Caddy.
+# DNS : hub.hugoloiseau.fr et concierge.hugoloiseau.fr vers votre acces Caddy.
+hub.hugoloiseau.fr {
+    encode zstd gzip
+    reverse_proxy 192.0.2.10:18080
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        X-Frame-Options DENY
+    }
+}
+
+concierge.hugoloiseau.fr {
+    @interactions path /interactions
+    handle @interactions {
+        reverse_proxy 192.0.2.10:18081
+    }
+    handle {
+        respond "Not Found" 404
+    }
+}
+# Pas de log d'acces brut sur le callback OAuth : son URL contient un code.
+# Le Hub relaie /api/v1 vers l'API privee. Ne pas publier /internal ni le port API.
