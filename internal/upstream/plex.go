@@ -35,13 +35,37 @@ type Media struct {
 	Subtitle string `json:"subtitle,omitempty"`
 }
 
+// Keep the PIN creator, Plex's browser auth app and subsequent API calls on
+// the same device identity. Plex forwards context[device] as X-Plex headers.
+var plexDevice = [...]struct{ field, header, value string }{
+	{"product", "X-Plex-Product", "Le Hub"},
+	{"version", "X-Plex-Version", "0.1.0"},
+	{"platform", "X-Plex-Platform", "Web"},
+	{"device", "X-Plex-Device", "Browser"},
+	{"deviceName", "X-Plex-Device-Name", "Le Hub"},
+}
+
 func plexHeaders(client, token string) map[string]string {
-	h := map[string]string{"X-Plex-Product": "Le Concierge", "X-Plex-Version": "0.1.0", "X-Plex-Client-Identifier": client}
+	h := map[string]string{"X-Plex-Client-Identifier": client}
+	for _, item := range plexDevice {
+		h[item.header] = item.value
+	}
 	if token != "" {
 		h["X-Plex-Token"] = token
 	}
 	return h
 }
+
+func PlexAuthURL(client, code string) string {
+	q := url.Values{"clientID": {client}, "code": {code}}
+	for _, item := range plexDevice {
+		q.Set("context[device]["+item.field+"]", item.value)
+	}
+	// These parameters live in a URI fragment, not a form body. Match the
+	// percent-encoded spaces used by Plex's documented auth URL format.
+	return "https://app.plex.tv/auth#?" + strings.ReplaceAll(q.Encode(), "+", "%20")
+}
+
 func (c *Client) PlexPin(ctx context.Context, client string) (Pin, error) {
 	var p Pin
 	e := c.JSON(ctx, "POST", "https://plex.tv/api/v2/pins?strong=true", plexHeaders(client, ""), "", &p)

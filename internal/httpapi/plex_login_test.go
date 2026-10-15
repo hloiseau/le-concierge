@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -69,6 +70,60 @@ func plexProvider(t *testing.T, s *Server, resources string, restricted bool) {
 }
 
 const authorizedResources = `[{"clientIdentifier":"server-a","provides":"server","accessToken":"resource-secret"}]`
+
+func TestPlexAuthorizationMatchesPINDevice(t *testing.T) {
+	s := fixture(t)
+	var pinHeaders http.Header
+	const code = "strong+pin/with=symbols&end"
+	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != "POST" || r.URL.Path != "/api/v2/pins" || r.URL.Query().Get("strong") != "true" {
+			t.Fatalf("unexpected PIN request: %s %s", r.Method, r.URL.Path)
+		}
+		pinHeaders = r.Header.Clone()
+		return response(200, `{"id":1,"code":"`+code+`","expiresIn":300}`), nil
+	})
+	w := call(s, "POST", "/api/v1/auth/plex/start", "", s.Config.PublicOrigin, "")
+	if w.Code != 200 {
+		t.Fatal(w.Body)
+	}
+	var result struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(result.URL)
+	if err != nil || u.Scheme != "https" || u.Host != "app.plex.tv" || u.Path != "/auth" || u.RawQuery != "" {
+		t.Fatalf("invalid authorization URL: %q", result.URL)
+	}
+	// Decode the fragment as URI components, not an HTML form. A literal +
+	// must never stand in for a space in the authorization link.
+	values := map[string]string{}
+	for _, pair := range strings.Split(strings.TrimPrefix(u.EscapedFragment(), "?"), "&") {
+		key, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			t.Fatalf("invalid fragment pair %q", pair)
+		}
+		key, _ = url.PathUnescape(key)
+		value, _ = url.PathUnescape(value)
+		values[key] = value
+	}
+	if values["code"] != code || values["clientID"] != pinHeaders.Get("X-Plex-Client-Identifier") {
+		t.Fatal("authorization does not identify the created PIN")
+	}
+	for field, header := range map[string]string{
+		"product": "X-Plex-Product", "version": "X-Plex-Version",
+		"platform": "X-Plex-Platform", "device": "X-Plex-Device",
+		"deviceName": "X-Plex-Device-Name",
+	} {
+		if got, want := values["context[device]["+field+"]"], pinHeaders.Get(header); got == "" || got != want {
+			t.Errorf("Plex %s differs between PIN and browser: %q != %q", field, got, want)
+		}
+	}
+	if pinHeaders.Get("X-Plex-Product") != "Le Hub" {
+		t.Error("unexpected app identity")
+	}
+}
 
 func TestAnonymousPlexLoginIsBoundConsumedAndPrivate(t *testing.T) {
 	s := fixture(t)
