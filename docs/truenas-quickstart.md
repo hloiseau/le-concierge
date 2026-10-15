@@ -102,6 +102,7 @@ Conserver aussi une copie hors du dataset de l'application et noter les tags pr�
 | `cannot assign requested address` | IP LAN fictive `192.0.2.10` encore présente |
 | Caddy 502 | Port du Hub, IP accessible depuis Caddy, santé des conteneurs |
 | Connexion Plex désactivée | Renseigner `PLEX_URL` + `PLEX_SERVER_ID` dans l’API |
+| Plex affiche « Impossible de répondre à la demande » | Mettre à jour l’image API/bot, fermer l’ancien onglet Plex, puis « Recommencer la connexion » dans le Hub. Le PIN et le lien doivent utiliser la même identité d’application. Si le refus persiste, relever uniquement le statut HTTP et le code/message d’erreur de `/api/v2/pins/info` ou `/api/v2/pins/link` dans l’onglet Réseau du navigateur ; ne jamais partager les en-têtes, cookies, tokens ni l’URL complète de connexion. Vérifier aussi si une nouvelle connexion Plex depuis Seerr fonctionne. |
 | Liaison Discord désactivée | Client ID + secret OAuth2 + guild ID dans l’API ; facultatif pour le portail |
 | Discord refuse le callback | URL exacte et même domaine que `PUBLIC_ORIGIN` |
 | Erreur 403 lors d'une action Hub | Ouvrir le domaine HTTPS configuré, pas une IP ou un alias |

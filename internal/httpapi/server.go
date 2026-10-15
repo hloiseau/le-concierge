@@ -438,8 +438,7 @@ func (s *Server) plexStart(w http.ResponseWriter, r *http.Request) {
 	s.pins[digest(value)] = pendingPin{Pin: p, ClientID: client, Expires: time.Now().Add(time.Duration(ttl) * time.Second)}
 	s.mu.Unlock()
 	s.cookie(w, s.plexCookieName(), value, ttl, false)
-	q := url.Values{"clientID": {client}, "code": {p.Code}, "context[device][product]": {"Le Hub"}}
-	jsonOut(w, 200, map[string]any{"url": "https://app.plex.tv/auth#?" + q.Encode(), "expiresIn": ttl})
+	jsonOut(w, 200, map[string]any{"url": upstream.PlexAuthURL(client, p.Code), "expiresIn": ttl})
 }
 func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 	if !s.origin(w, r) {
