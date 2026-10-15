@@ -32,10 +32,10 @@ func (id *tautulliID) UnmarshalJSON(raw []byte) error {
 }
 
 type Playback struct {
-	ID                                     int64
-	MediaID, ParentID, GrandparentID, Kind string
-	Percent                                float64
-	Completed                              bool
+	ID                                           int64
+	MediaID, ParentID, GrandparentID, Kind, GUID string
+	Percent                                      float64
+	Completed                                    bool
 }
 
 // History contains recorded observations only. An absent row never proves
@@ -155,6 +155,7 @@ func (c *Client) TautulliHistory(ctx context.Context, base, key, serverID, plexI
 				ParentID      tautulliID `json:"parent_rating_key"`
 				GrandparentID tautulliID `json:"grandparent_rating_key"`
 				Kind          string     `json:"media_type"`
+				GUID          string     `json:"guid"`
 				Percent       *float64   `json:"percent_complete"`
 				Watched       *float64   `json:"watched_status"`
 				Live          *int       `json:"live"`
@@ -187,7 +188,7 @@ func (c *Client) TautulliHistory(ctx context.Context, base, key, serverID, plexI
 			if err != nil || mediaID <= 0 || row.Percent == nil || *row.Percent < 0 || row.Watched == nil || (*row.Watched != 0 && *row.Watched != .25 && *row.Watched != .5 && *row.Watched != .75 && *row.Watched != 1) {
 				return History{}, ErrIncomplete
 			}
-			out.Items = append(out.Items, Playback{ID: rowID, MediaID: string(row.MediaID), ParentID: string(row.ParentID), GrandparentID: string(row.GrandparentID), Kind: row.Kind, Percent: *row.Percent, Completed: *row.Watched == 1})
+			out.Items = append(out.Items, Playback{ID: rowID, MediaID: string(row.MediaID), ParentID: string(row.ParentID), GrandparentID: string(row.GrandparentID), Kind: row.Kind, GUID: row.GUID, Percent: *row.Percent, Completed: *row.Watched == 1})
 		}
 		start += len(page.Data)
 		if start == total {

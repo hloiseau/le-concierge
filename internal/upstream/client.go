@@ -12,6 +12,7 @@ import (
 
 var ErrDenied = errors.New("upstream access denied")
 var ErrUnavailable = errors.New("upstream unavailable")
+var ErrNotFound = errors.New("upstream item not found")
 
 type Client struct{ HTTP *http.Client }
 
@@ -34,6 +35,9 @@ func (c *Client) JSON(ctx context.Context, method, target string, headers map[st
 	defer resp.Body.Close()
 	if resp.StatusCode == 401 || resp.StatusCode == 403 {
 		return ErrDenied
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return ErrNotFound
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return ErrUnavailable
