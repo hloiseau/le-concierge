@@ -23,6 +23,7 @@ type Config struct {
 	DiscordClientID, DiscordClientSecret, DiscordGuildID, DiscordPublicKey, DiscordBotToken string
 	BotAPIURL, BotAPISecret                                                                 string
 	PlexURL, PlexServerID, SeerrURL, SeerrAPIKey                                            string
+	MaintainerrURL, TautulliURL, TautulliAPIKey                                             string
 	AdminIDs                                                                                []string
 	Services                                                                                []Service
 }
@@ -59,10 +60,12 @@ func ValidURL(raw string, origin bool) bool {
 }
 func Load() (Config, error) {
 	c := Config{Env: fallback("APP_ENV", "production"), Listen: fallback("LISTEN_ADDR", ":8080"), BotListen: fallback("BOT_LISTEN_ADDR", ":8081"), PublicOrigin: strings.TrimRight(fallback("PUBLIC_ORIGIN", "http://localhost:3000"), "/"), DatabasePath: fallback("DATABASE_PATH", "data/concierge.db"), DiscordClientID: os.Getenv("DISCORD_CLIENT_ID"), DiscordGuildID: os.Getenv("DISCORD_GUILD_ID"), DiscordPublicKey: os.Getenv("DISCORD_PUBLIC_KEY"), BotAPIURL: strings.TrimRight(fallback("BOT_API_URL", "http://api:8080"), "/"), PlexURL: strings.TrimRight(os.Getenv("PLEX_URL"), "/"), PlexServerID: os.Getenv("PLEX_SERVER_ID"), SeerrURL: strings.TrimRight(os.Getenv("SEERR_URL"), "/")}
+	c.MaintainerrURL = strings.TrimRight(os.Getenv("MAINTAINERR_URL"), "/")
+	c.TautulliURL = strings.TrimRight(os.Getenv("TAUTULLI_URL"), "/")
 	for _, p := range []struct {
 		name string
 		dest *string
-	}{{"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}} {
+	}{{"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}} {
 		v, e := secret(p.name)
 		if e != nil {
 			return c, e
@@ -79,7 +82,7 @@ func Load() (Config, error) {
 	if origin.Scheme != "https" && (c.Env != "development" || (origin.Hostname() != "localhost" && origin.Hostname() != "127.0.0.1")) {
 		return c, errors.New("PUBLIC_ORIGIN requires HTTPS outside local development")
 	}
-	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL} {
+	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL, c.MaintainerrURL, c.TautulliURL} {
 		if v != "" && !ValidURL(v, false) {
 			return c, errors.New("invalid service URL")
 		}
@@ -89,6 +92,12 @@ func Load() (Config, error) {
 	}
 	if (c.SeerrURL == "") != (c.SeerrAPIKey == "") {
 		return c, errors.New("SEERR_URL and SEERR_API_KEY must be set together")
+	}
+	if (c.TautulliURL == "") != (c.TautulliAPIKey == "") {
+		return c, errors.New("TAUTULLI_URL and TAUTULLI_API_KEY must be set together")
+	}
+	if (c.MaintainerrURL != "" || c.TautulliURL != "") && c.PlexServerID == "" {
+		return c, errors.New("removal sources require PLEX_SERVER_ID")
 	}
 	if c.DiscordClientSecret != "" {
 		if !Snowflake(c.DiscordClientID) || !Snowflake(c.DiscordGuildID) || c.DiscordClientSecret == "" {

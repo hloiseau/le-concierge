@@ -1,9 +1,44 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestRemovalSourceConfiguration(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	t.Setenv("MAINTAINERR_URL", "http://maintainerr.test")
+	if _, err := Load(); err == nil {
+		t.Fatal("sources accepted without Plex server identity")
+	}
+	t.Setenv("PLEX_URL", "http://plex.test")
+	t.Setenv("PLEX_SERVER_ID", "server-a")
+	t.Setenv("TAUTULLI_URL", "http://tautulli.test")
+	if _, err := Load(); err == nil {
+		t.Fatal("Tautulli accepted without key")
+	}
+	keyFile := filepath.Join(t.TempDir(), "key")
+	if err := os.WriteFile(keyFile, []byte("test-secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TAUTULLI_API_KEY_FILE", keyFile)
+	c, err := Load()
+	if err != nil || c.TautulliAPIKey != "test-secret" || c.MaintainerrURL != "http://maintainerr.test" {
+		t.Fatalf("secret file configuration failed: %v", err)
+	}
+	t.Setenv("TAUTULLI_API_KEY", "test-secret")
+	if _, err := Load(); err == nil {
+		t.Fatal("ambiguous key configuration accepted")
+	}
+	t.Setenv("TAUTULLI_API_KEY", "")
+	t.Setenv("MAINTAINERR_URL", "http://user:secret@maintainerr.test")
+	if _, err := Load(); err == nil {
+		t.Fatal("credentials in service URL accepted")
+	}
+}
 
 func TestValidation(t *testing.T) {
 	t.Setenv("APP_ENV", "development")

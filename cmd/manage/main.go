@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/store"
+	"github.com/hloiseau/le-concierge/internal/upstream"
 	"os"
 	"time"
 )
@@ -18,7 +19,7 @@ func main() {
 }
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: manage link-seerr|unlink|backup [flags]")
+		return fmt.Errorf("usage: manage link-seerr|unlink|backup|check-sources [flags]")
 	}
 	command := os.Args[1]
 	f := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -26,8 +27,18 @@ func run() error {
 	id := f.String("discord", "", "verified Discord user ID")
 	seerr := f.Int64("seerr", 0, "verified Seerr user ID")
 	dest := f.String("destination", "", "new backup file")
+	plexUser := f.String("plex-user", "", "optional verified Plex user ID for read-only history diagnostics")
 	if e := f.Parse(os.Args[2:]); e != nil {
 		return e
+	}
+	if command == "check-sources" {
+		c, err := config.Load()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return checkSources(ctx, c, upstream.New(), *plexUser, os.Stdout)
 	}
 	if *dbpath == "" {
 		*dbpath = "data/concierge.db"
