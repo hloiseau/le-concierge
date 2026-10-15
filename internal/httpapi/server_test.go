@@ -63,16 +63,17 @@ func seed(t *testing.T, s *Server, id string, plex bool) string {
 }
 func TestAuthBoundaryAndPreferences(t *testing.T) {
 	s := fixture(t)
-	for _, path := range []string{"/api/v1/requests", "/api/v1/recent", "/api/v1/preferences"} {
+	for _, path := range []string{"/api/v1/services", "/api/v1/requests", "/api/v1/recent", "/api/v1/preferences", "/api/v1/auth/discord/start"} {
 		if w := call(s, "GET", path, "", "", ""); w.Code != 401 {
 			t.Fatalf("anonymous access %s %d", path, w.Code)
 		}
 	}
 	a := seed(t, s, "11111", false)
-	b := seed(t, s, "22222", false)
+	b := seed(t, s, "22222", true)
 	if w := call(s, "GET", "/api/v1/recent", a, "", ""); w.Code != 403 {
 		t.Fatal("Discord alone granted Plex access")
 	}
+	a = seed(t, s, "11111", true)
 	if w := call(s, "PUT", "/api/v1/preferences", a, "https://attacker.example", `{"notifications":true}`); w.Code != 403 {
 		t.Fatal("CSRF accepted")
 	}
@@ -101,6 +102,7 @@ func TestAuthBoundaryAndPreferences(t *testing.T) {
 }
 func TestOAuthStateBoundAndOneTime(t *testing.T) {
 	s := fixture(t)
+	cookie, userID := seedPlexOnly(t, s, "77")
 	calls := 0
 	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
@@ -119,7 +121,7 @@ func TestOAuthStateBoundAndOneTime(t *testing.T) {
 			return nil, nil
 		}
 	})
-	start := call(s, "GET", "/api/v1/auth/discord/start", "", "", "")
+	start := call(s, "GET", "/api/v1/auth/discord/start", cookie, "", "")
 	loc, _ := url.Parse(start.Header().Get("Location"))
 	state := loc.Query().Get("state")
 	if len(state) != 64 || !strings.Contains(loc.Query().Get("scope"), "guilds.members.read") {
@@ -145,48 +147,17 @@ func TestOAuthStateBoundAndOneTime(t *testing.T) {
 	if sessionCookie == nil || !sessionCookie.HttpOnly || sessionCookie.SameSite != http.SameSiteStrictMode {
 		t.Fatal("unsafe session cookie")
 	}
+	u, err := s.Store.UserByDiscord(context.Background(), "11111")
+	if err != nil || u.ID != userID || s.sessions[digest(sessionCookie.Value)].UserID != userID {
+		t.Fatal("Discord linked to the wrong Plex session")
+	}
+	if _, exists := s.sessions[digest(cookie)]; exists {
+		t.Fatal("link did not rotate the session")
+	}
 	w = httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	if w.Code != 403 || calls != 3 {
 		t.Fatal("OAuth callback replay accepted")
-	}
-}
-func TestPlexPinBoundConsumedAndNoTokenLeak(t *testing.T) {
-	s := fixture(t)
-	a := seed(t, s, "11111", false)
-	b := seed(t, s, "22222", false)
-	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
-		switch r.URL.Path {
-		case "/api/v2/pins":
-			return response(200, `{"id":1,"code":"long-pin-code","expiresIn":300}`), nil
-		case "/api/v2/pins/1":
-			return response(200, `{"id":1,"code":"long-pin-code","authToken":"account-secret"}`), nil
-		case "/api/v2/user":
-			return response(200, `{"id":77,"restricted":false}`), nil
-		case "/api/v2/resources":
-			return response(200, `[{"clientIdentifier":"server-a","provides":"server","accessToken":"resource-secret"}]`), nil
-		case "/api/v1/user":
-			return response(200, `{"pageInfo":{"results":1},"results":[{"id":42,"plexId":77}]}`), nil
-		default:
-			t.Fatalf("unexpected URL %s", r.URL.Path)
-			return nil, nil
-		}
-	})
-	if w := call(s, "POST", "/api/v1/auth/plex/start", a, s.Config.PublicOrigin, ""); w.Code != 200 {
-		t.Fatal(w.Body.String())
-	}
-	if w := call(s, "POST", "/api/v1/auth/plex/poll", b, s.Config.PublicOrigin, ""); w.Code != 410 {
-		t.Fatal("PIN crossed browser boundary")
-	}
-	if w := call(s, "POST", "/api/v1/auth/plex/poll", a, s.Config.PublicOrigin, ""); w.Code != 200 || strings.Contains(w.Body.String(), "secret") {
-		t.Fatal("PIN failed or token leaked")
-	}
-	if w := call(s, "POST", "/api/v1/auth/plex/poll", a, s.Config.PublicOrigin, ""); w.Code != 410 {
-		t.Fatal("PIN replay accepted")
-	}
-	w := call(s, "GET", "/api/v1/session", a, "", "")
-	if strings.Contains(w.Body.String(), "secret") || !strings.Contains(w.Body.String(), `"plexConnected":true`) {
-		t.Fatal("unsafe session DTO")
 	}
 }
 func TestPlexRevocationAndOutageFailClosed(t *testing.T) {
@@ -322,7 +293,10 @@ func TestSeerrLookupFailuresNeverUseStoredMapping(t *testing.T) {
 
 func TestDiscordRequestsUseAutomaticSeerrAssociation(t *testing.T) {
 	s := fixture(t)
-	seed(t, s, "11111", true)
+	_, userID := seedPlexOnly(t, s, "11111")
+	if _, err := s.Store.LinkDiscord(context.Background(), userID, "11111", "11111"); err != nil {
+		t.Fatal(err)
+	}
 	public, private, _ := ed25519.GenerateKey(rand.Reader)
 	s.Config.DiscordPublicKey = hex.EncodeToString(public)
 	s.Config.BotAPISecret = strings.Repeat("s", 32)

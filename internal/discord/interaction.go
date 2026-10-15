@@ -53,5 +53,5 @@ func Message(content string) map[string]any {
 }
 
 func Help(origin string) string {
-	return "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n\n[Ouvrir le Hub](" + origin + ")\nConnectez-vous avec Discord puis Plex dans **Mon compte**. Seerr est associé automatiquement via votre identité Plex."
+	return "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n\n[Ouvrir le Hub](" + origin + ")\nConnectez-vous au Hub avec Plex, puis liez Discord dans **Mon compte** pour utiliser les commandes personnelles. Seerr est associé automatiquement via votre identité Plex."
 }

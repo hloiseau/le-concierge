@@ -51,6 +51,13 @@ func run() error {
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	if command != "backup" {
+		u, err := db.UserByDiscord(ctx, *id)
+		if err != nil {
+			return fmt.Errorf("Discord user not found")
+		}
+		*id = u.ID
+	}
 	switch command {
 	case "link-seerr":
 		e = db.LinkSeerr(ctx, *id, *seerr)

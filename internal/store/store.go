@@ -2,18 +2,22 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 type Store struct{ DB *sql.DB }
 type User struct {
-	DiscordID     string `json:"discordId"`
+	ID            string `json:"-"`
+	DiscordID     string `json:"discordId,omitempty"`
 	Name          string `json:"name"`
 	PlexID        string `json:"plexId,omitempty"`
 	SeerrID       int64  `json:"seerrId,omitempty"`
@@ -57,7 +61,7 @@ func Open(path string) (*Store, error) {
 		tx.Rollback()
 		return fail(e)
 	}
-	if version > 1 {
+	if version > 2 {
 		tx.Rollback()
 		return fail(errors.New("database schema is newer than this binary; restore a compatible backup"))
 	}
@@ -66,6 +70,17 @@ func Open(path string) (*Store, error) {
 		tx.Rollback()
 		return fail(e)
 	}
+	if version < 2 {
+		// Preserve v1 identities, preferences and links while making Discord optional.
+		if _, e = tx.Exec(`CREATE TABLE users_v2(id TEXT PRIMARY KEY, discord_id TEXT UNIQUE, name TEXT NOT NULL, plex_id TEXT UNIQUE, seerr_id INTEGER UNIQUE CHECK(seerr_id>0), notifications INTEGER NOT NULL DEFAULT 0 CHECK(notifications IN (0,1)), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+INSERT INTO users_v2(id,discord_id,name,plex_id,seerr_id,notifications,created_at) SELECT discord_id,discord_id,name,plex_id,seerr_id,notifications,created_at FROM users;
+DROP TABLE users;
+ALTER TABLE users_v2 RENAME TO users;
+INSERT INTO schema_migrations(version) VALUES(2);`); e != nil {
+			tx.Rollback()
+			return fail(e)
+		}
+	}
 	if e = tx.Commit(); e != nil {
 		return fail(e)
 	}
@@ -73,22 +88,96 @@ func Open(path string) (*Store, error) {
 }
 func (s *Store) Close() error { return s.DB.Close() }
 func (s *Store) Upsert(ctx context.Context, id, name string) (User, error) {
-	_, e := s.DB.ExecContext(ctx, `INSERT INTO users(discord_id,name) VALUES(?,?) ON CONFLICT(discord_id) DO UPDATE SET name=excluded.name`, id, name)
+	_, e := s.DB.ExecContext(ctx, `INSERT INTO users(id,discord_id,name) VALUES(?,?,?) ON CONFLICT(discord_id) DO UPDATE SET name=excluded.name`, id, id, name)
 	if e != nil {
 		return User{}, e
 	}
-	return s.User(ctx, id)
+	return s.UserByDiscord(ctx, id)
 }
 func (s *Store) User(ctx context.Context, id string) (User, error) {
 	var u User
-	e := s.DB.QueryRowContext(ctx, `SELECT discord_id,name,COALESCE(plex_id,''),COALESCE(seerr_id,0),notifications FROM users WHERE discord_id=?`, id).Scan(&u.DiscordID, &u.Name, &u.PlexID, &u.SeerrID, &u.Notifications)
+	e := s.DB.QueryRowContext(ctx, `SELECT id,COALESCE(discord_id,''),name,COALESCE(plex_id,''),COALESCE(seerr_id,0),notifications FROM users WHERE id=?`, id).Scan(&u.ID, &u.DiscordID, &u.Name, &u.PlexID, &u.SeerrID, &u.Notifications)
 	return u, e
 }
+func (s *Store) UserByDiscord(ctx context.Context, discord string) (User, error) {
+	var id string
+	if err := s.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE discord_id=?`, discord).Scan(&id); err != nil {
+		return User{}, err
+	}
+	return s.User(ctx, id)
+}
+
+// LoginPlex reuses an existing verified Plex identity, including migrated v1 users.
+func (s *Store) LoginPlex(ctx context.Context, plex, name string) (User, error) {
+	n, err := strconv.ParseInt(plex, 10, 64)
+	if err != nil || n <= 0 {
+		return User{}, errors.New("invalid Plex identity")
+	}
+	if name == "" {
+		name = "Membre Plex"
+	}
+	randomID := make([]byte, 16)
+	if _, err := rand.Read(randomID); err != nil {
+		return User{}, err
+	}
+	_, err = s.DB.ExecContext(ctx, `INSERT INTO users(id,plex_id,name) VALUES(?,?,?) ON CONFLICT(plex_id) DO UPDATE SET name=excluded.name`, hex.EncodeToString(randomID), plex, name)
+	if err != nil {
+		return User{}, err
+	}
+	var id string
+	if err = s.DB.QueryRowContext(ctx, `SELECT id FROM users WHERE plex_id=?`, plex).Scan(&id); err != nil {
+		return User{}, err
+	}
+	return s.User(ctx, id)
+}
+
+// LinkDiscord requires both a verified Plex session and a proven Discord login.
+// Only a legacy Discord-only row may be merged; a different Plex owner conflicts.
+func (s *Store) LinkDiscord(ctx context.Context, id, plex, discord string) (string, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	var currentDiscord string
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(discord_id,'') FROM users WHERE id=? AND plex_id=?`, id, plex).Scan(&currentDiscord); err != nil {
+		return "", err
+	}
+	if currentDiscord != "" && currentDiscord != discord {
+		return "", errors.New("different Discord identity already linked")
+	}
+	var oldID, oldPlex string
+	var oldNotifications bool
+	err = tx.QueryRowContext(ctx, `SELECT id,COALESCE(plex_id,''),notifications FROM users WHERE discord_id=?`, discord).Scan(&oldID, &oldPlex, &oldNotifications)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", err
+	}
+	merged := ""
+	if oldID != "" && oldID != id {
+		if oldPlex != "" {
+			return "", errors.New("Discord identity belongs to another Plex account")
+		}
+		if _, err = tx.ExecContext(ctx, `DELETE FROM users WHERE id=?`, oldID); err != nil {
+			return "", err
+		}
+		if oldNotifications {
+			if _, err = tx.ExecContext(ctx, `UPDATE users SET notifications=1 WHERE id=?`, id); err != nil {
+				return "", err
+			}
+		}
+		merged = oldID
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE users SET discord_id=? WHERE id=?`, discord, id); err != nil {
+		return "", err
+	}
+	return merged, tx.Commit()
+}
+
 func (s *Store) LinkPlex(ctx context.Context, id, plex string) error {
 	if plex == "" {
 		return errors.New("empty Plex identity")
 	}
-	result, e := s.DB.ExecContext(ctx, `UPDATE users SET plex_id=? WHERE discord_id=? AND (plex_id IS NULL OR plex_id=?)`, plex, id, plex)
+	result, e := s.DB.ExecContext(ctx, `UPDATE users SET plex_id=? WHERE id=? AND (plex_id IS NULL OR plex_id=?)`, plex, id, plex)
 	if e != nil {
 		return e
 	}
@@ -112,7 +201,7 @@ func (s *Store) LinkSeerr(ctx context.Context, id string, seerr int64) error {
 	if seerr <= 0 {
 		return errors.New("invalid Seerr ID")
 	}
-	_, e = s.DB.ExecContext(ctx, `UPDATE users SET seerr_id=? WHERE discord_id=?`, seerr, id)
+	_, e = s.DB.ExecContext(ctx, `UPDATE users SET seerr_id=? WHERE id=?`, seerr, id)
 	return e
 }
 
@@ -122,7 +211,7 @@ func (s *Store) SyncSeerr(ctx context.Context, id, plex string, seerr int64) err
 	if plex == "" || seerr <= 0 {
 		return errors.New("invalid verified identity")
 	}
-	r, err := s.DB.ExecContext(ctx, `UPDATE users SET seerr_id=? WHERE discord_id=? AND plex_id=?`, seerr, id, plex)
+	r, err := s.DB.ExecContext(ctx, `UPDATE users SET seerr_id=? WHERE id=? AND plex_id=?`, seerr, id, plex)
 	if err != nil {
 		return err
 	}
@@ -137,15 +226,15 @@ func (s *Store) SyncSeerr(ctx context.Context, id, plex string, seerr int64) err
 }
 
 func (s *Store) Preferences(ctx context.Context, id string, enabled bool) error {
-	_, e := s.DB.ExecContext(ctx, `UPDATE users SET notifications=? WHERE discord_id=?`, enabled, id)
+	_, e := s.DB.ExecContext(ctx, `UPDATE users SET notifications=? WHERE id=?`, enabled, id)
 	return e
 }
 func (s *Store) Unlink(ctx context.Context, id string) error {
-	_, e := s.DB.ExecContext(ctx, `UPDATE users SET plex_id=NULL,seerr_id=NULL WHERE discord_id=?`, id)
+	_, e := s.DB.ExecContext(ctx, `UPDATE users SET plex_id=NULL,seerr_id=NULL WHERE id=?`, id)
 	return e
 }
 func (s *Store) Delete(ctx context.Context, id string) error {
-	_, e := s.DB.ExecContext(ctx, `DELETE FROM users WHERE discord_id=?`, id)
+	_, e := s.DB.ExecContext(ctx, `DELETE FROM users WHERE id=?`, id)
 	return e
 }
 func (s *Store) Backup(ctx context.Context, path string) error {

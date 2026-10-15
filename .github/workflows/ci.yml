@@ -54,6 +54,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
   deployment-smoke:
+    timeout-minutes: 12
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -80,13 +81,19 @@ jobs:
           PY
       - name: Build the API and bot under test
         run: docker build -t concierge-ci:test .
+      - name: Pull the published Hub image
+        timeout-minutes: 3
+        run: docker compose -p concierge-ci -f /tmp/concierge-ci.yaml pull hub
       - name: Start tested API and bot with TrueNAS settings
-        run: docker compose -p concierge-ci -f /tmp/concierge-ci.yaml up -d --wait --wait-timeout 120
+        timeout-minutes: 3
+        run: docker compose -p concierge-ci -f /tmp/concierge-ci.yaml up -d --pull never --wait --wait-timeout 120
       - name: Check health, private routes and proxy
         run: |
           bash deploy/truenas-admin.sh check
           curl --fail http://127.0.0.1:18080/healthz
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/requests)" = 401
+          for route in services requests recent preferences; do
+            test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/$route)" = 401
+          done
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/interactions -d '{}')" = 401
       - name: Show logs on failure
         if: failure()

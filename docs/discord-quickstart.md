@@ -1,6 +1,6 @@
 # Brancher Le Concierge à Discord
 
-Une application Discord dédiée sert à la fois à la connexion du Hub et aux trois commandes du bot. Le bot reçoit des interactions HTTP : aucun Gateway ni privileged intent n'est nécessaire pour cette première version.
+Une application Discord dédiée sert à la liaison facultative du compte Discord et aux trois commandes du bot. La connexion au Hub se fait avec Plex. Le bot reçoit des interactions HTTP : aucun Gateway ni privileged intent n'est nécessaire pour cette première version.
 
 ## 1. Créer l'application et récupérer les valeurs
 
@@ -60,7 +60,7 @@ Cette opération remplace les commandes de **cette application dans ce serveur**
 
 ## 6. Tester
 
-Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement par toi. Ensuite ouvrir le Hub, se connecter avec Discord, lier Plex : le compte Seerr est associé automatiquement avec cette identité. Si nécessaire, se connecter une première fois à Seerr avec le même Plex puis actualiser l’association dans le Hub. Tester `/mes-demandes` et `/nouveautes`.
+Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement par toi. Ensuite ouvrir le Hub, se connecter avec Plex puis ouvrir **Mon compte → Lier Discord** : le compte Seerr est associé automatiquement avec cette identité. Si nécessaire, se connecter une première fois à Seerr avec le même Plex puis actualiser l’association dans le Hub. Tester `/mes-demandes` et `/nouveautes`.
 
 Le bot peut apparaître **hors ligne** dans la liste des membres : il n'ouvre pas de connexion Gateway pour afficher une présence. Ce sont les commandes qui vérifient son fonctionnement. Les réponses personnelles sont éphémères dans le salon ; les notifications proactives par DM ne sont pas encore implémentées.
 

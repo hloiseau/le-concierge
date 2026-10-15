@@ -30,7 +30,7 @@ Le bot utilise les interactions HTTP signées Discord : Caddy expose son endpoin
 
 ## Identité et droits
 
-Connexion Discord pour le portail, puis liaison vérifiée des comptes Plex et Seerr. Une présence dans Discord ne constitue pas une autorisation d’accès à toutes les bibliothèques. Les associations utilisent des identifiants stables et une preuve de contrôle, jamais un simple nom ou email.
+Connexion Plex obligatoire pour le portail, association automatique Seerr et liaison Discord facultative pour les commandes du bot. Le serveur vérifie le partage Plex avant de créer la session, et protège aussi les liens des services côté API. Une présence dans Discord ne constitue pas une autorisation d’accès à toutes les bibliothèques. Les associations utilisent des identifiants stables et une preuve de contrôle, jamais un simple nom ou email.
 
 Le brief mentionne « Plex OAuth2 » ; le projet de référence Torrent Watch utilise un flux PIN. Le flux PIN est implémenté et le parcours réel reste à valider dans [Concierge #4](https://github.com/hloiseau/le-concierge/issues/4). Les tokens restent côté serveur ; contrôles d’accès, révocation, cookies et protection CSRF font partie de ce ticket.
 

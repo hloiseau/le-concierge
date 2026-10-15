@@ -9,6 +9,8 @@ Bot Discord et API Go commune pour un écosystème multimédia auto-hébergé.
 - [Contribuer](CONTRIBUTING.md)
 - [Projet complémentaire : le-hub](https://github.com/hloiseau/le-hub)
 
+Le Hub utilise une connexion Plex obligatoire avec vérification de l’accès au serveur. Discord se lie ensuite, de façon facultative, pour utiliser le bot.
+
 ## Démarrer
 
 **TrueNAS :** [guide rapide et YAML prêts à adapter](docs/truenas-quickstart.md) · [mini tutoriel Discord](docs/discord-quickstart.md).

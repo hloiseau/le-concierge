@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -140,5 +141,65 @@ func TestAutomaticSeerrSyncCannotRestoreUnlinkedIdentity(t *testing.T) {
 	}
 	if err = s.SyncSeerr(ctx, "11111", "123", 42); err == nil {
 		t.Fatal("stale lookup restored an unlinked account")
+	}
+}
+
+func TestV1MigrationPreservesAccountsAndPlexLogin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v1.db")
+	legacy, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = legacy.Exec(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO schema_migrations VALUES(1);
+ CREATE TABLE users(discord_id TEXT PRIMARY KEY,name TEXT NOT NULL,plex_id TEXT UNIQUE,seerr_id INTEGER UNIQUE,notifications INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+ INSERT INTO users(discord_id,name,plex_id,seerr_id,notifications) VALUES('11111','Alice','77',42,1),('22222','Legacy',NULL,NULL,1);`)
+	legacy.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	u, err := s.LoginPlex(ctx, "77", "Alice Plex")
+	if err != nil || u.ID != "11111" || u.DiscordID != "11111" || u.SeerrID != 42 || !u.Notifications {
+		t.Fatalf("migration lost identity/preferences: %+v %v", u, err)
+	}
+	fresh, err := s.LoginPlex(ctx, "88", "Bob")
+	if err != nil || fresh.DiscordID != "" {
+		t.Fatalf("Plex requires Discord: %+v %v", fresh, err)
+	}
+	merged, err := s.LinkDiscord(ctx, fresh.ID, "88", "22222")
+	if err != nil || merged != "22222" {
+		t.Fatalf("legacy merge failed: %s %v", merged, err)
+	}
+	linked, err := s.UserByDiscord(ctx, "22222")
+	if err != nil || linked.ID != fresh.ID || !linked.Notifications {
+		t.Fatal("legacy preferences/identity lost")
+	}
+	if _, err = s.LinkDiscord(ctx, fresh.ID, "88", "11111"); err == nil {
+		t.Fatal("Discord moved between Plex owners")
+	}
+	other, err := s.LoginPlex(ctx, "99", "Other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.LinkDiscord(ctx, other.ID, "99", "11111"); err == nil {
+		t.Fatal("existing Discord account stolen")
+	}
+	if _, err = s.LinkDiscord(ctx, other.ID, "777", "33333"); err == nil {
+		t.Fatal("unverified Plex identity linked")
+	}
+	s.Close()
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	u, err = reopened.LoginPlex(ctx, "77", "Alice")
+	if err != nil || u.ID != "11111" || !u.Notifications {
+		t.Fatal("reopen reapplied migration")
 	}
 }
