@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -73,19 +74,30 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "duplicate interaction", 409)
 		return
 	}
+	// Static help must work even when the API is unavailable.
+	if i.Data.Name == "aide" {
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message(Help(b.Config.PublicOrigin))})
+		return
+	}
 	select {
 	case b.slots <- struct{}{}:
 	default:
 		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Le Concierge est occupé. Réessayez dans un instant.")})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"type": 5, "data": map[string]int{"flags": 64}})
+	// Discord supports an empty 202 when the callback is sent separately.
+	// Wait for that callback's success before editing @original: flushing an
+	// inline type-5 response does not prove Discord has created the message.
+	w.WriteHeader(http.StatusAccepted)
 	b.workers.Add(1)
 	go func() {
 		defer b.workers.Done()
 		defer func() { <-b.slots }()
 		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 		defer cancel()
+		if !b.acknowledge(ctx, i) {
+			return
+		}
 		req, e := http.NewRequestWithContext(ctx, "POST", b.Config.BotAPIURL+"/internal/discord", bytes.NewReader(body))
 		if e != nil {
 			return
@@ -110,7 +122,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		encoded, _ := json.Marshal(reply)
 		// Webhook token is provided in a signed Discord interaction, never in a log.
 		for attempt := 0; attempt < 3; attempt++ {
-			target := "https://discord.com/api/v10/webhooks/" + i.ApplicationID + "/" + i.Token + "/messages/@original"
+			target := "https://discord.com/api/v10/webhooks/" + i.ApplicationID + "/" + url.PathEscape(i.Token) + "/messages/@original"
 			req, e = http.NewRequestWithContext(ctx, "PATCH", target, bytes.NewReader(encoded))
 			if e != nil {
 				return
@@ -124,8 +136,9 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 			status := resp.StatusCode
 			var retry struct {
 				After float64 `json:"retry_after"`
+				Code  int     `json:"code"`
 			}
-			if status == 429 {
+			if status >= 400 {
 				_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&retry)
 			}
 			resp.Body.Close()
@@ -133,7 +146,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if status != 429 || retry.After <= 0 || retry.After > 5 {
-				slog.Warn("Discord reply rejected", "status", status)
+				slog.Warn("Discord reply rejected", "status", status, "discord_code", retry.Code)
 				return
 			}
 			select {
@@ -144,6 +157,34 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 }
+
+// acknowledge has its own short deadline to respect Discord's initial-response window.
+func (b *Bot) acknowledge(ctx context.Context, i Interaction) bool {
+	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+	defer cancel()
+	target := "https://discord.com/api/v10/interactions/" + i.ID + "/" + url.PathEscape(i.Token) + "/callback"
+	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(`{"type":5,"data":{"flags":64}}`))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := b.Client.Do(req)
+	if err != nil {
+		slog.Warn("Discord acknowledgement failed")
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNoContent {
+		return true
+	}
+	var detail struct {
+		Code int `json:"code"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&detail)
+	slog.Warn("Discord acknowledgement rejected", "status", resp.StatusCode, "discord_code", detail.Code)
+	return false
+}
+
 func (b *Bot) Register(ctx context.Context) error {
 	if b.Config.DiscordBotToken == "" {
 		return errors.New("DISCORD_BOT_TOKEN is required to register commands")

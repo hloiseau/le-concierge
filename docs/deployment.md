@@ -30,7 +30,7 @@ Pour une démonstration visuelle isolée : `NUXT_PUBLIC_DEMO=true npm run dev`. 
 6. Installer l'application dédiée dans la guild avec la portée `applications.commands` et le bot si requis par la configuration Discord ; ne pas lui donner la permission Administrateur.
 7. Renseigner temporairement `DISCORD_BOT_TOKEN` et exécuter `./bin/bot --register`. Cette opération remplace la liste des commandes de cette application dans cette guild par `/aide`, `/mes-demandes`, `/nouveautes` ; utiliser une application dédiée. Le token de bot n'est plus nécessaire au fonctionnement des réponses HTTP après l'enregistrement.
 
-Les commandes sont privées, acquittées immédiatement puis complétées. Les listes Discord montrent les premiers résultats et renvoient vers le Hub ; la pagination complète dans Discord reste à réaliser. Le bot vérifie les signatures, le serveur, l'application, les rejouements et limite les traitements simultanés. L'API revérifie la signature originale : le seul secret de service ne permet pas d'inventer une identité utilisateur.
+Les commandes sont privées. `/aide` répond directement, sans appeler l’API. Les commandes personnelles reçoivent un acquittement différé via le callback Discord, confirmé avant de modifier le message. Les listes Discord montrent les premiers résultats et renvoient vers le Hub ; la pagination complète dans Discord reste à réaliser. Le bot vérifie les signatures, le serveur, l'application, les rejouements et limite les traitements simultanés. L'API revérifie la signature originale : le seul secret de service ne permet pas d'inventer une identité utilisateur.
 
 ## Plex et Seerr
 
@@ -38,13 +38,11 @@ Configurer `PLEX_URL` avec l'adresse privée du PMS et `PLEX_SERVER_ID` avec son
 
 L'utilisateur se connecte avec Discord, choisit « Lier Plex », ouvre le lien Plex et autorise l'application. Le PIN est associé à la session initiatrice, expire après cinq minutes maximum et est consommé une seule fois. Les comptes Plex Home gérés/restrictifs ne sont pas pris en charge par ce premier parcours.
 
-Configurer `SEERR_URL` et `SEERR_API_KEY` pour la lecture des demandes. L'association Seerr est explicitement vérifiée par l'administrateur dans cette version : comparer le compte Plex lié et le compte Seerr réel avant de lancer :
+Configurer `SEERR_URL` et `SEERR_API_KEY` avec la clé serveur de Seerr (accès à la gestion des utilisateurs requis pour lire `plexId`). Après la connexion Discord puis Plex dans le Hub, le backend retrouve automatiquement le compte Seerr grâce à l'identifiant Plex vérifié. Aucun script d'association ni mot de passe Seerr n'est nécessaire.
 
-```bash
-./bin/manage link-seerr --database data/concierge.db --discord 123456789012345678 --seerr 42
-```
+Si le compte est absent, ouvrir Seerr et se connecter une première fois **avec le même compte Plex**, puis cliquer sur **Actualiser l’association** dans Mon compte, ou réessayer `/mes-demandes`. Aucun compte Seerr n'est créé par le Concierge.
 
-Ne pas se baser sur le pseudonyme. La commande exige un utilisateur déjà connecté et lié à Plex ; les identifiants Plex et Seerr sont uniques dans la base. Une réponse Seerr contenant une demande d'un autre utilisateur est entièrement refusée. En conteneur : `docker compose --env-file .env -f deploy/compose.yaml exec api /app/manage link-seerr --discord ID --seerr ID`.
+Le backend compare des identifiants stables, jamais les pseudos ou emails. La recherche paginée est limitée à 5 000 utilisateurs et quatre secondes ; une liste incomplète, des identités ambiguës ou une panne sont refusées. L'association est revérifiée avant chaque lecture de demandes, y compris les anciennes associations manuelles. La commande historique `manage link-seerr` n'est plus nécessaire et ne permet pas de contourner cette vérification. Une réponse contenant une demande d'un autre utilisateur est entièrement refusée.
 
 Une erreur d'association se corrige avec `manage unlink --discord ID`, puis une nouvelle liaison. Les anciennes autorisations en mémoire deviennent inutilisables dès que l'identité de la base ne correspond plus.
 

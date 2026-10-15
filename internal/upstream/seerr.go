@@ -2,9 +2,14 @@ package upstream
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
+	"time"
 )
+
+var ErrSeerrUserNotFound = errors.New("no Seerr user for verified Plex identity")
 
 type Request struct {
 	ID        int64  `json:"id"`
@@ -104,4 +109,76 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 		out.Items = append(out.Items, Request{ID: r.ID, Title: title, Type: kind, Status: status, CreatedAt: r.CreatedAt, MediaID: r.Media.TmdbID, Seasons: seasons})
 	}
 	return out, nil
+}
+
+// SeerrUser resolves only the stable identity already verified by Plex. The
+// server API key must be allowed to manage users so Seerr exposes plexId.
+// Never fall back to display names, email addresses or a previously saved ID.
+func (c *Client) SeerrUser(ctx context.Context, base, key, plexID string) (int64, error) {
+	plex, err := strconv.ParseInt(plexID, 10, 64)
+	if err != nil || plex <= 0 {
+		return 0, ErrDenied
+	}
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	var match int64
+	total := -1
+	seen := map[int64]bool{}
+	for skip := 0; skip < 5000; {
+		var page struct {
+			PageInfo struct {
+				Results *int `json:"results"`
+			} `json:"pageInfo"`
+			Results []struct {
+				ID     int64           `json:"id"`
+				PlexID json.RawMessage `json:"plexId"`
+			} `json:"results"`
+		}
+		target := fmt.Sprintf("%s/api/v1/user?take=100&skip=%d", base, skip)
+		if err := c.JSON(ctx, "GET", target, map[string]string{"X-Api-Key": key}, "", &page); err != nil {
+			return 0, err
+		}
+		if page.PageInfo.Results == nil {
+			return 0, ErrUnavailable
+		}
+		count := *page.PageInfo.Results
+		if count < 0 || count > 5000 || (total >= 0 && count != total) || skip+len(page.Results) > count {
+			return 0, ErrUnavailable
+		}
+		total = count
+		for _, user := range page.Results {
+			if user.ID <= 0 || seen[user.ID] || len(user.PlexID) == 0 {
+				return 0, ErrUnavailable
+			}
+			seen[user.ID] = true
+			if string(user.PlexID) == "null" {
+				continue
+			}
+			var number json.Number
+			if json.Unmarshal(user.PlexID, &number) != nil {
+				return 0, ErrUnavailable
+			}
+			id, err := number.Int64()
+			if err != nil || id <= 0 {
+				return 0, ErrUnavailable
+			}
+			if id == plex {
+				if match != 0 {
+					return 0, ErrDenied
+				}
+				match = user.ID
+			}
+		}
+		skip += len(page.Results)
+		if skip == total {
+			if match == 0 {
+				return 0, ErrSeerrUserNotFound
+			}
+			return match, nil
+		}
+		if len(page.Results) == 0 {
+			return 0, ErrUnavailable
+		}
+	}
+	return 0, ErrUnavailable
 }

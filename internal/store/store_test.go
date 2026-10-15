@@ -115,3 +115,30 @@ func TestConcurrentPlexLinkCannotReplaceIdentity(t *testing.T) {
 		t.Fatal("missing user accepted")
 	}
 }
+
+func TestAutomaticSeerrSyncCannotRestoreUnlinkedIdentity(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	if _, err = s.Upsert(ctx, "11111", "User"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.LinkPlex(ctx, "11111", "123"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SyncSeerr(ctx, "11111", "999", 42); err == nil {
+		t.Fatal("different Plex identity accepted")
+	}
+	if err = s.SyncSeerr(ctx, "11111", "123", 42); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Unlink(ctx, "11111"); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.SyncSeerr(ctx, "11111", "123", 42); err == nil {
+		t.Fatal("stale lookup restored an unlinked account")
+	}
+}

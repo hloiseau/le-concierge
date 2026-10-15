@@ -115,6 +115,27 @@ func (s *Store) LinkSeerr(ctx context.Context, id string, seerr int64) error {
 	_, e = s.DB.ExecContext(ctx, `UPDATE users SET seerr_id=? WHERE discord_id=?`, seerr, id)
 	return e
 }
+
+// SyncSeerr binds the resolution to the Plex identity used for the lookup,
+// preventing a concurrent unlink/delete from restoring a stale association.
+func (s *Store) SyncSeerr(ctx context.Context, id, plex string, seerr int64) error {
+	if plex == "" || seerr <= 0 {
+		return errors.New("invalid verified identity")
+	}
+	r, err := s.DB.ExecContext(ctx, `UPDATE users SET seerr_id=? WHERE discord_id=? AND plex_id=?`, seerr, id, plex)
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return errors.New("Plex identity changed during Seerr lookup")
+	}
+	return nil
+}
+
 func (s *Store) Preferences(ctx context.Context, id string, enabled bool) error {
 	_, e := s.DB.ExecContext(ctx, `UPDATE users SET notifications=? WHERE discord_id=?`, enabled, id)
 	return e

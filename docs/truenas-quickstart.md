@@ -9,7 +9,7 @@ Les deux premières versions sont fusionnées dans `main`. Les images ci-dessous
 | [truenas.yaml](../deploy/truenas.yaml) | API + Hub ; démarre sans identifiants pour vérifier l'accueil et les liens |
 | [truenas-discord.yaml](../deploy/truenas-discord.yaml) | API + Hub + bot ; renseigner d'abord l'application Discord |
 | [Caddyfile.truenas](../deploy/Caddyfile.truenas) | Deux blocs à ajouter au Caddy existant |
-| [truenas-admin.sh](../deploy/truenas-admin.sh) | Vérification, enregistrement Discord, association Seerr et sauvegarde |
+| [truenas-admin.sh](../deploy/truenas-admin.sh) | Vérification, enregistrement Discord et sauvegarde |
 
 **Une seule application TrueNAS**, nom suggéré `media-hub`. Pour ajouter le bot plus tard, remplacer le YAML de cette application par la variante complète en conservant les paramètres et le dataset. Ne pas installer les deux variantes en parallèle : elles utilisent les mêmes noms de conteneurs et la même base.
 
@@ -69,22 +69,20 @@ sudo bash truenas-admin.sh check
 
 Ce contrôle vérifie API/SQLite, le passage Hub → API et la santé HTTP du bot s'il est installé. Il ne valide pas tes identifiants auprès des fournisseurs.
 
-Après le tutoriel Discord : se connecter au Hub, ouvrir **Mon compte**, puis **Lier Plex**. Une fois l'identité Plex vérifiée, associer le bon utilisateur Seerr après comparaison avec son compte réel dans l'administration Seerr :
+Après le tutoriel Discord : se connecter au Hub, ouvrir **Mon compte**, puis **Lier Plex**. Le compte Seerr est associé automatiquement via l'identifiant Plex vérifié : **aucun script à lancer**.
 
-```bash
-sudo bash truenas-admin.sh link-seerr ID_DISCORD ID_SEERR
-```
+Si l'association n'est pas confirmée, ouvrir Seerr, se connecter avec le même compte Plex et cliquer sur **Actualiser l’association** dans le Hub. Vérifier que `SEERR_API_KEY` est la clé serveur Seerr, avec accès à la gestion des utilisateurs. Une panne ou un identifiant masqué ne donne jamais accès aux demandes d'un autre compte.
 
-Le script demande des identifiants numériques. Il ne déduit jamais l'association d'un pseudo. Tester avec ton compte puis avec un ami : chacun doit voir ses seules demandes et ses bibliothèques Plex autorisées. Tester `/aide`, `/mes-demandes`, `/nouveautes` dans le serveur Discord configuré.
+Tester avec ton compte puis avec un ami : chacun doit voir ses seules demandes et ses bibliothèques Plex autorisées. Tester `/aide`, `/mes-demandes`, `/nouveautes` dans le serveur Discord configuré.
 
 ## 5. Images, mise à jour et sauvegarde
 
-Les YAML figent cette première paire validée :
+Les YAML utilisent **`edge`**, publié après chaque fusion validée sur `main` :
 
-- API/bot : `ghcr.io/hloiseau/le-concierge:sha-ed5d6d2008ea5f0d6e4f7d4e2d0d9c359244bda2`
-- Hub : `ghcr.io/hloiseau/le-hub:sha-a000edd9047061821ebf49a9c2d1162b133a9c72`
+- API et bot : `ghcr.io/hloiseau/le-concierge:edge`
+- Hub : `ghcr.io/hloiseau/le-hub:edge`
 
-Pour suivre les prochaines fusions, le tag disponible est **`edge`**, dans les deux dépôts. `main` et `latest` ne sont pas publiés par cette CI. Un tag ne provoque pas à lui seul la mise à jour d'une application déjà lancée : demander à TrueNAS de récupérer/redéployer l'image après sa publication.
+Pour figer une version, remplacer `edge` par `sha-<SHA complet du commit publié>` après vérification du succès de la CI. `main` et `latest` ne sont pas des tags publiés. Après une mise à jour, demander à TrueNAS de **récupérer les nouvelles images puis redéployer les trois services**. Un simple redémarrage peut réutiliser l'image en cache. Si ton YAML utilise encore les anciens tags `sha-…`, remplacer uniquement les trois lignes `image:` en conservant tes paramètres et ton dataset.
 
 Avant une mise à jour :
 
@@ -104,7 +102,8 @@ Conserver aussi une copie hors du dataset de l'application et noter les tags pr�
 | Connexion désactivée | Client ID + secret OAuth2 + guild ID dans l'API |
 | Discord refuse le callback | URL exacte et même domaine que `PUBLIC_ORIGIN` |
 | Erreur 403 lors d'une action Hub | Ouvrir le domaine HTTPS configuré, pas une IP ou un alias |
-| Demandes Seerr en attente de liaison | Lier Plex puis exécuter `link-seerr` avec l'identité vérifiée |
+| Demandes Seerr en attente de liaison | Se connecter à Seerr avec le même Plex puis actualiser l’association ; vérifier la clé API serveur |
+| `/aide` sans réponse / `Discord reply rejected` 404 | Mettre à jour API et bot ; `/aide` répond désormais directement. Les erreurs différées indiquent `discord_code` sans exposer le token |
 | Bot hors ligne dans la liste Discord | Normal pour cette version HTTP sans Gateway ; tester `/aide` |
 | Image refusée au téléchargement | Vérifier le nom/tag exact ; les deux images listées ont été vérifiées accessibles sans connexion |
 

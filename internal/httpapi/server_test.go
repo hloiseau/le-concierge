@@ -54,10 +54,10 @@ func seed(t *testing.T, s *Server, id string, plex bool) string {
 	value := token()
 	s.sessions[digest(value)] = session{id, time.Now().Add(time.Hour)}
 	if plex {
-		if e := s.Store.LinkPlex(context.Background(), id, "plex-"+id); e != nil {
+		if e := s.Store.LinkPlex(context.Background(), id, id); e != nil {
 			t.Fatal(e)
 		}
-		s.grants[id] = upstream.Grant{PlexID: "plex-" + id, AccountToken: "account-" + id, ServerToken: "resource-" + id, ClientID: "client", VerifiedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}
+		s.grants[id] = upstream.Grant{PlexID: id, AccountToken: "account-" + id, ServerToken: "resource-" + id, ClientID: "client", VerifiedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}
 	}
 	return value
 }
@@ -165,6 +165,8 @@ func TestPlexPinBoundConsumedAndNoTokenLeak(t *testing.T) {
 			return response(200, `{"id":77,"restricted":false}`), nil
 		case "/api/v2/resources":
 			return response(200, `[{"clientIdentifier":"server-a","provides":"server","accessToken":"resource-secret"}]`), nil
+		case "/api/v1/user":
+			return response(200, `{"pageInfo":{"results":1},"results":[{"id":42,"plexId":77}]}`), nil
 		default:
 			t.Fatalf("unexpected URL %s", r.URL.Path)
 			return nil, nil
@@ -248,5 +250,104 @@ func TestBotCannotInventIdentity(t *testing.T) {
 	}
 	if w = request(body, true); w.Code != 409 {
 		t.Fatal("interaction replay accepted")
+	}
+}
+
+func TestRequestsAutomaticallyResolvePlexIdentity(t *testing.T) {
+	s := fixture(t)
+	cookie := seed(t, s, "11111", true)
+	// An old, incorrect manual mapping must never grant another user's requests.
+	if err := s.Store.LinkSeerr(context.Background(), "11111", 99); err != nil {
+		t.Fatal(err)
+	}
+	requested := false
+	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.Path {
+		case "/api/v1/user":
+			return response(200, `{"pageInfo":{"results":2},"results":[{"id":42,"plexId":11111},{"id":99,"plexId":22222}]}`), nil
+		case "/api/v1/user/42/requests":
+			requested = true
+			return response(200, `{"pageInfo":{"results":0},"results":[]}`), nil
+		default:
+			t.Errorf("wrong account accessed: %s", r.URL.Path)
+			return response(500, `{}`), nil
+		}
+	})
+	w := call(s, "GET", "/api/v1/requests?userId=99", cookie, "", "")
+	if w.Code != 200 || !requested {
+		t.Fatalf("automatic mapping failed: %d %s", w.Code, w.Body)
+	}
+	u, err := s.Store.User(context.Background(), "11111")
+	if err != nil || u.SeerrID != 42 {
+		t.Fatal("verified mapping not saved")
+	}
+	w = call(s, "GET", "/api/v1/session", cookie, "", "")
+	if !strings.Contains(w.Body.String(), `"seerrId":42`) {
+		t.Fatal("automatic association not reflected in session")
+	}
+}
+func TestSeerrLookupFailuresNeverUseStoredMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name, body   string
+		status, want int
+	}{
+		{"not registered", `{"pageInfo":{"results":0},"results":[]}`, 200, 409},
+		{"no permission", `{}`, 403, 502},
+		{"outage", `{}`, 503, 502},
+		{"ambiguous", `{"pageInfo":{"results":2},"results":[{"id":42,"plexId":11111},{"id":43,"plexId":11111}]}`, 200, 502},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := fixture(t)
+			cookie := seed(t, s, "11111", true)
+			if err := s.Store.LinkSeerr(context.Background(), "11111", 99); err != nil {
+				t.Fatal(err)
+			}
+			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path != "/api/v1/user" {
+					t.Error("requests fetched without a verified Seerr identity")
+				}
+				return response(tc.status, tc.body), nil
+			})
+			w := call(s, "GET", "/api/v1/requests", cookie, "", "")
+			if w.Code != tc.want {
+				t.Fatalf("got %d %s", w.Code, w.Body)
+			}
+			w = call(s, "GET", "/api/v1/session", cookie, "", "")
+			if strings.Contains(w.Body.String(), `"seerrId"`) {
+				t.Fatal("unverified stored mapping advertised")
+			}
+		})
+	}
+}
+
+func TestDiscordRequestsUseAutomaticSeerrAssociation(t *testing.T) {
+	s := fixture(t)
+	seed(t, s, "11111", true)
+	public, private, _ := ed25519.GenerateKey(rand.Reader)
+	s.Config.DiscordPublicKey = hex.EncodeToString(public)
+	s.Config.BotAPISecret = strings.Repeat("s", 32)
+	calls := 0
+	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		switch r.URL.Path {
+		case "/api/v1/user":
+			return response(200, `{"pageInfo":{"results":1},"results":[{"id":42,"plexId":11111}]}`), nil
+		case "/api/v1/user/42/requests":
+			return response(200, `{"pageInfo":{"results":0},"results":[]}`), nil
+		default:
+			t.Errorf("wrong account accessed: %s", r.URL.Path)
+			return response(500, `{}`), nil
+		}
+	})
+	body := `{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"member":{"user":{"id":"11111"}},"data":{"name":"mes-demandes"}}`
+	stamp := strconv.FormatInt(time.Now().Unix(), 10)
+	r := httptest.NewRequest("POST", "/internal/discord", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+s.Config.BotAPISecret)
+	r.Header.Set("X-Signature-Timestamp", stamp)
+	r.Header.Set("X-Signature-Ed25519", hex.EncodeToString(ed25519.Sign(private, []byte(stamp+body))))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if w.Code != 200 || calls != 2 || !strings.Contains(w.Body.String(), "Aucune demande") || !strings.Contains(w.Body.String(), `"flags":64`) {
+		t.Fatalf("bot mapping failed: %d %s calls=%d", w.Code, w.Body, calls)
 	}
 }

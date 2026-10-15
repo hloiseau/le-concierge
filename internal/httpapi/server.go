@@ -125,7 +125,14 @@ func (s *Server) origin(w http.ResponseWriter, r *http.Request) bool {
 }
 func (s *Server) limited(w http.ResponseWriter, r *http.Request, scope string, max int) bool {
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	key := scope + ":" + host
+	if s.rate(scope+":"+host, max) {
+		w.Header().Set("Retry-After", "60")
+		problem(w, 429, "rate_limited", "Patientez avant de réessayer.")
+		return true
+	}
+	return false
+}
+func (s *Server) rate(key string, max int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
@@ -140,12 +147,7 @@ func (s *Server) limited(w http.ResponseWriter, r *http.Request, scope string, m
 	}
 	b.Count++
 	s.limits[key] = b
-	if b.Count > max || len(s.limits) > 2000 {
-		w.Header().Set("Retry-After", "60")
-		problem(w, 429, "rate_limited", "Patientez avant de réessayer.")
-		return true
-	}
-	return false
+	return b.Count > max || len(s.limits) > 2000
 }
 func (s *Server) cleanup() {
 	s.mu.Lock()
@@ -242,7 +244,15 @@ func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	g, has := s.grants[u.DiscordID]
 	s.mu.Unlock()
-	jsonOut(w, 200, map[string]any{"user": u, "admin": s.Config.Admin(u.DiscordID), "plexConnected": has && g.PlexID == u.PlexID && time.Now().Before(g.ExpiresAt), "expiresAt": v.Expires.UTC().Format(time.RFC3339)})
+	connected := has && g.PlexID == u.PlexID && time.Now().Before(g.ExpiresAt)
+	// Only advertise a Seerr association confirmed by the upstream directory.
+	u.SeerrID = 0
+	if connected && s.Config.SeerrURL != "" && !s.rate("seerr-session:"+u.DiscordID, 30) {
+		if _, err := s.grant(r.Context(), u); err == nil {
+			u.SeerrID, _ = s.resolveSeerr(r.Context(), u)
+		}
+	}
+	jsonOut(w, 200, map[string]any{"user": u, "admin": s.Config.Admin(u.DiscordID), "plexConnected": connected, "expiresAt": v.Expires.UTC().Format(time.RFC3339)})
 }
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if !s.Config.OAuthEnabled() {
@@ -502,6 +512,20 @@ func offset(r *http.Request) (int, error) {
 	}
 	return n, nil
 }
+
+const seerrMissing = "Connectez-vous une première fois à Seerr avec le même compte Plex, puis réessayez. L’association est automatique."
+
+func (s *Server) resolveSeerr(ctx context.Context, u store.User) (int64, error) {
+	id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.Store.SyncSeerr(ctx, u.DiscordID, u.PlexID, id); err != nil {
+		return 0, upstream.ErrDenied
+	}
+	return id, nil
+}
+
 func (s *Server) requests(w http.ResponseWriter, r *http.Request) {
 	_, u, ok := s.user(w, r)
 	if !ok {
@@ -517,16 +541,21 @@ func (s *Server) requests(w http.ResponseWriter, r *http.Request) {
 		problem(w, 503, "not_configured", "Seerr n’est pas configuré.")
 		return
 	}
-	if u.SeerrID == 0 {
-		problem(w, 409, "seerr_unlinked", "L’administrateur doit associer votre compte Seerr.")
-		return
-	}
 	off, e := offset(r)
 	if e != nil {
 		problem(w, 400, "invalid_offset", "Pagination invalide.")
 		return
 	}
-	data, e := s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, u.SeerrID, off)
+	seerrID, e := s.resolveSeerr(r.Context(), u)
+	if e != nil {
+		if errors.Is(e, upstream.ErrSeerrUserNotFound) {
+			problem(w, 409, "seerr_unlinked", seerrMissing)
+		} else {
+			problem(w, 502, "seerr_unavailable", "L’association automatique Seerr est indisponible. Réessayez plus tard.")
+		}
+		return
+	}
+	data, e := s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, off)
 	if e != nil {
 		problem(w, 502, "seerr_unavailable", "Les demandes ne sont pas disponibles actuellement.")
 		return
@@ -614,7 +643,7 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	}
 	text := "Commande inconnue. Utilisez /aide."
 	if i.Data.Name == "aide" {
-		text = "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n\n[Ouvrir le Hub](" + s.Config.PublicOrigin + ")\nLiez vos comptes dans **Mon compte**."
+		text = discord.Help(s.Config.PublicOrigin)
 	} else if i.Data.Name == "mes-demandes" || i.Data.Name == "nouveautes" {
 		u, e := s.Store.User(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
@@ -624,13 +653,17 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		if e != nil {
 			text = "Connectez-vous au Hub et liez votre compte Plex : " + s.Config.PublicOrigin + "/compte"
 		} else if i.Data.Name == "mes-demandes" {
-			if u.SeerrID == 0 {
-				text = "Votre compte Seerr doit être associé par l’administrateur."
-			} else if s.Config.SeerrURL == "" {
+			if s.Config.SeerrURL == "" {
 				text = "Seerr n’est pas encore configuré."
 			} else {
-				p, e := s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, u.SeerrID, 0)
-				if e != nil {
+				seerrID, e := s.resolveSeerr(r.Context(), u)
+				var p upstream.RequestPage
+				if e == nil {
+					p, e = s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, 0)
+				}
+				if errors.Is(e, upstream.ErrSeerrUserNotFound) {
+					text = seerrMissing
+				} else if e != nil {
 					text = "Seerr est momentanément indisponible."
 				} else {
 					text = "**Vos demandes**\n"

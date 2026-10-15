@@ -60,10 +60,12 @@ Cette opération remplace les commandes de **cette application dans ce serveur**
 
 ## 6. Tester
 
-Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement par toi. Ensuite ouvrir le Hub, se connecter avec Discord, lier Plex et faire valider l'association Seerr via le script du guide TrueNAS. Tester `/mes-demandes` et `/nouveautes`.
+Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement par toi. Ensuite ouvrir le Hub, se connecter avec Discord, lier Plex : le compte Seerr est associé automatiquement avec cette identité. Si nécessaire, se connecter une première fois à Seerr avec le même Plex puis actualiser l’association dans le Hub. Tester `/mes-demandes` et `/nouveautes`.
 
 Le bot peut apparaître **hors ligne** dans la liste des membres : il n'ouvre pas de connexion Gateway pour afficher une présence. Ce sont les commandes qui vérifient son fonctionnement. Les réponses personnelles sont éphémères dans le salon ; les notifications proactives par DM ne sont pas encore implémentées.
 
 Si les commandes n'apparaissent pas : vérifier le serveur configuré, le résultat de `register`, les droits d'intégration, puis recharger Discord. Si elles invitent à se reconnecter, ouvrir le Hub : les autorisations expirent au plus tard après 12 h et sont perdues au redémarrage.
+
+En cas de `Discord reply rejected` avec statut 404 sur une ancienne image, mettre à jour **API et bot**. `/aide` répond directement sans webhook. Pour les commandes personnelles, le bot attend désormais la confirmation du callback initial avant de modifier le message ; les erreurs incluent le code Discord (`discord_code`) sans les tokens. Un 404 isolé ne permet pas de distinguer un webhook inconnu d’un message absent : ce code précis permet de poursuivre le diagnostic.
 
 Référence officielle : [Getting Started Discord](https://docs.discord.com/developers/quick-start/getting-started), [Receiving and Responding](https://docs.discord.com/developers/interactions/receiving-and-responding).
