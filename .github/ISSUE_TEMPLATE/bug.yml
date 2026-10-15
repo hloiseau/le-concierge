@@ -1,0 +1,18 @@
+name: Problème
+description: Signaler un comportement incorrect sans partager de secret
+title: "[Bug] "
+body:
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Étapes, résultat attendu et résultat constaté
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version de l’application
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs anonymisés sans token ni donnée personnelle

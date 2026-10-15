@@ -1,0 +1,20 @@
+name: Évolution
+description: Décrire un besoin et ses critères de réussite
+title: "[Évolution] "
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Objectif utilisateur
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critères d’acceptation
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dépendances, phase et version

@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+node_modules/
+.nuxt/
+.output/
+coverage/
+dist/
+bin/
+.DS_Store

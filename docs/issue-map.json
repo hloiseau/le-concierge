@@ -1,0 +1,284 @@
+[
+  {
+    "key": "C01",
+    "phase": 1,
+    "version": "Socle",
+    "priority": "P0",
+    "depends_on": [],
+    "issue_number": 1,
+    "url": "https://github.com/hloiseau/le-concierge/issues/1"
+  },
+  {
+    "key": "C02",
+    "phase": 1,
+    "version": "Socle",
+    "priority": "P0",
+    "depends_on": [
+      "C01"
+    ],
+    "issue_number": 2,
+    "url": "https://github.com/hloiseau/le-concierge/issues/2"
+  },
+  {
+    "key": "C03",
+    "phase": 1,
+    "version": "Socle",
+    "priority": "P0",
+    "depends_on": [
+      "C01"
+    ],
+    "issue_number": 3,
+    "url": "https://github.com/hloiseau/le-concierge/issues/3"
+  },
+  {
+    "key": "C04",
+    "phase": 1,
+    "version": "Socle",
+    "priority": "P0",
+    "depends_on": [
+      "C02",
+      "C03"
+    ],
+    "issue_number": 4,
+    "url": "https://github.com/hloiseau/le-concierge/issues/4"
+  },
+  {
+    "key": "C05",
+    "phase": 1,
+    "version": "V1",
+    "priority": "P0",
+    "depends_on": [
+      "C02",
+      "C04"
+    ],
+    "issue_number": 5,
+    "url": "https://github.com/hloiseau/le-concierge/issues/5"
+  },
+  {
+    "key": "C06",
+    "phase": 1,
+    "version": "V1",
+    "priority": "P1",
+    "depends_on": [
+      "C02",
+      "C04"
+    ],
+    "issue_number": 6,
+    "url": "https://github.com/hloiseau/le-concierge/issues/6"
+  },
+  {
+    "key": "C07",
+    "phase": 1,
+    "version": "V1",
+    "priority": "P0",
+    "depends_on": [
+      "C01",
+      "C02",
+      "C04"
+    ],
+    "issue_number": 7,
+    "url": "https://github.com/hloiseau/le-concierge/issues/7"
+  },
+  {
+    "key": "C08",
+    "phase": 1,
+    "version": "V1",
+    "priority": "P0",
+    "depends_on": [
+      "C05",
+      "C07"
+    ],
+    "issue_number": 8,
+    "url": "https://github.com/hloiseau/le-concierge/issues/8"
+  },
+  {
+    "key": "C09",
+    "phase": 1,
+    "version": "V1",
+    "priority": "P1",
+    "depends_on": [
+      "C06",
+      "C07"
+    ],
+    "issue_number": 9,
+    "url": "https://github.com/hloiseau/le-concierge/issues/9"
+  },
+  {
+    "key": "C10",
+    "phase": 1,
+    "version": "Socle",
+    "priority": "P0",
+    "depends_on": [
+      "C01",
+      "C03"
+    ],
+    "issue_number": 10,
+    "url": "https://github.com/hloiseau/le-concierge/issues/10"
+  },
+  {
+    "key": "C11",
+    "phase": 3,
+    "version": "V3",
+    "priority": "P0",
+    "depends_on": [],
+    "issue_number": 11,
+    "url": "https://github.com/hloiseau/le-concierge/issues/11"
+  },
+  {
+    "key": "C12",
+    "phase": 3,
+    "version": "V3",
+    "priority": "P1",
+    "depends_on": [
+      "C11",
+      "C04",
+      "C07"
+    ],
+    "issue_number": 12,
+    "url": "https://github.com/hloiseau/le-concierge/issues/12"
+  },
+  {
+    "key": "C13",
+    "phase": 3,
+    "version": "V3",
+    "priority": "P1",
+    "depends_on": [
+      "C11",
+      "C04",
+      "C07"
+    ],
+    "issue_number": 13,
+    "url": "https://github.com/hloiseau/le-concierge/issues/13"
+  },
+  {
+    "key": "C14",
+    "phase": 3,
+    "version": "V3",
+    "priority": "P1",
+    "depends_on": [
+      "C12",
+      "C13"
+    ],
+    "issue_number": 14,
+    "url": "https://github.com/hloiseau/le-concierge/issues/14"
+  },
+  {
+    "key": "C15",
+    "phase": 3,
+    "version": "V3",
+    "priority": "P2",
+    "depends_on": [
+      "C12",
+      "C14"
+    ],
+    "issue_number": 15,
+    "url": "https://github.com/hloiseau/le-concierge/issues/15"
+  },
+  {
+    "key": "C16",
+    "phase": 4,
+    "version": "Monitoring",
+    "priority": "P0",
+    "depends_on": [],
+    "issue_number": 16,
+    "url": "https://github.com/hloiseau/le-concierge/issues/16"
+  },
+  {
+    "key": "C17",
+    "phase": 4,
+    "version": "Monitoring",
+    "priority": "P1",
+    "depends_on": [
+      "C16",
+      "C04"
+    ],
+    "issue_number": 17,
+    "url": "https://github.com/hloiseau/le-concierge/issues/17"
+  },
+  {
+    "key": "C18",
+    "phase": 4,
+    "version": "Monitoring",
+    "priority": "P1",
+    "depends_on": [
+      "C06",
+      "C17"
+    ],
+    "issue_number": 18,
+    "url": "https://github.com/hloiseau/le-concierge/issues/18"
+  },
+  {
+    "key": "C19",
+    "phase": 5,
+    "version": "V2",
+    "priority": "P1",
+    "depends_on": [
+      "C03",
+      "C04",
+      "C05",
+      "C07"
+    ],
+    "issue_number": 19,
+    "url": "https://github.com/hloiseau/le-concierge/issues/19"
+  },
+  {
+    "key": "C20",
+    "phase": 5,
+    "version": "V2 / V3",
+    "priority": "P1",
+    "depends_on": [
+      "C19",
+      "C06"
+    ],
+    "issue_number": 20,
+    "url": "https://github.com/hloiseau/le-concierge/issues/20"
+  },
+  {
+    "key": "C21",
+    "phase": 5,
+    "version": "V2",
+    "priority": "P2",
+    "depends_on": [
+      "C06",
+      "C07"
+    ],
+    "issue_number": 21,
+    "url": "https://github.com/hloiseau/le-concierge/issues/21"
+  },
+  {
+    "key": "C22",
+    "phase": 5,
+    "version": "V4",
+    "priority": "P1",
+    "depends_on": [
+      "C05",
+      "C06",
+      "C07"
+    ],
+    "issue_number": 22,
+    "url": "https://github.com/hloiseau/le-concierge/issues/22"
+  },
+  {
+    "key": "C23",
+    "phase": 5,
+    "version": "Communauté",
+    "priority": "P2",
+    "depends_on": [
+      "C04",
+      "C07"
+    ],
+    "issue_number": 23,
+    "url": "https://github.com/hloiseau/le-concierge/issues/23"
+  },
+  {
+    "key": "C24",
+    "phase": 5,
+    "version": "Téléchargements",
+    "priority": "P1",
+    "depends_on": [
+      "C04"
+    ],
+    "issue_number": 24,
+    "url": "https://github.com/hloiseau/le-concierge/issues/24"
+  }
+]
