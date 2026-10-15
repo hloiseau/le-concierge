@@ -64,6 +64,7 @@ jobs:
           sudo chown 65532:65532 /tmp/concierge-ci-data
           python3 - <<'PY'
           from pathlib import Path
+          import re
           text = Path('deploy/truenas-discord.yaml').read_text()
           for old, new in {
               '192.0.2.10': '127.0.0.1',
@@ -74,9 +75,12 @@ jobs:
               'REMPLACER_PAR_SECRET_ALEATOIRE_64_CARACTERES': 'ci-only-' * 8,
           }.items():
               text = text.replace(old, new)
+          text = re.sub(r'ghcr.io/hloiseau/le-concierge:[^\s]+', 'concierge-ci:test', text)
           Path('/tmp/concierge-ci.yaml').write_text(text)
           PY
-      - name: Start published images with TrueNAS settings
+      - name: Build the API and bot under test
+        run: docker build -t concierge-ci:test .
+      - name: Start tested API and bot with TrueNAS settings
         run: docker compose -p concierge-ci -f /tmp/concierge-ci.yaml up -d --wait --wait-timeout 120
       - name: Check health, private routes and proxy
         run: |

@@ -51,3 +51,7 @@ func Verify(publicKey, timestamp, signature string, body []byte, now time.Time) 
 func Message(content string) map[string]any {
 	return map[string]any{"content": content, "allowed_mentions": map[string]any{"parse": []string{}}, "flags": 64}
 }
+
+func Help(origin string) string {
+	return "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n\n[Ouvrir le Hub](" + origin + ")\nConnectez-vous avec Discord puis Plex dans **Mon compte**. Seerr est associé automatiquement via votre identité Plex."
+}

@@ -2,7 +2,7 @@
 # Remplacer 192.0.2.10 par l'IP LAN du NAS joignable depuis Caddy.
 # Dataset dedie /mnt/Main/tank/concierge : ecriture autorisee a UID/GID 65532.
 # Ne pas installer les deux variantes simultanement : remplacer le YAML de la meme app.
-# Images figees sur les commits testes. Le tag edge suit main si vous le preferez.
+# Images edge publiees apres validation de main. Re-pull avant de redeployer.
 x-runtime: &runtime
   restart: unless-stopped
   read_only: true
@@ -27,7 +27,7 @@ x-discord: &discord
 services:
   api:
     <<: *runtime
-    image: ghcr.io/hloiseau/le-concierge:sha-ed5d6d2008ea5f0d6e4f7d4e2d0d9c359244bda2
+    image: ghcr.io/hloiseau/le-concierge:edge
     container_name: le-concierge-api
     environment:
       <<: *discord
@@ -59,7 +59,7 @@ services:
       retries: 3
   hub:
     <<: *runtime
-    image: ghcr.io/hloiseau/le-hub:sha-a000edd9047061821ebf49a9c2d1162b133a9c72
+    image: ghcr.io/hloiseau/le-hub:edge
     container_name: le-hub
     environment:
       HOST: 0.0.0.0
@@ -80,7 +80,7 @@ services:
       retries: 3
   bot:
     <<: *runtime
-    image: ghcr.io/hloiseau/le-concierge:sha-ed5d6d2008ea5f0d6e4f7d4e2d0d9c359244bda2
+    image: ghcr.io/hloiseau/le-concierge:edge
     container_name: le-concierge-bot
     entrypoint: [/app/bot]
     environment:
