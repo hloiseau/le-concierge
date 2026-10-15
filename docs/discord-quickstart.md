@@ -64,6 +64,10 @@ Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement
 
 Le bot peut apparaître **hors ligne** dans la liste des membres : il n'ouvre pas de connexion Gateway pour afficher une présence. Ce sont les commandes qui vérifient son fonctionnement. Les réponses personnelles sont éphémères dans le salon ; les notifications proactives par DM ne sont pas encore implémentées.
 
+Avec plus de dix demandes Seerr, `/mes-demandes` propose **Suivant**, puis **Précédent** pour revenir en arrière. Les pages remplacent le même message, toujours visible uniquement par toi. Tester aussi la dernière page et une nouvelle commande après déconnexion du Hub : elle doit inviter à se reconnecter. Si une page devient vide après suppression de demandes dans Seerr, le bouton précédent permet de revenir. En cas de panne, les boutons sont retirés ; relancer `/mes-demandes` après rétablissement.
+
+Pour obtenir cette pagination, mettre à jour **API et bot** avec la même version. Aucun nouvel enregistrement des slash commands, secret ou changement de base de données n’est nécessaire. La pagination de `/nouveautes` reste à développer.
+
 Si les commandes n'apparaissent pas : vérifier le serveur configuré, le résultat de `register`, les droits d'intégration, puis recharger Discord. Si elles invitent à se reconnecter, ouvrir le Hub : les autorisations expirent au plus tard après 12 h et sont perdues au redémarrage.
 
 En cas de `Discord reply rejected` avec statut 404 sur une ancienne image, mettre à jour **API et bot**. `/aide` répond directement sans webhook. Pour les commandes personnelles, le bot attend désormais la confirmation du callback initial avant de modifier le message ; les erreurs incluent le code Discord (`discord_code`) sans les tokens. Un 404 isolé ne permet pas de distinguer un webhook inconnu d’un message absent : ce code précis permet de poursuivre le diagnostic.

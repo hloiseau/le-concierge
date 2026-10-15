@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/discord"
 	"github.com/hloiseau/le-concierge/internal/store"
@@ -716,7 +717,8 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	i, e := discord.Verify(s.Config.DiscordPublicKey, r.Header.Get("X-Signature-Timestamp"), r.Header.Get("X-Signature-Ed25519"), body, time.Now())
-	if e != nil || i.Type != 2 || i.ApplicationID != s.Config.DiscordClientID || i.GuildID != s.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) {
+	command, off, commandErr := discord.Command(i)
+	if e != nil || commandErr != nil || i.ApplicationID != s.Config.DiscordClientID || i.GuildID != s.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) {
 		problem(w, 403, "invalid_interaction", "Interaction refusée.")
 		return
 	}
@@ -731,9 +733,10 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	text := "Commande inconnue. Utilisez /aide."
-	if i.Data.Name == "aide" {
+	var pagination *discord.RequestPagination
+	if command == "aide" {
 		text = discord.Help(s.Config.PublicOrigin)
-	} else if i.Data.Name == "mes-demandes" || i.Data.Name == "nouveautes" {
+	} else if command == "mes-demandes" || command == "nouveautes" {
 		u, e := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
 		if e == nil {
@@ -741,14 +744,14 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		}
 		if e != nil {
 			text = "Connectez-vous au Hub avec Plex, puis liez Discord dans Mon compte : " + s.Config.PublicOrigin + "/compte"
-		} else if i.Data.Name == "mes-demandes" {
+		} else if command == "mes-demandes" {
 			if s.Config.SeerrURL == "" {
 				text = "Seerr n’est pas encore configuré."
 			} else {
 				seerrID, e := s.resolveSeerr(r.Context(), u)
 				var p upstream.RequestPage
 				if e == nil {
-					p, e = s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, 0)
+					p, e = s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, off)
 				}
 				if errors.Is(e, upstream.ErrSeerrUserNotFound) {
 					text = seerrMissing
@@ -756,8 +759,16 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 					text = "Seerr est momentanément indisponible."
 				} else {
 					text = "**Vos demandes**\n"
+					pagination = &discord.RequestPagination{Offset: off, Total: p.Total}
+					if p.Total > 0 {
+						text += fmt.Sprintf("Page %d · %d demande(s)\n", off/10+1, p.Total)
+					}
 					if len(p.Items) == 0 {
-						text += "Aucune demande pour le moment."
+						if off == 0 {
+							text += "Aucune demande pour le moment."
+						} else {
+							text += "Aucune demande sur cette page. Revenez à la page précédente."
+						}
 					}
 					for _, v := range p.Items {
 						text += "• " + safeText(v.Title) + " — " + statusLabel(v.Status) + "\n"
@@ -784,7 +795,11 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	jsonOut(w, 200, discord.Message(text))
+	reply := discord.Message(text)
+	if pagination != nil {
+		reply["pagination"] = pagination
+	}
+	jsonOut(w, 200, reply)
 }
 func safeText(v string) string {
 	v = strings.NewReplacer("@", "＠", "*", "", "_", "", "`", "", "[", "", "]", "", "\n", " ", "\r", " ").Replace(v)

@@ -52,7 +52,8 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]int{"type": 1})
 		return
 	}
-	if i.Type != 2 || i.GuildID != b.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) || len(i.Token) < 8 || len(i.Token) > 4096 {
+	command, offset, commandErr := Command(i)
+	if commandErr != nil || i.GuildID != b.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) || len(i.Token) < 8 || len(i.Token) > 4096 {
 		http.Error(w, "unsupported interaction", 403)
 		return
 	}
@@ -75,7 +76,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Static help must work even when the API is unavailable.
-	if i.Data.Name == "aide" {
+	if command == "aide" {
 		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message(Help(b.Config.PublicOrigin))})
 		return
 	}
@@ -111,10 +112,14 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		if e == nil {
 			if resp.StatusCode == 200 {
 				var m struct {
-					Content string `json:"content"`
+					Content    string             `json:"content"`
+					Pagination *RequestPagination `json:"pagination"`
 				}
 				if json.NewDecoder(io.LimitReader(resp.Body, 16*1024)).Decode(&m) == nil && len(m.Content) > 0 && len([]rune(m.Content)) <= 2000 {
 					reply = Message(m.Content)
+					if command == "mes-demandes" && m.Pagination != nil && m.Pagination.Offset == offset {
+						reply["components"] = m.Pagination.Components(i.Member.User.ID)
+					}
 				}
 			}
 			resp.Body.Close()
@@ -163,7 +168,11 @@ func (b *Bot) acknowledge(ctx context.Context, i Interaction) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
 	defer cancel()
 	target := "https://discord.com/api/v10/interactions/" + i.ID + "/" + url.PathEscape(i.Token) + "/callback"
-	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(`{"type":5,"data":{"flags":64}}`))
+	callback := `{"type":5,"data":{"flags":64}}`
+	if i.Type == 3 {
+		callback = `{"type":6}`
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(callback))
 	if err != nil {
 		return false
 	}
