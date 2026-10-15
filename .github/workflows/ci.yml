@@ -19,6 +19,11 @@ jobs:
       - run: go vet ./...
       - run: go test -race -cover ./...
       - run: make build
+      - name: Validate TrueNAS deployment files
+        run: |
+          docker compose -f deploy/truenas.yaml config --quiet
+          docker compose -f deploy/truenas-discord.yaml config --quiet
+          bash -n deploy/truenas-admin.sh
   image:
     needs: test
     runs-on: ubuntu-latest
@@ -48,3 +53,40 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+  deployment-smoke:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated TrueNAS configuration
+        run: |
+          mkdir -p /tmp/concierge-ci-data
+          sudo chown 65532:65532 /tmp/concierge-ci-data
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('deploy/truenas-discord.yaml').read_text()
+          for old, new in {
+              '192.0.2.10': '127.0.0.1',
+              '/mnt/Main/tank/concierge': '/tmp/concierge-ci-data',
+              'REMPLACER_PAR_APPLICATION_ID': '12345',
+              'REMPLACER_PAR_ID_SERVEUR_DISCORD': '23456',
+              'REMPLACER_PAR_PUBLIC_KEY_HEXADECIMALE': '00' * 32,
+              'REMPLACER_PAR_SECRET_ALEATOIRE_64_CARACTERES': 'ci-only-' * 8,
+          }.items():
+              text = text.replace(old, new)
+          Path('/tmp/concierge-ci.yaml').write_text(text)
+          PY
+      - name: Start published images with TrueNAS settings
+        run: docker compose -p concierge-ci -f /tmp/concierge-ci.yaml up -d --wait --wait-timeout 120
+      - name: Check health, private routes and proxy
+        run: |
+          bash deploy/truenas-admin.sh check
+          curl --fail http://127.0.0.1:18080/healthz
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/requests)" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/interactions -d '{}')" = 401
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -p concierge-ci -f /tmp/concierge-ci.yaml logs --tail 100
+      - name: Stop isolated containers
+        if: always()
+        run: docker compose -p concierge-ci -f /tmp/concierge-ci.yaml down --volumes

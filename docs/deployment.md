@@ -2,6 +2,8 @@
 
 Cette version permet de démarrer l'API, le bot d'interactions et le Hub. Les parcours ont été testés avec des fournisseurs simulés ; la validation des versions réellement installées de Plex et Seerr reste nécessaire. Aucun service n'est encore déployé automatiquement sur votre NAS.
 
+Pour une première installation sur le NAS, utiliser le [guide TrueNAS pas à pas](truenas-quickstart.md) et le [mini tutoriel Discord](discord-quickstart.md). Les fichiers TrueNAS publient le Hub sur 18080 et le bot sur 18081 ; le Compose de développement ci-dessous conserve 3000/8081.
+
 ## Développement local
 
 Prérequis : Go 1.27.2, Node 24.11 minimum dans la branche 24, npm. Les dépôts doivent être voisins : `le-concierge/` et `le-hub/`.
@@ -62,28 +64,7 @@ Pour TrueNAS, utiliser `deploy/truenas.yaml` après avoir remplacé les exemples
 
 Créer le dataset de données avec droit d'écriture pour l'UID/GID **65532** ; ne pas changer les droits d'un dataset de médias existant. L'image Go est non-root et ne nécessite aucun volume de médias. Les valeurs sensibles peuvent être lues via `DISCORD_CLIENT_SECRET_FILE`, `BOT_API_SECRET_FILE`, `DISCORD_BOT_TOKEN_FILE`, `SEERR_API_KEY_FILE`, avec fichiers montés en lecture seule. Ne jamais définir simultanément la variable et sa variante `_FILE`.
 
-Ajout du bot dans le YAML TrueNAS :
-
-```yaml
-  bot:
-    image: ghcr.io/hloiseau/le-concierge:edge
-    entrypoint: [/app/bot]
-    environment:
-      APP_ENV: production
-      PUBLIC_ORIGIN: https://hub.example.com
-      DISCORD_CLIENT_ID: 'ID_APPLICATION'
-      DISCORD_GUILD_ID: 'ID_SERVEUR'
-      DISCORD_PUBLIC_KEY: 'CLE_PUBLIQUE_ED25519'
-      BOT_API_SECRET: 'MEME_SECRET_ALEATOIRE_QUE_API'
-      BOT_API_URL: http://api:8080
-    ports: ['192.0.2.10:8081:8081']
-    restart: unless-stopped
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-```
-
-Ce bloc suppose le réseau Compose commun avec `api`. Pour l'enregistrement initial, ajouter temporairement le token de bot à l'environnement de ce service puis lancer `/app/bot --register` via un conteneur ponctuel. Le bot n'a pas besoin de lire la base SQLite.
+Pour installer aussi le bot, utiliser le fichier complet `deploy/truenas-discord.yaml` dans la même application TrueNAS. Il contient les trois services et les contrôles de santé. Le script `deploy/truenas-admin.sh register` effectue l’enregistrement ponctuel des commandes sans stocker le token du bot dans le YAML. Voir le [mini tutoriel Discord](discord-quickstart.md).
 
 ## Sauvegarde et retour arrière
 

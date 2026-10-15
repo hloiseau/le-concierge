@@ -1,0 +1,100 @@
+# TrueNAS SCALE 25.10 — Install via YAML, application unique : media-hub.
+# Remplacer 192.0.2.10 par l'IP LAN du NAS joignable depuis Caddy.
+# Dataset dedie /mnt/Main/tank/concierge : ecriture autorisee a UID/GID 65532.
+# Ne pas installer les deux variantes simultanement : remplacer le YAML de la meme app.
+# Images figees sur les commits testes. Le tag edge suit main si vous le preferez.
+x-runtime: &runtime
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
+# Renseigner une seule fois : ces valeurs sont partagees par API et bot.
+x-discord: &discord
+  APP_ENV: production
+  PUBLIC_ORIGIN: https://hub.hugoloiseau.fr
+  DISCORD_CLIENT_ID: 'REMPLACER_PAR_APPLICATION_ID'
+  DISCORD_GUILD_ID: 'REMPLACER_PAR_ID_SERVEUR_DISCORD'
+  DISCORD_PUBLIC_KEY: 'REMPLACER_PAR_PUBLIC_KEY_HEXADECIMALE'
+  # Generer sur le NAS : openssl rand -hex 32
+  BOT_API_SECRET: 'REMPLACER_PAR_SECRET_ALEATOIRE_64_CARACTERES'
+
+services:
+  api:
+    <<: *runtime
+    image: ghcr.io/hloiseau/le-concierge:sha-ed5d6d2008ea5f0d6e4f7d4e2d0d9c359244bda2
+    container_name: le-concierge-api
+    environment:
+      <<: *discord
+      DATABASE_PATH: /app/data/concierge.db
+      LISTEN_ADDR: ':8080'
+      # Secret OAuth2, different du token de bot. Vide = connexion desactivee.
+      DISCORD_CLIENT_SECRET: ''
+      ADMIN_DISCORD_IDS: ''
+      # Renseigner les deux valeurs d'une paire, ou laisser les deux vides.
+      # Exemple PLEX_URL : http://192.0.2.10:32400
+      PLEX_URL: ''
+      PLEX_SERVER_ID: ''
+      SEERR_URL: ''
+      SEERR_API_KEY: ''
+      # Liens publics HTTPS des boutons ; aucun secret ici.
+      SERVICE_LINKS_JSON: >-
+        {"plex":"https://app.plex.tv","seerr":"","downloadarr":"","torrent-watch":"","shelfmark":"","grimmory":""}
+    volumes:
+      - type: bind
+        source: /mnt/Main/tank/concierge
+        target: /app/data
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: [CMD, /app/api, --healthcheck]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+  hub:
+    <<: *runtime
+    image: ghcr.io/hloiseau/le-hub:sha-a000edd9047061821ebf49a9c2d1162b133a9c72
+    container_name: le-hub
+    environment:
+      HOST: 0.0.0.0
+      PORT: '3000'
+      NUXT_API_BASE: http://api:8080
+      NUXT_PUBLIC_DEMO: 'false'
+      NUXT_PUBLIC_DISCORD_URL: '' # Lien d'invitation Discord facultatif.
+    ports:
+      - '192.0.2.10:18080:3000'
+    tmpfs: [/tmp]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+  bot:
+    <<: *runtime
+    image: ghcr.io/hloiseau/le-concierge:sha-ed5d6d2008ea5f0d6e4f7d4e2d0d9c359244bda2
+    container_name: le-concierge-bot
+    entrypoint: [/app/bot]
+    environment:
+      <<: *discord
+      BOT_API_URL: http://api:8080
+      BOT_LISTEN_ADDR: ':8081'
+      # Pas de token permanent : enregistrement ponctuel avec truenas-admin.sh.
+    ports:
+      - '192.0.2.10:18081:8081'
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, /app/bot, --healthcheck]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

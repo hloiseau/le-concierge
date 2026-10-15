@@ -11,6 +11,8 @@ Bot Discord et API Go commune pour un écosystème multimédia auto-hébergé.
 
 ## Démarrer
 
+**TrueNAS :** [guide rapide et YAML prêts à adapter](docs/truenas-quickstart.md) · [mini tutoriel Discord](docs/discord-quickstart.md).
+
 Voir le [guide de déploiement](docs/deployment.md) pour Go, Discord, Plex, Seerr, Docker, TrueNAS et Caddy. `make test`, `make build`, puis `./bin/api` après chargement de `.env` permettent de tester le backend. Le bot est un second processus : `./bin/bot`.
 
 Le [contrat HTTP](api/openapi.json) décrit l’API du portail. La [politique de rappels avant retrait](docs/removal-reminders.md) est codée et testée, mais ses connecteurs et envois ne sont pas encore actifs.
@@ -23,7 +25,7 @@ Le [contrat HTTP](api/openapi.json) décrit l’API du portail. La [politique de
 - V4 : `/diagnostic`, réservé aux administrateurs.
 - Socle commun : identité, API, données et intégrations nécessaires au Hub.
 
-Le bot complète Seerr et ses notifications déjà opérationnelles. Deux exécutables Go sont prévus : API et bot. Le backend reste l’unique propriétaire de la persistance.
+Le bot complète Seerr et ses notifications déjà opérationnelles. Deux exécutables Go sont disponibles : API et bot. Le backend reste l’unique propriétaire de la persistance.
 
 ## Suivi
 
