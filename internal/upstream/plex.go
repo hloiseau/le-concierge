@@ -17,6 +17,7 @@ type Pin struct {
 	AuthToken string `json:"authToken"`
 }
 type Grant struct {
+	Name         string
 	PlexID       string
 	AccountToken string
 	ServerToken  string
@@ -63,13 +64,16 @@ func (c *Client) PlexPoll(ctx context.Context, p Pin, client string) (string, er
 func (c *Client) PlexVerify(ctx context.Context, account, client, serverID string) (Grant, error) {
 	var user struct {
 		ID         json.Number `json:"id"`
+		Username   string      `json:"username"`
+		Title      string      `json:"title"`
 		Restricted bool        `json:"restricted"`
 	}
 	h := plexHeaders(client, account)
 	if e := c.JSON(ctx, "GET", "https://plex.tv/api/v2/user", h, "", &user); e != nil {
 		return Grant{}, e
 	}
-	if user.ID == "" || user.Restricted {
+	id, err := user.ID.Int64()
+	if err != nil || id <= 0 || user.Restricted {
 		return Grant{}, ErrDenied
 	}
 	var resources []struct {
@@ -83,7 +87,11 @@ func (c *Client) PlexVerify(ctx context.Context, account, client, serverID strin
 	}
 	for _, r := range resources {
 		if r.ClientID == serverID && strings.Contains(","+r.Provides+",", ",server,") && r.AccessToken != "" {
-			return Grant{PlexID: string(user.ID), AccountToken: account, ClientID: client, ServerToken: r.AccessToken, VerifiedAt: time.Now()}, nil
+			name := user.Username
+			if name == "" {
+				name = user.Title
+			}
+			return Grant{Name: name, PlexID: string(user.ID), AccountToken: account, ClientID: client, ServerToken: r.AccessToken, VerifiedAt: time.Now()}, nil
 		}
 	}
 	return Grant{}, ErrDenied

@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.1.0",
-    "description": "Public Hub API. Bot /internal/discord is deliberately not proxied by the Hub. Protected media requires a verified Plex grant; Seerr additionally requires an administrator-verified mapping. Pagination is bounded; times are UTC RFC3339."
+    "version": "0.2.0",
+    "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
     {
@@ -42,7 +42,11 @@
     "/api/v1/services": {
       "get": {
         "operationId": "getServices",
-        "security": [],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -268,12 +272,8 @@
     },
     "/api/v1/auth/plex/start": {
       "post": {
-        "operationId": "startPlexLink",
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
+        "operationId": "startPlexLogin",
+        "security": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -306,17 +306,14 @@
             },
             "description": "Must equal configured PUBLIC_ORIGIN. Browser sends this header automatically."
           }
-        ]
+        ],
+        "description": "Anonymous Plex PIN flow; exact Origin required. The pending PIN is bound to a dedicated HttpOnly browser cookie. A session is issued only after Plex verifies access to the configured server."
       }
     },
     "/api/v1/auth/plex/poll": {
       "post": {
-        "operationId": "pollPlexLink",
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
+        "operationId": "pollPlexLogin",
+        "security": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -349,7 +346,8 @@
             },
             "description": "Must equal configured PUBLIC_ORIGIN. Browser sends this header automatically."
           }
-        ]
+        ],
+        "description": "Anonymous Plex PIN flow; exact Origin required. The pending PIN is bound to a dedicated HttpOnly browser cookie. A session is issued only after Plex verifies access to the configured server."
       }
     },
     "/api/v1/auth/logout": {
@@ -437,7 +435,11 @@
     "/api/v1/auth/discord/start": {
       "get": {
         "operationId": "startDiscord",
-        "security": [],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
         "responses": {
           "302": {
             "description": "Redirect to Discord or Hub; callback requires single-use state and the initiating browser cookie."
@@ -452,7 +454,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Link Discord to the current verified Plex account. The OAuth attempt is bound to the initiating live session."
       }
     },
     "/api/v1/auth/discord/callback": {
@@ -473,7 +476,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Consume the one-time state and its browser cookie, verify the initiating Plex session is still valid, link the Discord identity, rotate the session cookie. Does not grant Hub access on its own."
       }
     }
   },
@@ -514,7 +518,8 @@
         "type": "object",
         "properties": {
           "discordId": {
-            "type": "string"
+            "type": "string",
+            "description": "Optional Discord identity, linked after Plex login."
           },
           "name": {
             "type": "string"
@@ -530,8 +535,8 @@
           }
         },
         "required": [
-          "discordId",
           "name",
+          "plexId",
           "notifications"
         ]
       },
@@ -613,10 +618,12 @@
             "type": "string"
           },
           "discordLogin": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Optional Discord account linking is configured; this does not authenticate access to the Hub."
           },
           "plexLink": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Plex sign-in is configured and required to enter the Hub."
           },
           "requests": {
             "type": "boolean"

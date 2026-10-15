@@ -33,11 +33,12 @@ services:
       <<: *discord
       DATABASE_PATH: /app/data/concierge.db
       LISTEN_ADDR: ':8080'
-      # Secret OAuth2, different du token de bot. Vide = connexion desactivee.
+      # Secret OAuth2, different du token de bot. Vide = liaison Discord desactivee (Plex reste disponible).
       DISCORD_CLIENT_SECRET: ''
       ADMIN_DISCORD_IDS: ''
       # Renseigner les deux valeurs d'une paire, ou laisser les deux vides.
       # Exemple PLEX_URL : http://192.0.2.10:32400
+      # Connexion obligatoire au Hub : renseigner URL + identifiant du serveur.
       PLEX_URL: ''
       PLEX_SERVER_ID: ''
       SEERR_URL: ''

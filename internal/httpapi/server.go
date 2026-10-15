@@ -27,11 +27,17 @@ type session struct {
 	UserID  string
 	Expires time.Time
 }
+type oauthAttempt struct {
+	Expires    time.Time
+	SessionKey string
+	UserID     string
+}
 type pendingPin struct {
-	Pin      upstream.Pin
-	ClientID string
-	Expires  time.Time
-	LastPoll time.Time
+	Pin        upstream.Pin
+	ClientID   string
+	Expires    time.Time
+	LastPoll   time.Time
+	Processing bool
 }
 type bucket struct {
 	Since time.Time
@@ -43,7 +49,7 @@ type Server struct {
 	Upstream *upstream.Client
 	mu       sync.Mutex
 	sessions map[string]session
-	oauth    map[string]time.Time
+	oauth    map[string]oauthAttempt
 	pins     map[string]pendingPin
 	grants   map[string]upstream.Grant
 	limits   map[string]bucket
@@ -51,7 +57,7 @@ type Server struct {
 }
 
 func New(c config.Config, db *store.Store) *Server {
-	return &Server{Config: c, Store: db, Upstream: upstream.New(), sessions: map[string]session{}, oauth: map[string]time.Time{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}}
+	return &Server{Config: c, Store: db, Upstream: upstream.New(), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}}
 }
 func token() string {
 	b := make([]byte, 32)
@@ -106,13 +112,16 @@ func (s *Server) session(r *http.Request) (string, session, bool) {
 func (s *Server) user(w http.ResponseWriter, r *http.Request) (string, store.User, bool) {
 	key, v, ok := s.session(r)
 	if !ok {
-		problem(w, 401, "unauthenticated", "Connectez-vous avec Discord.")
+		problem(w, 401, "unauthenticated", "Connectez-vous avec Plex.")
 		return "", store.User{}, false
 	}
 	u, e := s.Store.User(r.Context(), v.UserID)
 	if e != nil {
-		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Discord.")
+		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Plex.")
 		return "", u, false
+	}
+	if _, ok := s.requireGrant(w, r, u); !ok {
+		return "", store.User{}, false
 	}
 	return key, u, true
 }
@@ -160,7 +169,7 @@ func (s *Server) cleanup() {
 		}
 	}
 	for k, v := range s.oauth {
-		if now.After(v) {
+		if now.After(v.Expires) {
 			delete(s.oauth, k)
 		}
 	}
@@ -192,6 +201,9 @@ func (s *Server) Handler() http.Handler {
 	})
 	m.HandleFunc("GET /api/v1/capabilities", s.capabilities)
 	m.HandleFunc("GET /api/v1/services", func(w http.ResponseWriter, r *http.Request) {
+		if _, _, ok := s.user(w, r); !ok {
+			return
+		}
 		jsonOut(w, 200, map[string]any{"items": s.Config.Services})
 	})
 	m.HandleFunc("GET /api/v1/session", s.getSession)
@@ -228,7 +240,7 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, 200, map[string]any{"version": "0.1.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "subscriptions": false, "notifications": false, "books": false, "monitoring": false})
+	jsonOut(w, 200, map[string]any{"version": "0.2.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "subscriptions": false, "notifications": false, "books": false, "monitoring": false})
 }
 func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 	_, v, ok := s.session(r)
@@ -241,20 +253,25 @@ func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, 200, map[string]any{"user": nil})
 		return
 	}
-	s.mu.Lock()
-	g, has := s.grants[u.DiscordID]
-	s.mu.Unlock()
-	connected := has && g.PlexID == u.PlexID && time.Now().Before(g.ExpiresAt)
-	// Only advertise a Seerr association confirmed by the upstream directory.
-	u.SeerrID = 0
-	if connected && s.Config.SeerrURL != "" && !s.rate("seerr-session:"+u.DiscordID, 30) {
-		if _, err := s.grant(r.Context(), u); err == nil {
-			u.SeerrID, _ = s.resolveSeerr(r.Context(), u)
+	if _, err := s.grant(r.Context(), u); err != nil {
+		if errors.Is(err, upstream.ErrUnavailable) {
+			problem(w, 503, "plex_unavailable", "La vérification Plex est momentanément indisponible. Réessayez.")
+		} else {
+			jsonOut(w, 200, map[string]any{"user": nil})
 		}
+		return
 	}
-	jsonOut(w, 200, map[string]any{"user": u, "admin": s.Config.Admin(u.DiscordID), "plexConnected": connected, "expiresAt": v.Expires.UTC().Format(time.RFC3339)})
+	u.SeerrID = 0
+	if s.Config.SeerrURL != "" && !s.rate("seerr-session:"+u.ID, 30) {
+		u.SeerrID, _ = s.resolveSeerr(r.Context(), u)
+	}
+	jsonOut(w, 200, map[string]any{"user": u, "admin": s.Config.Admin(u.DiscordID), "plexConnected": true, "expiresAt": v.Expires.UTC().Format(time.RFC3339)})
 }
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	key, u, ok := s.user(w, r)
+	if !ok {
+		return
+	}
 	if !s.Config.OAuthEnabled() {
 		problem(w, 503, "not_configured", "La connexion Discord n’est pas encore configurée.")
 		return
@@ -269,7 +286,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		problem(w, 503, "busy", "Réessayez plus tard.")
 		return
 	}
-	s.oauth[digest(state)] = time.Now().Add(5 * time.Minute)
+	s.oauth[digest(state)] = oauthAttempt{Expires: time.Now().Add(5 * time.Minute), SessionKey: key, UserID: u.ID}
 	s.mu.Unlock()
 	s.cookie(w, s.oauthCookieName(), state, 300, true)
 	q := url.Values{"client_id": {s.Config.DiscordClientID}, "redirect_uri": {s.Config.PublicOrigin + "/api/v1/auth/discord/callback"}, "response_type": {"code"}, "scope": {"identify guilds.members.read"}, "state": {state}, "prompt": {"consent"}}
@@ -283,12 +300,27 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.Lock()
-	expiry, ok := s.oauth[digest(state)]
+	attempt, ok := s.oauth[digest(state)]
 	delete(s.oauth, digest(state))
 	s.mu.Unlock()
 	s.cookie(w, s.oauthCookieName(), "", -1, true)
-	if !ok || time.Now().After(expiry) || r.URL.Query().Get("code") == "" {
+	if !ok || time.Now().After(attempt.Expires) || r.URL.Query().Get("code") == "" {
 		problem(w, 403, "invalid_state", "Relancez la connexion.")
+		return
+	}
+	s.mu.Lock()
+	sess, valid := s.sessions[attempt.SessionKey]
+	s.mu.Unlock()
+	if !valid || sess.UserID != attempt.UserID || !time.Now().Before(sess.Expires) {
+		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Plex avant de lier Discord.")
+		return
+	}
+	u, err := s.Store.User(r.Context(), sess.UserID)
+	if err != nil {
+		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Plex.")
+		return
+	}
+	if _, ok := s.requireGrant(w, r, u); !ok {
 		return
 	}
 	identity, e := s.Upstream.DiscordLogin(r.Context(), s.Config.DiscordClientID, s.Config.DiscordClientSecret, r.URL.Query().Get("code"), s.Config.PublicOrigin+"/api/v1/auth/discord/callback", s.Config.DiscordGuildID)
@@ -296,27 +328,34 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		problem(w, 403, "discord_denied", "Connexion refusée. Vérifiez votre accès au serveur Discord.")
 		return
 	}
-	name := identity.GlobalName
-	if name == "" {
-		name = identity.Username
-	}
-	if _, e = s.Store.Upsert(r.Context(), identity.ID, name); e != nil {
-		problem(w, 500, "storage_error", "Connexion impossible.")
+	// Check the initiating session again after the provider round trip. Holding
+	// this lock through the transaction prevents a concurrent logout from linking.
+	s.mu.Lock()
+	current, valid := s.sessions[attempt.SessionKey]
+	if !valid || current != sess || !time.Now().Before(current.Expires) {
+		s.mu.Unlock()
+		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Plex.")
 		return
+	}
+	merged, err := s.Store.LinkDiscord(r.Context(), u.ID, u.PlexID, identity.ID)
+	if err != nil {
+		s.mu.Unlock()
+		problem(w, 409, "identity_conflict", "Ce compte Discord est déjà lié à un autre compte Plex, ou votre compte possède une autre liaison Discord.")
+		return
+	}
+	if merged != "" {
+		for key, v := range s.sessions {
+			if v.UserID == merged {
+				delete(s.sessions, key)
+			}
+		}
+		delete(s.grants, merged)
 	}
 	value := token()
-	s.mu.Lock()
-	if len(s.sessions) >= 1000 {
-		s.mu.Unlock()
-		problem(w, 503, "busy", "Réessayez plus tard.")
-		return
-	}
-	if old, e := r.Cookie(s.cookieName()); e == nil {
-		delete(s.sessions, digest(old.Value))
-	}
-	s.sessions[digest(value)] = session{identity.ID, time.Now().Add(12 * time.Hour)}
+	delete(s.sessions, attempt.SessionKey)
+	s.sessions[digest(value)] = sess
 	s.mu.Unlock()
-	s.cookie(w, s.cookieName(), value, 12*3600, false)
+	s.cookie(w, s.cookieName(), value, int(time.Until(sess.Expires).Seconds()), false)
 	http.Redirect(w, r, "/compte", http.StatusSeeOther)
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -327,11 +366,15 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	delete(s.sessions, key)
 	delete(s.pins, key)
+	if pending, err := r.Cookie(s.plexCookieName()); err == nil {
+		delete(s.pins, digest(pending.Value))
+	}
 	if ok {
 		delete(s.grants, v.UserID)
 	}
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
+	s.cookie(w, s.plexCookieName(), "", -1, false)
 	jsonOut(w, 200, map[string]bool{"ok": true})
 }
 func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
@@ -342,32 +385,34 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if e := s.Store.Delete(r.Context(), u.DiscordID); e != nil {
+	if e := s.Store.Delete(r.Context(), u.ID); e != nil {
 		problem(w, 500, "storage_error", "Suppression impossible.")
 		return
 	}
 	s.mu.Lock()
 	for k, v := range s.sessions {
-		if v.UserID == u.DiscordID {
+		if v.UserID == u.ID {
 			delete(s.sessions, k)
 			delete(s.pins, k)
 		}
 	}
-	delete(s.grants, u.DiscordID)
+	delete(s.grants, u.ID)
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
 	jsonOut(w, 200, map[string]bool{"ok": true})
+}
+func (s *Server) plexCookieName() string {
+	if s.Config.Env == "development" {
+		return "concierge_plex"
+	}
+	return "__Host-concierge_plex"
 }
 func (s *Server) plexStart(w http.ResponseWriter, r *http.Request) {
 	if !s.origin(w, r) {
 		return
 	}
-	key, _, ok := s.user(w, r)
-	if !ok {
-		return
-	}
-	if s.Config.PlexURL == "" {
-		problem(w, 503, "not_configured", "Plex n’est pas configuré.")
+	if s.Config.PlexURL == "" || s.Config.PlexServerID == "" {
+		problem(w, 503, "not_configured", "La connexion Plex n’est pas encore configurée.")
 		return
 	}
 	if s.limited(w, r, "plex", 10) {
@@ -380,26 +425,43 @@ func (s *Server) plexStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ttl := min(p.ExpiresIn, 300)
+	value := token()
 	s.mu.Lock()
-	s.pins[key] = pendingPin{Pin: p, ClientID: client, Expires: time.Now().Add(time.Duration(ttl) * time.Second)}
+	if old, err := r.Cookie(s.plexCookieName()); err == nil {
+		delete(s.pins, digest(old.Value))
+	}
+	if len(s.pins) >= 1000 {
+		s.mu.Unlock()
+		problem(w, 503, "busy", "Réessayez plus tard.")
+		return
+	}
+	s.pins[digest(value)] = pendingPin{Pin: p, ClientID: client, Expires: time.Now().Add(time.Duration(ttl) * time.Second)}
 	s.mu.Unlock()
-	q := url.Values{"clientID": {client}, "code": {p.Code}, "context[device][product]": {"Le Concierge"}}
+	s.cookie(w, s.plexCookieName(), value, ttl, false)
+	q := url.Values{"clientID": {client}, "code": {p.Code}, "context[device][product]": {"Le Hub"}}
 	jsonOut(w, 200, map[string]any{"url": "https://app.plex.tv/auth#?" + q.Encode(), "expiresIn": ttl})
 }
 func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 	if !s.origin(w, r) {
 		return
 	}
-	key, u, ok := s.user(w, r)
-	if !ok {
+	c, e := r.Cookie(s.plexCookieName())
+	if e != nil || len(c.Value) != 64 {
+		problem(w, 410, "pin_expired", "Relancez la connexion Plex.")
 		return
 	}
+	key := digest(c.Value)
 	s.mu.Lock()
 	p, exists := s.pins[key]
 	if !exists || time.Now().After(p.Expires) {
 		delete(s.pins, key)
 		s.mu.Unlock()
-		problem(w, 410, "pin_expired", "Relancez la liaison Plex.")
+		problem(w, 410, "pin_expired", "Relancez la connexion Plex.")
+		return
+	}
+	if p.Processing {
+		s.mu.Unlock()
+		problem(w, 409, "pin_consumed", "Connexion en cours de vérification.")
 		return
 	}
 	if time.Since(p.LastPoll) < 2*time.Second {
@@ -419,41 +481,69 @@ func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 		jsonOut(w, 200, map[string]bool{"connected": false})
 		return
 	}
-	// Consume a successful PIN before verification so concurrent polls cannot bind it twice.
+	// Atomically claim the PIN; retain it until the final commit so cancellation
+	// or replacement of this browser attempt also invalidates in-flight work.
 	s.mu.Lock()
 	current, exists := s.pins[key]
-	if exists && current.Pin.ID == p.Pin.ID {
-		delete(s.pins, key)
+	if exists && !current.Processing && current.Pin.ID == p.Pin.ID {
+		current.Processing = true
+		s.pins[key] = current
+	} else {
+		exists = false
 	}
 	s.mu.Unlock()
 	if !exists || current.Pin.ID != p.Pin.ID {
-		problem(w, 409, "pin_consumed", "Cette liaison a déjà été traitée.")
+		problem(w, 409, "pin_consumed", "Cette connexion a déjà été traitée.")
 		return
 	}
+	s.cookie(w, s.plexCookieName(), "", -1, false)
 	g, e := s.Upstream.PlexVerify(r.Context(), account, p.ClientID, s.Config.PlexServerID)
 	if e != nil {
-		problem(w, 403, "plex_denied", "Ce compte Plex n’a pas accès au serveur, ou Plex ne peut pas le confirmer.")
-		return
-	}
-	if e = s.Store.LinkPlex(r.Context(), u.DiscordID, g.PlexID); e != nil {
-		problem(w, 409, "identity_conflict", "Ce compte est déjà lié, ou une autre identité Plex est associée. Contactez l’administrateur.")
-		return
-	}
-	s.mu.Lock()
-	sess, valid := s.sessions[key]
-	if !valid || !time.Now().Before(sess.Expires) {
+		s.mu.Lock()
+		delete(s.pins, key)
 		s.mu.Unlock()
-		problem(w, 401, "unauthenticated", "Reconnectez-vous.")
+		if errors.Is(e, upstream.ErrUnavailable) {
+			problem(w, 503, "plex_unavailable", "Plex est momentanément indisponible. Relancez la connexion.")
+		} else {
+			problem(w, 403, "plex_denied", "Ce compte Plex n’a pas accès à ce serveur.")
+		}
 		return
 	}
-	g.ExpiresAt = sess.Expires
-	s.grants[u.DiscordID] = g
+	value := token()
+	expires := time.Now().Add(12 * time.Hour)
+	s.mu.Lock()
+	current, exists = s.pins[key]
+	delete(s.pins, key)
+	if !exists || !current.Processing || current.Pin.ID != p.Pin.ID || !time.Now().Before(current.Expires) {
+		s.mu.Unlock()
+		problem(w, 410, "pin_expired", "Relancez la connexion Plex.")
+		return
+	}
+	if len(s.sessions) >= 1000 {
+		s.mu.Unlock()
+		problem(w, 503, "busy", "Réessayez plus tard.")
+		return
+	}
+	u, e := s.Store.LoginPlex(r.Context(), g.PlexID, g.Name)
+	if e != nil {
+		s.mu.Unlock()
+		problem(w, 500, "storage_error", "Connexion impossible.")
+		return
+	}
+	if old, err := r.Cookie(s.cookieName()); err == nil {
+		delete(s.sessions, digest(old.Value))
+	}
+	s.sessions[digest(value)] = session{u.ID, expires}
+	g.ExpiresAt = expires
+	s.grants[u.ID] = g
 	s.mu.Unlock()
+	s.cookie(w, s.cookieName(), value, 12*3600, false)
 	jsonOut(w, 200, map[string]bool{"connected": true})
 }
+
 func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error) {
 	s.mu.Lock()
-	g, ok := s.grants[u.DiscordID]
+	g, ok := s.grants[u.ID]
 	s.mu.Unlock()
 	if !ok || g.PlexID != u.PlexID || time.Now().After(g.ExpiresAt) {
 		return upstream.Grant{}, upstream.ErrDenied
@@ -465,7 +555,7 @@ func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error
 	if e != nil {
 		if errors.Is(e, upstream.ErrDenied) {
 			s.mu.Lock()
-			delete(s.grants, u.DiscordID)
+			delete(s.grants, u.ID)
 			s.mu.Unlock()
 		}
 		return upstream.Grant{}, e
@@ -475,9 +565,9 @@ func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error
 	}
 	fresh.ExpiresAt = g.ExpiresAt
 	s.mu.Lock()
-	current, exists := s.grants[u.DiscordID]
+	current, exists := s.grants[u.ID]
 	if exists && current.AccountToken == g.AccountToken {
-		s.grants[u.DiscordID] = fresh
+		s.grants[u.ID] = fresh
 	}
 	s.mu.Unlock()
 	if !exists || current.AccountToken != g.AccountToken {
@@ -490,7 +580,7 @@ func (s *Server) requireGrant(w http.ResponseWriter, r *http.Request, u store.Us
 	if e != nil {
 		status := 403
 		code := "plex_required"
-		message := "Liez ou reconnectez votre compte Plex depuis Mon compte."
+		message := "Connectez-vous avec Plex pour accéder au Hub."
 		if errors.Is(e, upstream.ErrUnavailable) {
 			status = 503
 			code = "plex_unavailable"
@@ -520,7 +610,7 @@ func (s *Server) resolveSeerr(ctx context.Context, u store.User) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
-	if err := s.Store.SyncSeerr(ctx, u.DiscordID, u.PlexID, id); err != nil {
+	if err := s.Store.SyncSeerr(ctx, u.ID, u.PlexID, id); err != nil {
 		return 0, upstream.ErrDenied
 	}
 	return id, nil
@@ -609,7 +699,7 @@ func (s *Server) putPreferences(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_body", "Préférences invalides.")
 		return
 	}
-	if e := s.Store.Preferences(r.Context(), u.DiscordID, *p.Notifications); e != nil {
+	if e := s.Store.Preferences(r.Context(), u.ID, *p.Notifications); e != nil {
 		problem(w, 500, "storage_error", "Enregistrement impossible.")
 		return
 	}
@@ -645,13 +735,13 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	if i.Data.Name == "aide" {
 		text = discord.Help(s.Config.PublicOrigin)
 	} else if i.Data.Name == "mes-demandes" || i.Data.Name == "nouveautes" {
-		u, e := s.Store.User(r.Context(), i.Member.User.ID)
+		u, e := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
 		if e == nil {
 			g, e = s.grant(r.Context(), u)
 		}
 		if e != nil {
-			text = "Connectez-vous au Hub et liez votre compte Plex : " + s.Config.PublicOrigin + "/compte"
+			text = "Connectez-vous au Hub avec Plex, puis liez Discord dans Mon compte : " + s.Config.PublicOrigin + "/compte"
 		} else if i.Data.Name == "mes-demandes" {
 			if s.Config.SeerrURL == "" {
 				text = "Seerr n’est pas encore configuré."

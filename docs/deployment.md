@@ -20,7 +20,9 @@ Dans le Hub : `npm ci`, puis `npm run dev`. Le proxy Nuxt utilise `NUXT_API_BASE
 
 Pour une démonstration visuelle isolée : `NUXT_PUBLIC_DEMO=true npm run dev`. Toutes les données y sont fictives et signalées ; aucune authentification de démonstration n'existe dans l'API.
 
-## Discord
+## Discord (facultatif)
+
+Plex ouvre l’accès au Hub. Discord sert uniquement à associer les commandes du bot à ce compte ; le Hub fonctionne sans identifiants Discord.
 
 1. Créer une application dédiée au Concierge dans le Developer Portal Discord.
 2. Configurer `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_GUILD_ID` et la clé publique Ed25519 `DISCORD_PUBLIC_KEY`.
@@ -36,9 +38,9 @@ Les commandes sont privées. `/aide` répond directement, sans appeler l’API. 
 
 Configurer `PLEX_URL` avec l'adresse privée du PMS et `PLEX_SERVER_ID` avec son `machineIdentifier`. Le backend vérifie le serveur retourné par `/identity` avant de lire les nouveautés. Il n'utilise jamais les adresses contenues dans la réponse Plex resources. Les lectures se font avec le token de ressource de l'utilisateur, pas un token propriétaire global.
 
-L'utilisateur se connecte avec Discord, choisit « Lier Plex », ouvre le lien Plex et autorise l'application. Le PIN est associé à la session initiatrice, expire après cinq minutes maximum et est consommé une seule fois. Les comptes Plex Home gérés/restrictifs ne sont pas pris en charge par ce premier parcours.
+L’utilisateur ouvre le Hub, choisit **Se connecter avec Plex**, puis **Continuer sur Plex** et autorise l’application dans l’onglet Plex. Le Hub vérifie automatiquement le résultat. Le PIN est lié à un cookie HttpOnly du navigateur, expire après cinq minutes maximum et est consommé une seule fois. Aucune session n’est créée avant la vérification de l’accès au serveur configuré. L’accueil, les guides et les liens des services ne sont pas affichés avant cette connexion ; les endpoints de données sont également protégés côté API. Les comptes Plex Home gérés/restrictifs ne sont pas pris en charge par ce premier parcours.
 
-Configurer `SEERR_URL` et `SEERR_API_KEY` avec la clé serveur de Seerr (accès à la gestion des utilisateurs requis pour lire `plexId`). Après la connexion Discord puis Plex dans le Hub, le backend retrouve automatiquement le compte Seerr grâce à l'identifiant Plex vérifié. Aucun script d'association ni mot de passe Seerr n'est nécessaire.
+Configurer `SEERR_URL` et `SEERR_API_KEY` avec la clé serveur de Seerr (accès à la gestion des utilisateurs requis pour lire `plexId`). Après la connexion Plex dans le Hub, le backend retrouve automatiquement le compte Seerr grâce à l'identifiant Plex vérifié. Aucun script d'association ni mot de passe Seerr n'est nécessaire.
 
 Si le compte est absent, ouvrir Seerr et se connecter une première fois **avec le même compte Plex**, puis cliquer sur **Actualiser l’association** dans Mon compte, ou réessayer `/mes-demandes`. Aucun compte Seerr n'est créé par le Concierge.
 
@@ -83,6 +85,12 @@ Pour restaurer : arrêter l'API et le bot, conserver l'ancienne base et ses fich
 
 Les sessions et tokens sont uniquement en mémoire, expirent après 12 heures, et sont perdus au redémarrage. Le bot ne peut lire les contenus personnels que pendant une autorisation Plex active ; il invite à reconnecter le Hub sinon. La déconnexion supprime aussi l'autorisation en mémoire utilisée par le bot pour cet utilisateur, mais ne révoque pas l'application dans Plex.
 
-Le partage Plex est revérifié toutes les cinq minutes lors des accès protégés. L'appartenance Discord est vérifiée à la connexion ; un retrait Discord ne coupe donc pas immédiatement une session existante (maximum 12 heures). Les quotas sont basés sur l'adresse directe, sans faire confiance aux en-têtes de proxy : derrière Caddy, les visiteurs partagent ce quota.
+Le partage Plex est revérifié toutes les cinq minutes lors des accès protégés. L’appartenance Discord est vérifiée lors de la liaison facultative ; elle ne conditionne pas l’accès au portail, qui dépend de Plex. Le client revérifie sa session chaque minute et au retour dans l’onglet. Les routes publiques se limitent à l’état de connexion, aux capacités sans URLs privées, au flux d’authentification et aux contrôles de santé. Les quotas sont basés sur l'adresse directe, sans faire confiance aux en-têtes de proxy : derrière Caddy, les visiteurs partagent ce quota.
 
 Les nouveautés n'ont pas encore de regroupement avancé ni d'affiches ; l'API ne fait aucun cache partagé de données privées. Le titre des demandes est enrichi par Seerr avec une valeur de repli si les métadonnées manquent. La préférence de notifications est stockée mais aucun envoi proactif n'est actif. Maintainerr/Tautulli, livres, métriques et conversions restent à intégrer.
+
+## Migration vers la connexion Plex
+
+Le schéma SQLite v2 ajoute un identifiant local et rend Discord facultatif. La migration est transactionnelle et conserve identités Plex/Discord/Seerr, préférences et dates. Un compte existant avec Plex est retrouvé par cet identifiant ; un ancien compte Discord sans Plex est fusionné uniquement après preuve du contrôle de ce Discord depuis une session Plex vérifiée. Une identité Discord déjà liée à un autre Plex est refusée.
+
+Sauvegarder la base avant la mise à jour (`truenas-admin.sh backup`) puis récupérer les images API/bot et Hub et redéployer. Les sessions en mémoire seront renouvelées par une connexion Plex. Les anciens binaires refusent un schéma plus récent : pour revenir à une ancienne image, restaurer aussi la sauvegarde antérieure. Aucun nouveau secret ni changement de proxy n’est requis ; `PLEX_URL`, `PLEX_SERVER_ID` et `PUBLIC_ORIGIN` doivent être correctement renseignés.

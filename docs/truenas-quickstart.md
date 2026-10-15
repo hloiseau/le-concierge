@@ -69,7 +69,7 @@ sudo bash truenas-admin.sh check
 
 Ce contrôle vérifie API/SQLite, le passage Hub → API et la santé HTTP du bot s'il est installé. Il ne valide pas tes identifiants auprès des fournisseurs.
 
-Après le tutoriel Discord : se connecter au Hub, ouvrir **Mon compte**, puis **Lier Plex**. Le compte Seerr est associé automatiquement via l'identifiant Plex vérifié : **aucun script à lancer**.
+Ouvrir le Hub : toutes les pages demandent désormais **Se connecter avec Plex**. Choisir **Continuer sur Plex**, autoriser l’application puis revenir sur le Hub. Seuls les comptes ayant accès au serveur configuré sont acceptés. Discord est facultatif ; pour utiliser le bot, ouvrir ensuite **Mon compte → Lier Discord**. Le compte Seerr est associé automatiquement via l'identifiant Plex vérifié : **aucun script à lancer**.
 
 Si l'association n'est pas confirmée, ouvrir Seerr, se connecter avec le même compte Plex et cliquer sur **Actualiser l’association** dans le Hub. Vérifier que `SEERR_API_KEY` est la clé serveur Seerr, avec accès à la gestion des utilisateurs. Une panne ou un identifiant masqué ne donne jamais accès aux demandes d'un autre compte.
 
@@ -84,13 +84,15 @@ Les YAML utilisent **`edge`**, publié après chaque fusion validée sur `main` 
 
 Pour figer une version, remplacer `edge` par `sha-<SHA complet du commit publié>` après vérification du succès de la CI. `main` et `latest` ne sont pas des tags publiés. Après une mise à jour, demander à TrueNAS de **récupérer les nouvelles images puis redéployer les trois services**. Un simple redémarrage peut réutiliser l'image en cache. Si ton YAML utilise encore les anciens tags `sha-…`, remplacer uniquement les trois lignes `image:` en conservant tes paramètres et ton dataset.
 
+Cette version migre SQLite vers le schéma v2 en conservant les comptes et préférences. Une ancienne image nécessite la restauration d’une sauvegarde antérieure pour revenir en arrière.
+
 Avant une mise à jour :
 
 ```bash
 sudo bash truenas-admin.sh backup
 ```
 
-Conserver aussi une copie hors du dataset de l'application et noter les tags précédents. Le guide détaillé décrit la restauration SQLite et le retour arrière. Les sessions ne survivent pas au redémarrage : reconnecter Discord puis Plex. L'association Seerr et les préférences restent en base.
+Conserver aussi une copie hors du dataset de l'application et noter les tags précédents. Le guide détaillé décrit la restauration SQLite et le retour arrière. Les sessions ne survivent pas au redémarrage : se reconnecter avec Plex. L'association Seerr et les préférences restent en base.
 
 ## Dépannage rapide
 
@@ -99,7 +101,8 @@ Conserver aussi une copie hors du dataset de l'application et noter les tags pr�
 | `permission denied` / SQLite impossible à ouvrir | Dataset existant, UID 65532 autorisé, traversée des dossiers parents |
 | `cannot assign requested address` | IP LAN fictive `192.0.2.10` encore présente |
 | Caddy 502 | Port du Hub, IP accessible depuis Caddy, santé des conteneurs |
-| Connexion désactivée | Client ID + secret OAuth2 + guild ID dans l'API |
+| Connexion Plex désactivée | Renseigner `PLEX_URL` + `PLEX_SERVER_ID` dans l’API |
+| Liaison Discord désactivée | Client ID + secret OAuth2 + guild ID dans l’API ; facultatif pour le portail |
 | Discord refuse le callback | URL exacte et même domaine que `PUBLIC_ORIGIN` |
 | Erreur 403 lors d'une action Hub | Ouvrir le domaine HTTPS configuré, pas une IP ou un alias |
 | Demandes Seerr en attente de liaison | Se connecter à Seerr avec le même Plex puis actualiser l’association ; vérifier la clé API serveur |
