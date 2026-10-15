@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -479,6 +479,39 @@
         },
         "description": "Consume the one-time state and its browser cookie, verify the initiating Plex session is still valid, link the Discord identity, rotate the session cookie. Does not grant Hub access on its own."
       }
+    },
+    "/api/v1/departures": {
+      "get": {
+        "operationId": "getDepartures",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Departures"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Current Plex user only. Recorded viewing history and season/show parents within 30 days. Checks active rules, exclusions and current per-item Plex access. Missing history and whole-season completion remain unknown. No query parameters or automatic reminders."
+      }
     }
   },
   "components": {
@@ -642,6 +675,10 @@
           },
           "monitoring": {
             "type": "boolean"
+          },
+          "departures": {
+            "type": "boolean",
+            "description": "Personal recorded viewing history; automatic reminders remain separate."
           }
         },
         "required": [
@@ -858,6 +895,82 @@
         },
         "required": [
           "ok"
+        ]
+      },
+      "Departure": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "episode",
+              "season",
+              "show"
+            ]
+          },
+          "watch": {
+            "type": "string",
+            "enum": [
+              "in_progress",
+              "completed",
+              "unknown"
+            ]
+          },
+          "estimatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "type",
+          "watch",
+          "estimatedAt",
+          "url"
+        ]
+      },
+      "Departures": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Departure"
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "recorded_history"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "scope",
+          "updatedAt",
+          "expiresAt"
         ]
       }
     }

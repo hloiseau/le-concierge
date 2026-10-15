@@ -91,7 +91,7 @@ jobs:
         run: |
           bash deploy/truenas-admin.sh check
           curl --fail http://127.0.0.1:18080/healthz
-          for route in services requests recent preferences; do
+          for route in services requests recent preferences departures; do
             test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/$route)" = 401
           done
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/interactions -d '{}')" = 401

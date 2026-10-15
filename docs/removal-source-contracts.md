@@ -15,7 +15,7 @@ La lecture de l’instance Maintainerr, effectuée pendant cette session, a conf
 
 Le commit du build est [`78ee15578f25493fea7196a0e4d9780d10f7460d`][M-build]. Sa comparaison au tag montre seulement le changelog et les trois versions de `package.json` : les fichiers de code audités sont identiques. Cette comparaison explique l’écart de SHA ; elle ne vérifie pas le digest de l’image Docker.
 
-Le diagnostic Go a ensuite confirmé Tautulli `v2.18.2` avec une clé autorisée lue localement : authentification par en-tête, même identité serveur que Maintainerr, compte administrateur trouvé par identifiant dans `get_users`, puis historique paginé jusqu’au total annoncé. Ces lectures n’ont modifié aucune source ni ouvert SQLite côté Concierge. La correspondance avec la configuration de l’API déployée et les identités Discord reste à vérifier ; la réussite du diagnostic ne remplace pas ce contrôle.
+Le diagnostic Go a ensuite confirmé Tautulli `v2.18.2` avec une clé autorisée lue localement : authentification par en-tête, même identité serveur que Maintainerr, compte administrateur trouvé par identifiant dans `get_users`, puis historique paginé jusqu’au total annoncé. Le diagnostic n’a envoyé aucune commande de mutation ni ouvert SQLite côté Concierge. La correspondance avec la configuration locale, l’identité Plex directe et les groupes/exclusions Maintainerr a ensuite été vérifiée. La recette de l’API déployée reste distincte ; la réussite du diagnostic ne remplace pas ce contrôle.
 
 ## Maintainerr : lectures utiles
 
@@ -51,7 +51,12 @@ Normalisation recommandée : conserver `(machineIdentifier, ratingKey, type)`, `
 
 Une exclusion brute est `{id,mediaServerId,ruleGroupId,parent,type}` ; les quatre derniers champs peuvent être nuls pour des données anciennes. `ruleGroupId=null` signifie global. `GET /api/rules/exclusion` **sans paramètre retourne `[]`**, pas toutes les exclusions. Le filtre `rulegroupId=N` ajoute les globales ; le filtre `mediaServerId=K` seul cherche l’identifiant ou le champ `parent`. [Lecture des exclusions][M-exclusions-read], [entité][M-exclusion-entity]
 
-Pour une exclusion typée, la cascade utilise `mediaServerId` et `type` : une série exclut ses saisons/épisodes, une saison ses épisodes. `parent` mémorise le point d’entrée d’une demande et ne doit pas être utilisé comme cascade générale ; il sert de repli pour les anciennes lignes sans type. Il faut donc connaître `parentId` et `grandparentId` des membres pour statuer sur leurs exclusions. Les métadonnées sont accessibles par `/api/media-server/meta/{id}`. Sans hiérarchie fiable, conserver un état d’exclusion inconnu et bloquer les rappels. [Cascade exacte][M-cascade], [route de métadonnées][M-server]
+Pour une exclusion typée, la cascade utilise `mediaServerId` et `type` : une série exclut ses saisons/épisodes, une saison ses épisodes. `parent` mémorise le point d’entrée d’une demande et ne doit pas être utilisé comme cascade générale ; il sert de repli pour les anciennes lignes sans type. Il faut donc connaître `parentId` et `grandparentId` des membres pour statuer sur leurs exclusions. Les métadonnées sont accessibles par `/api/media-server/meta/{id}`, mais la liste personnelle utilise directement Plex avec le jeton utilisateur. Sans hiérarchie fiable, conserver un état d’exclusion inconnu et bloquer les rappels. [Cascade exacte][M-cascade], [route de métadonnées][M-server]
+
+Les lectures passant par l’adaptateur Plex de Maintainerr peuvent déclencher son initialisation ou une reconnexion : la redécouverte peut alors enregistrer l’hôte, le port, le protocole ou l’identifiant serveur. « Lecture seule » décrit les commandes émises par le Concierge, sans garantir l’absence de toute écriture interne amont. Le collecteur n’appelle ni route de traitement, ni route de modification des collections. [Initialisation de l’adaptateur][M-factory], [redécouverte Plex][M-rediscovery]
+
+[M-factory]: https://github.com/Maintainerr/Maintainerr/blob/3e11c99b8bdaf567f2463c9975a46a8259616616/apps/server/src/modules/api/media-server/media-server.factory.ts#L306-L320
+[M-rediscovery]: https://github.com/Maintainerr/Maintainerr/blob/3e11c99b8bdaf567f2463c9975a46a8259616616/apps/server/src/modules/api/plex-api/plex-api.service.ts#L351-L366
 
 ### Actions, activation et échéances
 
@@ -136,7 +141,13 @@ Un `ratingKey` doit rester associé à son serveur. En cas de réimport, changem
 4. Cache borné par serveur/utilisateur, invalidé sur changement de version, révocation, échec ou incohérence. Un dépassement de borne n’est jamais un relevé complet. Revalider avant chaque futur envoi.
 5. Avant activation des rappels : valider la correspondance avec le serveur de l’API et les identités Discord/Plex ; lire les exclusions/hiérarchies ; confirmer la politique de complétion et les éditions ; tester calendrier et annulation après retrait d’une collection. Aucune de ces conditions n’est remplacée par le seul succès HTTP d’un collecteur.
 
-Ces choix sont des recommandations du projet, et doivent rester cohérents avec [la politique existante](removal-reminders.md). La recette actuelle permet d’implémenter et de diagnostiquer les sources. Elle ne permet pas encore d’affirmer « jamais commencé », de fixer une date effective de suppression, ni d’envoyer des alertes personnalisées.
+Ces choix sont des recommandations du projet, et doivent rester cohérents avec [la politique existante](removal-reminders.md). La liste personnelle utilise maintenant les droits individuels, règles et exclusions dans le périmètre `recorded_history`. Elle ne permet pas d’affirmer « jamais commencé », de fixer une date effective de suppression, ni d’envoyer des alertes personnalisées.
+
+## Métadonnées Plex individuelles
+
+La liste utilise `GET /identity` pour vérifier `machineIdentifier`, puis `GET /library/metadata/{id}?skipRefresh=1` avec le jeton serveur du compte connecté et `Accept: application/json`. `skipRefresh` évite une demande implicite de rafraîchissement des métadonnées. La réponse doit contenir un seul élément dans `MediaContainer.Metadata`, avec la clé demandée, le type, le GUID et la bibliothèque attendus. Les attributs communs de bibliothèque et de hiérarchie peuvent être portés par `MediaContainer` plutôt que chaque élément. `viewCount` et `viewOffset` appartiennent au compte dont le jeton est utilisé. [Contrat officiel Plex](https://developer.plex.tv/pms/#tag/Content/operation/libraryMetadataGetSlash)
+
+Un inventaire complet par `allLeaves` serait nécessaire pour conclure sur une saison/série. Ce parcours n’est pas implémenté : la liste conserve donc l’état incertain pour ces ensembles. [Inventaire officiel Plex](https://developer.plex.tv/pms/#tag/Library/operation/libraryMetadataGetAllLeaves)
 
 [M-tag]: https://github.com/Maintainerr/Maintainerr/tree/3e11c99b8bdaf567f2463c9975a46a8259616616
 [M-build]: https://github.com/Maintainerr/Maintainerr/commit/78ee15578f25493fea7196a0e4d9780d10f7460d

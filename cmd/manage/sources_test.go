@@ -22,6 +22,10 @@ func TestCheckSourcesProducesOnlyAggregateDiagnostics(t *testing.T) {
 			fmt.Fprint(w, `{"type":"plex"}`)
 		case "/api/media-server":
 			fmt.Fprint(w, `{"machineId":"private-server"}`)
+		case "/api/rules":
+			fmt.Fprint(w, `[{"id":5,"collectionId":1,"isActive":true,"notifications":[{"token":"private-notification"}]}]`)
+		case "/api/rules/exclusion":
+			fmt.Fprint(w, `[]`)
 		case "/api/collections/overlay-data":
 			fmt.Fprint(w, `[{"id":1,"title":"private-title","mediaServerType":"plex","libraryId":"1","isActive":true,"arrAction":0,"type":"movie","deleteAfterDays":null,"mediaCount":1,"media":[{"id":2,"collectionId":1,"mediaServerId":"42","addDate":"2026-10-01T00:00:00Z","isManual":false,"ruleEvaluationFailed":false}]}]`)
 		case "/api/v2":

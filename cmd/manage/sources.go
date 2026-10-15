@@ -24,13 +24,17 @@ func checkSources(ctx context.Context, c config.Config, client *upstream.Client,
 		if err != nil {
 			return fmt.Errorf("Maintainerr: %w", err)
 		}
+		rules, err := client.MaintainerrRules(ctx, c.MaintainerrURL)
+		if err != nil {
+			return fmt.Errorf("Maintainerr rules: %w", err)
+		}
 		unknown := 0
 		for _, item := range snapshot.Items {
 			if item.EstimatedAt == nil {
 				unknown++
 			}
 		}
-		result["maintainerr"] = map[string]any{"version": snapshot.Version, "build": snapshot.Build, "serverMatches": true, "collections": snapshot.Collections, "destructiveMemberships": len(snapshot.Items), "unknownDeadlines": unknown, "updatedAt": snapshot.UpdatedAt}
+		result["maintainerr"] = map[string]any{"version": snapshot.Version, "build": snapshot.Build, "serverMatches": true, "collections": snapshot.Collections, "destructiveMemberships": len(snapshot.Items), "verifiedRuleGroups": len(rules), "unknownDeadlines": unknown, "updatedAt": snapshot.UpdatedAt}
 	}
 	if c.TautulliURL != "" {
 		var version string

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/hloiseau/le-concierge/internal/config"
+	"github.com/hloiseau/le-concierge/internal/departures"
 	"github.com/hloiseau/le-concierge/internal/discord"
 	"github.com/hloiseau/le-concierge/internal/store"
 	"github.com/hloiseau/le-concierge/internal/upstream"
@@ -44,20 +45,22 @@ type bucket struct {
 	Count int
 }
 type Server struct {
-	Config   config.Config
-	Store    *store.Store
-	Upstream *upstream.Client
-	mu       sync.Mutex
-	sessions map[string]session
-	oauth    map[string]oauthAttempt
-	pins     map[string]pendingPin
-	grants   map[string]upstream.Grant
-	limits   map[string]bucket
-	seen     map[string]time.Time
+	Config     config.Config
+	Store      *store.Store
+	Upstream   *upstream.Client
+	Departures *departures.Service
+	mu         sync.Mutex
+	sessions   map[string]session
+	oauth      map[string]oauthAttempt
+	pins       map[string]pendingPin
+	grants     map[string]upstream.Grant
+	limits     map[string]bucket
+	seen       map[string]time.Time
 }
 
 func New(c config.Config, db *store.Store) *Server {
-	return &Server{Config: c, Store: db, Upstream: upstream.New(), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}}
+	client := upstream.New()
+	return &Server{Config: c, Store: db, Upstream: client, Departures: departures.New(client), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}}
 }
 func token() string {
 	b := make([]byte, 32)
@@ -215,6 +218,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("DELETE /api/v1/account", s.deleteAccount)
 	m.HandleFunc("GET /api/v1/requests", s.requests)
 	m.HandleFunc("GET /api/v1/recent", s.recent)
+	m.HandleFunc("GET /api/v1/departures", s.departures)
 	m.HandleFunc("GET /api/v1/preferences", s.getPreferences)
 	m.HandleFunc("PUT /api/v1/preferences", s.putPreferences)
 	m.HandleFunc("POST /internal/discord", s.interaction)
@@ -240,7 +244,7 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, 200, map[string]any{"version": "0.2.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "subscriptions": false, "notifications": false, "books": false, "monitoring": false})
+	jsonOut(w, 200, map[string]any{"version": "0.3.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(), "subscriptions": false, "notifications": false, "books": false, "monitoring": false})
 }
 func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 	_, v, ok := s.session(r)
