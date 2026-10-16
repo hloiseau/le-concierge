@@ -55,6 +55,7 @@ INSERT INTO schema_migrations(version) VALUES(3);`
 // DailyCap limits items in the single daily inbox digest, in Europe/Paris.
 type ReminderPreferences struct {
 	Enabled        bool  `json:"enabled"`
+	DiscordDM      bool  `json:"discordDmEnabled"`
 	DaysBefore     []int `json:"daysBefore"`
 	QuietStartHour int   `json:"quietStartHour"`
 	QuietEndHour   int   `json:"quietEndHour"`
@@ -87,8 +88,8 @@ type reminderQuerier interface {
 func reminderPreferences(ctx context.Context, db reminderQuerier, user string) (ReminderPreferences, error) {
 	var p ReminderPreferences
 	var days string
-	err := db.QueryRowContext(ctx, `SELECT u.notifications,COALESCE(p.days_before,'[7,2]'),COALESCE(p.quiet_start,22),COALESCE(p.quiet_end,8),COALESCE(p.daily_cap,10),COALESCE(p.all_unwatched,0)
-FROM users u LEFT JOIN reminder_preferences p ON p.user_id=u.id WHERE u.id=?`, user).Scan(&p.Enabled, &days, &p.QuietStartHour, &p.QuietEndHour, &p.DailyCap, &p.AllUnwatched)
+	err := db.QueryRowContext(ctx, `SELECT u.notifications,COALESCE(p.days_before,'[7,2]'),COALESCE(p.quiet_start,22),COALESCE(p.quiet_end,8),COALESCE(p.daily_cap,10),COALESCE(p.all_unwatched,0),COALESCE(p.discord_dm,0)
+FROM users u LEFT JOIN reminder_preferences p ON p.user_id=u.id WHERE u.id=?`, user).Scan(&p.Enabled, &days, &p.QuietStartHour, &p.QuietEndHour, &p.DailyCap, &p.AllUnwatched, &p.DiscordDM)
 	if err != nil {
 		return p, err
 	}
@@ -133,8 +134,8 @@ func (s *Store) SaveReminderPreferences(ctx context.Context, user string, p Remi
 	if _, err = tx.ExecContext(ctx, `UPDATE users SET notifications=? WHERE id=?`, p.Enabled, user); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO reminder_preferences(user_id,days_before,quiet_start,quiet_end,daily_cap,all_unwatched) VALUES(?,?,?,?,?,?)
-ON CONFLICT(user_id) DO UPDATE SET days_before=excluded.days_before,quiet_start=excluded.quiet_start,quiet_end=excluded.quiet_end,daily_cap=excluded.daily_cap,all_unwatched=excluded.all_unwatched`, user, string(days), p.QuietStartHour, p.QuietEndHour, p.DailyCap, p.AllUnwatched); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO reminder_preferences(user_id,days_before,quiet_start,quiet_end,daily_cap,all_unwatched,discord_dm) VALUES(?,?,?,?,?,?,?)
+ON CONFLICT(user_id) DO UPDATE SET days_before=excluded.days_before,quiet_start=excluded.quiet_start,quiet_end=excluded.quiet_end,daily_cap=excluded.daily_cap,all_unwatched=excluded.all_unwatched,discord_dm=excluded.discord_dm`, user, string(days), p.QuietStartHour, p.QuietEndHour, p.DailyCap, p.AllUnwatched, p.DiscordDM); err != nil {
 		return err
 	}
 	// Revalidate queued decisions against the new preferences before delivery.
@@ -219,6 +220,12 @@ func scanReminder(rows *sql.Rows) (Reminder, error) {
 // DeliverReminders records the inbox digest and its items in one transaction.
 // Callers must revalidate sources and access immediately before calling it.
 func (s *Store) DeliverReminders(ctx context.Context, user string, now time.Time) ([]Reminder, error) {
+	return s.DeliverRemindersWithDiscord(ctx, user, now, false)
+}
+
+// DeliverRemindersWithDiscord queues a DM atomically with a new inbox digest
+// only when the server channel and the user's explicit DM preference are on.
+func (s *Store) DeliverRemindersWithDiscord(ctx context.Context, user string, now time.Time, discordEnabled bool) ([]Reminder, error) {
 	delivered := []Reminder{}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -283,6 +290,11 @@ func (s *Store) DeliverReminders(ctx context.Context, user string, now time.Time
 		delivered[i].State = "sent"
 		sent := now.UTC()
 		delivered[i].SentAt = &sent
+	}
+	if discordEnabled {
+		if err = queueDiscordDelivery(ctx, tx, user, now); err != nil {
+			return nil, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, err

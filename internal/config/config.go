@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -25,6 +26,7 @@ type Config struct {
 	PlexURL, PlexServerID, SeerrURL, SeerrAPIKey                                            string
 	MaintainerrURL, TautulliURL, TautulliAPIKey                                             string
 	AdminIDs                                                                                []string
+	DiscordDMsEnabled                                                                       bool
 	Services                                                                                []Service
 }
 
@@ -74,6 +76,11 @@ func Load() (Config, error) {
 	}
 	if c.Env != "production" && c.Env != "development" {
 		return c, errors.New("APP_ENV must be production or development")
+	}
+	var err error
+	c.DiscordDMsEnabled, err = strconv.ParseBool(fallback("DISCORD_DMS_ENABLED", "false"))
+	if err != nil || (c.DiscordDMsEnabled && c.DiscordBotToken == "") {
+		return c, errors.New("DISCORD_DMS_ENABLED requires a boolean and a bot token when enabled")
 	}
 	if !ValidURL(c.PublicOrigin, true) {
 		return c, errors.New("PUBLIC_ORIGIN must be an absolute origin")

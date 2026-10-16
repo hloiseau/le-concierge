@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -618,6 +618,283 @@
           }
         }
       }
+    },
+    "/api/v1/subscriptions": {
+      "get": {
+        "operationId": "getSubscriptions",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscriptions"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "multipleOf": 10
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "postSubscription",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionInput"
+              }
+            }
+          }
+        },
+        "description": "Origin must match PUBLIC_ORIGIN. Only the authenticated owner can follow; at most 100 follows."
+      }
+    },
+    "/api/v1/subscriptions/{id}": {
+      "delete": {
+        "operationId": "deleteSubscription",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationOK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin required.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/extension-requests": {
+      "get": {
+        "operationId": "getExtensionRequests",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionRequests"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "The owner’s 100 latest requests, retained for 90 days."
+      },
+      "post": {
+        "operationId": "postExtensionRequest",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionRequest"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtensionRequestInput"
+              }
+            }
+          }
+        },
+        "description": "Fresh authorized departure required, matching Origin. One request per owner/action/deadline, at most ten pending or created within 24h. Creates an administrative request without changing Maintainerr."
+      }
+    },
+    "/api/v1/admin/extension-requests": {
+      "get": {
+        "operationId": "getAdminExtensionRequests",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionRequests"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Configured administrator only; 100 oldest pending requests, including requester display name."
+      },
+      "put": {
+        "operationId": "reviewExtensionRequest",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationOK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtensionReview"
+              }
+            }
+          }
+        },
+        "description": "Configured administrator only, matching Origin. Records manual handling or refusal; does not modify Maintainerr."
+      }
     }
   },
   "components": {
@@ -781,7 +1058,7 @@
           },
           "notifications": {
             "type": "boolean",
-            "description": "Private inbox reminders are configured. Discord DM delivery is not available."
+            "description": "Private removal reminder inbox is configured. Optional Discord delivery has its separate discordDMs capability and explicit consent."
           },
           "books": {
             "type": "boolean"
@@ -792,6 +1069,14 @@
           "departures": {
             "type": "boolean",
             "description": "Personal recorded viewing history; automatic reminders remain separate."
+          },
+          "discordDMs": {
+            "type": "boolean",
+            "description": "Explicit opt-in Discord removal reminders are configured."
+          },
+          "extensionRequests": {
+            "type": "boolean",
+            "description": "Fresh departure requests can be submitted to configured administrators."
           }
         },
         "required": [
@@ -1154,6 +1439,11 @@
           "allUnwatched": {
             "type": "boolean",
             "description": "Reserved preference; only verified in-progress films/episodes in recorded history currently produce reminders."
+          },
+          "discordDmEnabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Separate explicit consent for Discord removal reminders; omission on PUT disables DMs."
           }
         },
         "required": [
@@ -1248,6 +1538,323 @@
           "scope",
           "updatedAt",
           "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "SubscriptionInput": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "tv"
+            ]
+          },
+          "tmdbId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "season": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "hub",
+              "discord"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "tmdbId",
+          "channel"
+        ],
+        "additionalProperties": false,
+        "description": "TMDB identity; season only for TV. Whole series/season tracks first accessible episode. Discord availability alerts currently return channel_unavailable."
+      },
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "tv"
+            ]
+          },
+          "tmdbId": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "season": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "hub",
+              "discord"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "following",
+              "available",
+              "unavailable"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "tmdbId",
+          "channel",
+          "createdAt",
+          "title",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "Subscriptions": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subscription"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "limit": {
+            "type": "integer",
+            "enum": [
+              10
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "additionalProperties": false
+      },
+      "SubscriptionResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "following",
+              "already_available"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/Subscription"
+          }
+        },
+        "required": [
+          "status",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "ExtensionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "mediaId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "show",
+              "season",
+              "episode"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "estimatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "reviewed",
+              "declined"
+            ]
+          },
+          "adminNote": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requester": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "mediaId",
+          "title",
+          "type",
+          "url",
+          "estimatedAt",
+          "days",
+          "reason",
+          "status",
+          "adminNote",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ExtensionRequests": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ExtensionRequest"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "ExtensionRequestInput": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "mediaId",
+          "days"
+        ],
+        "additionalProperties": false
+      },
+      "ExtensionReview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "reviewed",
+              "declined"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "MutationOK": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "ok"
         ],
         "additionalProperties": false
       }

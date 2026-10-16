@@ -36,7 +36,7 @@ func loadContract(t *testing.T) *openapi3.T {
 
 func validateContractResponse(doc *openapi3.T, method, target string, w *httptest.ResponseRecorder) error {
 	r := httptest.NewRequest(method, target, nil)
-	path := doc.Paths.Value(r.URL.Path)
+	path := doc.Paths.Value(contractPath(doc, r.URL.Path))
 	if path == nil || path.GetOperation(method) == nil {
 		return fmt.Errorf("undocumented operation %s %s", method, r.URL.Path)
 	}
@@ -87,6 +87,31 @@ func validateContractResponse(doc *openapi3.T, method, target string, w *httptes
 	}
 	input.SetBodyBytes(w.Body.Bytes())
 	return openapi3filter.ValidateResponse(r.Context(), input)
+}
+
+func contractPath(doc *openapi3.T, target string) string {
+	path := strings.SplitN(target, "?", 2)[0]
+	if doc.Paths.Value(path) != nil {
+		return path
+	}
+	parts := strings.Split(path, "/")
+	for template := range doc.Paths.Map() {
+		segments := strings.Split(template, "/")
+		if len(segments) != len(parts) {
+			continue
+		}
+		match := true
+		for i, segment := range segments {
+			if segment != parts[i] && !(strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") && parts[i] != "") {
+				match = false
+				break
+			}
+		}
+		if match {
+			return template
+		}
+	}
+	return path
 }
 
 // Read literal registrations rather than maintaining a second hand-written route list.
@@ -144,7 +169,7 @@ func TestOpenAPIResponses(t *testing.T) {
 			t.Fatalf("%s %s: %v\nResponse: %s", method, path, err, w.Body)
 		}
 		if status < 400 {
-			covered[method+" "+strings.SplitN(path, "?", 2)[0]] = true
+			covered[method+" "+contractPath(doc, path)] = true
 		}
 	}
 	for _, tc := range []struct {
@@ -211,6 +236,35 @@ func TestOpenAPIResponses(t *testing.T) {
 		if callback.Header().Get("Location") != "/compte" {
 			t.Fatal("missing Hub redirect")
 		}
+	})
+	t.Run("subscriptions", func(t *testing.T) {
+		s, cookie, source := subscriptionFixture(t)
+		created := call(s, "POST", "/api/v1/subscriptions", cookie, s.Config.PublicOrigin, `{"type":"movie","tmdbId":12,"channel":"hub"}`)
+		check(t, "POST", "/api/v1/subscriptions", created, 200)
+		var result subscriptionResult
+		if err := json.Unmarshal(created.Body.Bytes(), &result); err != nil || result.Subscription == nil {
+			t.Fatal("missing subscription", err)
+		}
+		check(t, "GET", "/api/v1/subscriptions", call(s, "GET", "/api/v1/subscriptions", cookie, "", ""), 200)
+		source.available = true
+		check(t, "GET", "/api/v1/subscriptions", call(s, "GET", "/api/v1/subscriptions", cookie, "", ""), 200)
+		path := fmt.Sprintf("/api/v1/subscriptions/%d", result.Subscription.ID)
+		check(t, "DELETE", path, call(s, "DELETE", path, cookie, s.Config.PublicOrigin, ""), 200)
+		check(t, "POST", "/api/v1/subscriptions", call(s, "POST", "/api/v1/subscriptions", cookie, s.Config.PublicOrigin, `{"type":"movie","tmdbId":12,"channel":"hub"}`), 200)
+	})
+	t.Run("extension requests", func(t *testing.T) {
+		s, cookie, _ := reminderFixture(t)
+		s.Config.AdminIDs = []string{"99999"}
+		admin := seed(t, s, "99999", true)
+		created := call(s, "POST", "/api/v1/extension-requests", cookie, s.Config.PublicOrigin, `{"mediaId":"42","days":7,"reason":"Finir le film"}`)
+		check(t, "POST", "/api/v1/extension-requests", created, 200)
+		var item store.ExtensionRequest
+		if err := json.Unmarshal(created.Body.Bytes(), &item); err != nil {
+			t.Fatal(err)
+		}
+		check(t, "GET", "/api/v1/extension-requests", call(s, "GET", "/api/v1/extension-requests", cookie, "", ""), 200)
+		check(t, "GET", "/api/v1/admin/extension-requests", call(s, "GET", "/api/v1/admin/extension-requests", admin, "", ""), 200)
+		check(t, "PUT", "/api/v1/admin/extension-requests", call(s, "PUT", "/api/v1/admin/extension-requests", admin, s.Config.PublicOrigin, fmt.Sprintf(`{"id":%d,"status":"reviewed","note":"Vérifié"}`, item.ID)), 200)
 	})
 	t.Run("errors", func(t *testing.T) {
 		for path, item := range doc.Paths.Map() {

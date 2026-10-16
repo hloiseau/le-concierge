@@ -32,7 +32,7 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 	if !s.origin(w, r) {
 		return
 	}
-	_, u, ok := s.user(w, r)
+	key, u, ok := s.user(w, r)
 	if !ok {
 		return
 	}
@@ -43,6 +43,7 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 		QuietEndHour   *int  `json:"quietEndHour"`
 		DailyCap       *int  `json:"dailyCap"`
 		AllUnwatched   *bool `json:"allUnwatched"`
+		DiscordDM      *bool `json:"discordDmEnabled"`
 	}
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
@@ -51,6 +52,14 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	p := store.ReminderPreferences{Enabled: *input.Enabled, DaysBefore: input.DaysBefore, QuietStartHour: *input.QuietStartHour, QuietEndHour: *input.QuietEndHour, DailyCap: *input.DailyCap, AllUnwatched: *input.AllUnwatched}
+	// Omission preserves the old Hub's inbox-only behavior; never infer DM consent.
+	if input.DiscordDM != nil {
+		p.DiscordDM = *input.DiscordDM
+	}
+	if p.DiscordDM && (!s.Config.DiscordDMsEnabled || u.DiscordID == "") {
+		problem(w, 409, "discord_dm_unavailable", "Les DM nécessitent Discord lié et un service activé par l’administrateur.")
+		return
+	}
 	if store.ValidateReminderPreferences(p) != nil {
 		problem(w, 400, "invalid_body", "Préférences de rappel invalides.")
 		return
@@ -60,6 +69,18 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 		defer func() { <-s.reminderGate }()
 	case <-r.Context().Done():
 		problem(w, 503, "reminders_busy", "Réessayez dans un instant.")
+		return
+	}
+	// The gate can wait behind a remote refresh. Consent must still belong to
+	// the same live session and recipient when the mutation actually executes.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	sess, sessionExists := s.sessions[key]
+	g, grantExists := s.grants[u.ID]
+	owner, err := s.Store.User(r.Context(), u.ID)
+	if err != nil || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || !grantExists || !now.Before(g.ExpiresAt) || g.PlexID != u.PlexID || owner.PlexID != u.PlexID || (p.DiscordDM && owner.DiscordID != u.DiscordID) {
+		problem(w, 403, "authorization_changed", "Votre accès a changé. Reconnectez-vous avant de modifier vos préférences.")
 		return
 	}
 	if err := s.Store.SaveReminderPreferences(r.Context(), u.ID, p); err != nil {
@@ -193,7 +214,7 @@ func (s *Server) refreshReminders(ctx context.Context, u store.User) (departures
 		err = s.Store.EnqueueReminders(ctx, u.ID, queue)
 	}
 	if err == nil {
-		_, err = s.Store.DeliverReminders(ctx, u.ID, now)
+		_, err = s.Store.DeliverRemindersWithDiscord(ctx, u.ID, now, s.Config.DiscordDMsEnabled)
 	}
 	return page, err
 }
@@ -211,6 +232,12 @@ func (s *Server) RunReminders(ctx context.Context) {
 		}
 		if err := s.Store.PruneReminders(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			slog.Warn("Reminder retention cleanup deferred")
+		}
+		if err := s.Store.PruneExtensionRequests(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			slog.Warn("Extension request retention cleanup deferred")
+		}
+		if err := s.Store.PruneDiscordDeliveries(ctx, time.Now()); err != nil && ctx.Err() == nil {
+			slog.Warn("Discord delivery retention cleanup deferred")
 		}
 		if !s.departuresEnabled() {
 			continue
@@ -234,6 +261,11 @@ func (s *Server) RunReminders(ctx context.Context) {
 			_, err = s.refreshReminders(ctx, u)
 			if err != nil && !errors.Is(err, context.Canceled) {
 				slog.Warn("Reminder refresh deferred; fresh authorization and sources required")
+			}
+			if err == nil && s.Config.DiscordDMsEnabled {
+				if err := s.deliverDiscordReminders(ctx, u); err != nil && ctx.Err() == nil {
+					slog.Warn("Discord reminder delivery deferred")
+				}
 			}
 		}
 	}

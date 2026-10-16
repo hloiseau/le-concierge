@@ -30,6 +30,9 @@ services:
       # Secret OAuth2, different du token de bot. Vide = liaison Discord desactivee (Plex reste disponible).
       DISCORD_CLIENT_SECRET: ''
       ADMIN_DISCORD_IDS: ''
+      # DM de rappel facultatifs : activation serveur ET consentement individuel.
+      DISCORD_DMS_ENABLED: 'false'
+      DISCORD_BOT_TOKEN: '' # Preferer _FILE avec un secret monte en lecture seule.
       # Renseigner les deux valeurs d'une paire, ou laisser les deux vides.
       # Exemple PLEX_URL : http://192.0.2.10:32400
       # Connexion obligatoire au Hub : renseigner URL + identifiant du serveur.
@@ -37,7 +40,7 @@ services:
       PLEX_SERVER_ID: ''
       SEERR_URL: ''
       SEERR_API_KEY: ''
-      # Facultatif : diagnostic en lecture seule, rappels encore inactifs.
+      # Facultatif : departs personnels et rappels, sources en lecture seule.
       MAINTAINERR_URL: ''
       TAUTULLI_URL: ''
       TAUTULLI_API_KEY: ''

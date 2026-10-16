@@ -61,7 +61,7 @@ func Open(path string) (*Store, error) {
 		tx.Rollback()
 		return fail(e)
 	}
-	if version > 3 {
+	if version > 4 {
 		tx.Rollback()
 		return fail(errors.New("database schema is newer than this binary; restore a compatible backup"))
 	}
@@ -83,6 +83,12 @@ INSERT INTO schema_migrations(version) VALUES(2);`); e != nil {
 	}
 	if version < 3 {
 		if _, e = tx.Exec(remindersSchema); e != nil {
+			tx.Rollback()
+			return fail(e)
+		}
+	}
+	if version < 4 {
+		if _, e = tx.Exec(subscriptionsSchema + notificationDeliverySchema + extensionRequestsSchema + `INSERT INTO schema_migrations(version) VALUES(4);`); e != nil {
 			tx.Rollback()
 			return fail(e)
 		}
@@ -172,6 +178,12 @@ SELECT ?,days_before,quiet_start,quiet_end,daily_cap,all_unwatched FROM reminder
 			return "", err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO reminder_deliveries(user_id,local_day,delivered_at) SELECT ?,local_day,delivered_at FROM reminder_deliveries WHERE user_id=?`, id, oldID); err != nil {
+			return "", err
+		}
+		if err = mergeSubscriptions(ctx, tx, id, oldID); err != nil {
+			return "", err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE OR IGNORE extension_requests SET user_id=? WHERE user_id=?`, id, oldID); err != nil {
 			return "", err
 		}
 		if _, err = tx.ExecContext(ctx, `DELETE FROM users WHERE id=?`, oldID); err != nil {

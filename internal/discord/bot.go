@@ -202,7 +202,23 @@ func (b *Bot) Register(ctx context.Context) error {
 	if b.Config.DiscordBotToken == "" {
 		return errors.New("DISCORD_BOT_TOKEN is required to register commands")
 	}
-	commands := []map[string]any{{"name": "aide", "description": "Guides, services et liaison des comptes", "type": 1}, {"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1}, {"name": "nouveautes", "description": "Voir les derniers ajouts Plex autorisés", "type": 1}}
+	commands := []map[string]any{
+		{"name": "aide", "description": "Guides, services et liaison des comptes", "type": 1},
+		{"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1},
+		{"name": "nouveautes", "description": "Voir les derniers ajouts Plex autorisés", "type": 1},
+		{"name": "surprise", "description": "Tirer un titre dans votre catalogue Plex", "type": 1, "options": []map[string]any{
+			{"name": "type", "description": "Films ou séries (les deux par défaut)", "type": 3, "choices": []map[string]any{{"name": "Film", "value": "movie"}, {"name": "Série", "value": "show"}}},
+		}},
+		{"name": "recap", "description": "Voir les ajouts des sept jours terminés, en heure de Paris", "type": 1},
+		{"name": "suivre", "description": "Suivre la disponibilité d’un film ou d’une série", "type": 1, "options": []map[string]any{
+			{"name": "type", "description": "Film ou série", "type": 3, "required": true, "choices": []map[string]any{{"name": "Film", "value": "movie"}, {"name": "Série", "value": "tv"}}},
+			{"name": "tmdb-id", "description": "Identifiant numérique du titre sur TMDB", "type": 4, "required": true, "min_value": 1, "max_value": 2147483647},
+			{"name": "season", "description": "Numéro de saison pour une série (0 = épisodes spéciaux)", "type": 4, "min_value": 0, "max_value": 10000},
+		}},
+		{"name": "mes-suivis", "description": "Consulter vos suivis personnels", "type": 1, "options": []map[string]any{
+			{"name": "page", "description": "Page à consulter", "type": 4, "min_value": 1, "max_value": 1001},
+		}},
+	}
 	raw, _ := json.Marshal(commands)
 	req, e := http.NewRequestWithContext(ctx, "PUT", "https://discord.com/api/v10/applications/"+b.Config.DiscordClientID+"/guilds/"+b.Config.DiscordGuildID+"/commands", strings.NewReader(string(raw)))
 	if e != nil {

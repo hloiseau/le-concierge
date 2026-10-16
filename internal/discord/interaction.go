@@ -22,20 +22,88 @@ type Interaction struct {
 		} `json:"user"`
 	} `json:"member"`
 	Data struct {
-		Name          string `json:"name"`
-		CustomID      string `json:"custom_id"`
-		ComponentType int    `json:"component_type"`
+		Name          string              `json:"name"`
+		CustomID      string              `json:"custom_id"`
+		ComponentType int                 `json:"component_type"`
+		Options       []InteractionOption `json:"options"`
 	} `json:"data"`
 	Message struct {
 		Flags int `json:"flags"`
 	} `json:"message"`
 }
 
+type InteractionOption struct {
+	Name  string          `json:"name"`
+	Type  int             `json:"type"`
+	Value json.RawMessage `json:"value"`
+}
+
+type Options struct {
+	Kind   string
+	TMDBID int
+	Season *int
+	Page   int
+}
+
+// Validate values again after signature verification; Discord registration is not an authorization boundary.
+func CommandOptions(i Interaction) (Options, error) {
+	options := Options{Page: 1}
+	if i.Type != 2 {
+		return options, nil
+	}
+	invalid := errors.New("invalid command options")
+	seen := map[string]bool{}
+	for _, option := range i.Data.Options {
+		if seen[option.Name] {
+			return Options{}, invalid
+		}
+		seen[option.Name] = true
+		switch option.Name {
+		case "type":
+			if (i.Data.Name != "surprise" && i.Data.Name != "suivre") || option.Type != 3 || json.Unmarshal(option.Value, &options.Kind) != nil {
+				return Options{}, invalid
+			}
+			if (i.Data.Name == "surprise" && options.Kind != "movie" && options.Kind != "show") || (i.Data.Name == "suivre" && options.Kind != "movie" && options.Kind != "tv") {
+				return Options{}, invalid
+			}
+		case "tmdb-id", "season", "page":
+			var number int
+			if option.Type != 4 || string(option.Value) == "null" || json.Unmarshal(option.Value, &number) != nil {
+				return Options{}, invalid
+			}
+			switch option.Name {
+			case "tmdb-id":
+				if i.Data.Name != "suivre" || number < 1 || number > 2147483647 {
+					return Options{}, invalid
+				}
+				options.TMDBID = number
+			case "season":
+				if i.Data.Name != "suivre" || number < 0 || number > 10000 {
+					return Options{}, invalid
+				}
+				options.Season = &number
+			case "page":
+				if i.Data.Name != "mes-suivis" || number < 1 || number > 1001 {
+					return Options{}, invalid
+				}
+				options.Page = number
+			}
+		default:
+			return Options{}, invalid
+		}
+	}
+	if i.Data.Name == "suivre" && (options.Kind == "" || options.TMDBID == 0 || (options.Kind == "movie" && options.Season != nil)) {
+		return Options{}, invalid
+	}
+	return options, nil
+}
+
 // Command never takes an identity from a button: its owner must match the
 // signed caller, whose current access is checked again by the API.
 func Command(i Interaction) (string, int, error) {
 	if i.Type == 2 {
-		return i.Data.Name, 0, nil
+		_, err := CommandOptions(i)
+		return i.Data.Name, 0, err
 	}
 	parts := strings.Split(i.Data.CustomID, ":")
 	if i.Type != 3 || i.Data.ComponentType != 2 || i.Message.Flags&64 == 0 || len(parts) != 3 || (parts[0] != "requests" && parts[0] != "recent") || parts[1] != i.Member.User.ID {
@@ -131,5 +199,5 @@ func Message(content string) map[string]any {
 }
 
 func Help(origin string) string {
-	return "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n\n[Ouvrir le Hub](" + origin + ")\nConnectez-vous au Hub avec Plex, puis liez Discord dans **Mon compte** pour utiliser les commandes personnelles. Seerr est associé automatiquement via votre identité Plex."
+	return "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/suivre — Suivre un film ou une série par identifiant TMDB\n/mes-suivis — Consulter vos suivis\n\n[Ouvrir le Hub](" + origin + ")\nConnectez-vous au Hub avec Plex, puis liez Discord dans **Mon compte** pour utiliser les commandes personnelles. Seerr est associé automatiquement via votre identité Plex."
 }

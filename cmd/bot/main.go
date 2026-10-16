@@ -34,7 +34,7 @@ func run() error {
 		}
 		return nil
 	}
-	register := flag.Bool("register", false, "register this app's three guild commands, then exit")
+	register := flag.Bool("register", false, "register this app's guild commands, then exit")
 	flag.Parse()
 	c, e := config.Load()
 	if e != nil {

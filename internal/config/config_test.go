@@ -7,6 +7,29 @@ import (
 	"testing"
 )
 
+func TestDiscordDMRequiresExplicitServerEnable(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	t.Setenv("DISCORD_DMS_ENABLED", "")
+	t.Setenv("DISCORD_BOT_TOKEN", "fixture-token")
+	t.Setenv("DISCORD_BOT_TOKEN_FILE", "")
+	if c, err := Load(); err != nil || c.DiscordDMsEnabled {
+		t.Fatal("bot token silently enabled DMs", err)
+	}
+	t.Setenv("DISCORD_DMS_ENABLED", "true")
+	if c, err := Load(); err != nil || !c.DiscordDMsEnabled {
+		t.Fatal("explicit enable failed", err)
+	}
+	t.Setenv("DISCORD_BOT_TOKEN", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("DMs enabled without token")
+	}
+	t.Setenv("DISCORD_DMS_ENABLED", "maybe")
+	if _, err := Load(); err == nil {
+		t.Fatal("invalid boolean accepted")
+	}
+}
+
 func TestRemovalSourceConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")

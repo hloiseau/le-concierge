@@ -12,6 +12,7 @@ import (
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/departures"
 	"github.com/hloiseau/le-concierge/internal/discord"
+	"github.com/hloiseau/le-concierge/internal/notifications"
 	"github.com/hloiseau/le-concierge/internal/store"
 	"github.com/hloiseau/le-concierge/internal/upstream"
 	"io"
@@ -50,6 +51,7 @@ type Server struct {
 	Store        *store.Store
 	Upstream     *upstream.Client
 	Departures   *departures.Service
+	Discord      *notifications.Discord
 	mu           sync.Mutex
 	sessions     map[string]session
 	oauth        map[string]oauthAttempt
@@ -62,7 +64,11 @@ type Server struct {
 
 func New(c config.Config, db *store.Store) *Server {
 	client := upstream.New()
-	return &Server{Config: c, Store: db, Upstream: client, Departures: departures.New(client), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}, reminderGate: make(chan struct{}, 1)}
+	s := &Server{Config: c, Store: db, Upstream: client, Departures: departures.New(client), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}, reminderGate: make(chan struct{}, 1)}
+	if c.DiscordDMsEnabled {
+		s.Discord = notifications.NewDiscord(c.DiscordBotToken)
+	}
+	return s
 }
 func token() string {
 	b := make([]byte, 32)
@@ -240,6 +246,13 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/reminders", s.reminderInbox)
 	m.HandleFunc("GET /api/v1/reminders/preferences", s.getReminderPreferences)
 	m.HandleFunc("PUT /api/v1/reminders/preferences", s.putReminderPreferences)
+	m.HandleFunc("GET /api/v1/subscriptions", s.getSubscriptions)
+	m.HandleFunc("POST /api/v1/subscriptions", s.postSubscription)
+	m.HandleFunc("DELETE /api/v1/subscriptions/{id}", s.deleteSubscription)
+	m.HandleFunc("GET /api/v1/extension-requests", s.getExtensionRequests)
+	m.HandleFunc("POST /api/v1/extension-requests", s.postExtensionRequest)
+	m.HandleFunc("GET /api/v1/admin/extension-requests", s.adminExtensionRequests)
+	m.HandleFunc("PUT /api/v1/admin/extension-requests", s.reviewExtensionRequest)
 	m.HandleFunc("GET /api/v1/preferences", s.getPreferences)
 	m.HandleFunc("PUT /api/v1/preferences", s.putPreferences)
 	m.HandleFunc("POST /internal/discord", s.interaction)
@@ -265,7 +278,7 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, 200, map[string]any{"version": "0.4.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(), "subscriptions": false, "notifications": s.departuresEnabled(), "books": false, "monitoring": false})
+	jsonOut(w, 200, map[string]any{"version": "0.5.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(), "subscriptions": s.Config.SeerrURL != "" && s.Config.PlexURL != "", "notifications": s.departuresEnabled(), "discordDMs": s.Config.DiscordDMsEnabled && s.departuresEnabled(), "extensionRequests": s.extensionsEnabled(), "books": false, "monitoring": false})
 }
 func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 	_, v, ok := s.session(r)
@@ -766,7 +779,7 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	var recentPagination *discord.RecentPagination
 	if command == "aide" {
 		text = discord.Help(s.Config.PublicOrigin)
-	} else if command == "mes-demandes" || command == "nouveautes" {
+	} else if command == "mes-demandes" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "mes-suivis" {
 		u, e := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
 		if e == nil {
@@ -774,6 +787,14 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		}
 		if e != nil {
 			text = "Connectez-vous au Hub avec Plex, puis liez Discord dans Mon compte : " + s.Config.PublicOrigin + "/compte"
+		} else if s.rate("discord-personal:"+u.ID, 30) {
+			text = "Patientez avant de relancer une commande personnelle."
+		} else if command == "surprise" || command == "recap" {
+			options, _ := discord.CommandOptions(i)
+			text = s.discoveryMessage(r.Context(), g, command, options.Kind, time.Now())
+		} else if command == "suivre" || command == "mes-suivis" {
+			options, _ := discord.CommandOptions(i)
+			text = s.subscriptionMessage(r.Context(), u, command, options)
 		} else if command == "mes-demandes" {
 			if s.Config.SeerrURL == "" {
 				text = "Seerr n’est pas encore configuré."
