@@ -16,10 +16,13 @@ func TestSubscriptionMultipartAvailabilityNeedsEveryPartInOneEdition(t *testing.
 		name, media string
 		playable    bool
 	}{
-		{"complete multipart", `[{"Part":[{"key":"/library/parts/1/file.mkv","exists":true},{"key":"/library/parts/2/file.mkv","exists":1}]}]`, true},
+		{"complete multipart", `[{"Part":[{"key":"/library/parts/1/file.mkv","exists":true,"accessible":1},{"key":"/library/parts/2/file.mkv","exists":1,"accessible":true}]}]`, true},
 		{"missing second part", `[{"Part":[{"key":"/library/parts/1/file.mkv"},{"key":"/library/parts/2/file.mkv","exists":false}]}]`, false},
 		{"inaccessible second part", `[{"Part":[{"key":"/library/parts/1/file.mkv"},{"key":"/library/parts/2/file.mkv","accessible":0}]}]`, false},
-		{"complete alternate edition", `[{"Part":[{"key":"/library/parts/1/file.mkv","exists":false}]},{"Part":[{"key":"/library/parts/3/file.mkv"}]}]`, true},
+		{"complete alternate edition", `[{"Part":[{"key":"/library/parts/1/file.mkv","exists":false}]},{"Part":[{"key":"/library/parts/3/file.mkv","exists":true,"accessible":true}]}]`, true},
+		{"unknown file", `[{"Part":[{"key":"/library/parts/1/file.mkv"}]}]`, false},
+		{"unknown access", `[{"Part":[{"key":"/library/parts/1/file.mkv","exists":true}]}]`, false},
+		{"unknown existence", `[{"Part":[{"key":"/library/parts/1/file.mkv","accessible":true}]}]`, false},
 		{"empty parts", `[{"Part":[]}]`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,7 +84,7 @@ func TestSubscriptionAvailabilityAcrossPersonallyAuthorizedEditions(t *testing.T
 					}
 					w.WriteHeader(status)
 					if status == 200 {
-						fmt.Fprintf(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":%q,"type":"movie","guid":"plex://movie/x","Guid":[{"id":"tmdb://%d"}],"Media":[{"Part":[{"key":"/library/parts/1/file.mkv"}]}]}]}}`, id, tmdb)
+						fmt.Fprintf(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":%q,"type":"movie","guid":"plex://movie/x","Guid":[{"id":"tmdb://%d"}],"Media":[{"Part":[{"key":"/library/parts/1/file.mkv","exists":true,"accessible":true}]}]}]}}`, id, tmdb)
 					}
 				}
 			}))

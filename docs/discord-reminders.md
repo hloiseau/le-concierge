@@ -1,16 +1,16 @@
 # Rappels privés Discord
 
-Les rappels avant un départ estimé peuvent être envoyés en message privé Discord, en complément du récapitulatif du Hub. Les abonnements de disponibilité utilisent leur propre suivi dans le Hub.
+Les rappels avant un départ estimé et les disponibilités des suivis peuvent être envoyés en message privé Discord, en complément du Hub. Chaque suivi choisit son canal ; les préférences globales autorisent ou désactivent les notifications et les DM.
 
 ## Activation
 
-1. Sauvegarder SQLite avant la migration v4 ; le démarrage applique la migration automatiquement. Un retour à un binaire v3 nécessite la restauration de sa sauvegarde compatible.
+1. Sauvegarder SQLite avant la migration v5 ; le démarrage applique la migration automatiquement. Un retour à un binaire antérieur nécessite la restauration de sa sauvegarde compatible.
 2. Fournir `DISCORD_BOT_TOKEN` (ou son fichier secret `DISCORD_BOT_TOKEN_FILE`) au service API et activer `DISCORD_DMS_ENABLED=true`. La valeur par défaut est `false` et le démarrage refuse une activation sans jeton.
 3. Dans le Hub, l'utilisateur lie son compte Discord vérifié, active ses rappels, puis coche séparément « Recevoir aussi mes rappels en message privé Discord » et enregistre.
 
-L'ancien choix global de notifications ne vaut jamais consentement aux DM. La migration conserve les préférences et l'historique existants, avec les DM désactivés. L'activation ne transforme pas d'anciens récapitulatifs du Hub en messages à envoyer. Le processus ne crée une livraison Discord qu'au moment d'un nouveau récapitulatif, lorsque le serveur et le choix individuel l'autorisent.
+L'ancien choix global de notifications ne vaut jamais consentement aux DM. La migration conserve les préférences et l'historique existants ; le consentement DM est initialisé à faux lors de son introduction en v4, puis préservé lors des migrations suivantes. L'activation ne transforme pas d'anciens récapitulatifs du Hub en messages à envoyer. Le processus ne crée une livraison Discord qu'au moment d'un nouveau récapitulatif, lorsque le serveur et le choix individuel l'autorisent.
 
-Les heures calmes, le nombre maximal de contenus et le récapitulatif quotidien sont communs aux rappels. Seuls les films et épisodes commencés, encore accessibles et concernés par un départ estimé confirmé par les sources sont inclus. Les messages présentent cette date comme une estimation. Le bot doit pouvoir ouvrir un DM avec le compte lié ; un refus ou des DM fermés terminent la livraison sans tentative dans un salon public.
+Les heures calmes et le plafond quotidien de contenus sont communs aux deux familles. Chaque famille produit au plus un récapitulatif par jour : un pour les départs, un pour les disponibilités. Le total de contenus livrés dans les deux reste borné par le plafond partagé, y compris après désabonnement. Les départs couvrent lectures commencées, demandes et suivis non vus confirmés par Plex ; l’option explicite « tous mes contenus non vus » élargit ce ciblage. Les messages présentent les dates de retrait comme des estimations. Le bot doit pouvoir ouvrir un DM avec le compte lié ; un refus ou des DM fermés terminent la livraison sans tentative dans un salon public.
 
 ## Vérification et reprise
 

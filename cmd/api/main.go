@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -47,9 +48,12 @@ func run() error {
 	server := &http.Server{Addr: c.Listen, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	workerDone := make(chan struct{})
-	go func() { defer close(workerDone); api.RunReminders(ctx) }()
-	defer func() { stop(); <-workerDone }()
+	var workers sync.WaitGroup
+	for _, runWorker := range []func(context.Context){api.RunReminders, api.RunAvailability, api.RunMonitoring} {
+		workers.Add(1)
+		go func() { defer workers.Done(); runWorker(ctx) }()
+	}
+	defer func() { stop(); workers.Wait() }()
 	done := make(chan error, 1)
 	go func() { slog.Info("API listening", "address", c.Listen); done <- server.ListenAndServe() }()
 	select {

@@ -20,9 +20,12 @@ const discoveryPlaybackReads = 20
 
 type discoveryMetadata struct {
 	recentMetadata
-	DeletedAt int64           `json:"deletedAt"`
-	LeafCount *int            `json:"leafCount"`
-	Media     json.RawMessage `json:"Media"`
+	CanonicalGUID string          `json:"guid"`
+	ExternalGUIDs json.RawMessage `json:"Guid"`
+	ViewCount     *int64          `json:"viewCount"`
+	DeletedAt     int64           `json:"deletedAt"`
+	LeafCount     *int            `json:"leafCount"`
+	Media         json.RawMessage `json:"Media"`
 }
 
 type RecapResult struct {
@@ -159,7 +162,15 @@ func (c *Client) discoveryPlayable(ctx context.Context, base string, g Grant, ch
 			if episode.ID == "" || episode.ID == "0" || episode.Kind != "episode" || string(episode.GrandparentID) != id {
 				return false, ErrIncomplete
 			}
-			if playableSubscriptionItem(episode) {
+			if *remaining == 0 {
+				return false, ErrIncomplete
+			}
+			*remaining -= 1
+			playable, err := c.subscriptionEpisodePlayable(ctx, base, g, episode)
+			if err != nil {
+				return false, err
+			}
+			if playable {
 				return true, nil
 			}
 		}
@@ -209,7 +220,19 @@ func (c *Client) Recap(ctx context.Context, base, serverID string, g Grant, now 
 			if json.Unmarshal(m.Media, &playback.Media) != nil {
 				return RecapResult{}, ErrIncomplete
 			}
-			if !playableSubscriptionItem(playback) {
+			// A recap reports additions, not playback availability. List responses
+			// may omit file flags; only explicit absence excludes an addition here.
+			unavailable := len(playback.Media) > 0
+			for _, media := range playback.Media {
+				missing := false
+				for _, part := range media.Parts {
+					for _, flag := range []json.RawMessage{part.Exists, part.Accessible} {
+						missing = missing || string(flag) == "false" || string(flag) == "0"
+					}
+				}
+				unavailable = unavailable && missing
+			}
+			if unavailable {
 				continue
 			}
 		}

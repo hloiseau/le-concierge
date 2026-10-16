@@ -6,6 +6,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/api ./cmd/api \
  && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/bot ./cmd/bot \
  && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/manage ./cmd/manage \
+ && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/community-feed ./cmd/community-feed \
  && mkdir /out/data
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app

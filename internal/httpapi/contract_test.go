@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
+	"github.com/hloiseau/le-concierge/internal/community"
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/store"
 )
@@ -51,6 +53,10 @@ func validateContractResponse(doc *openapi3.T, method, target string, w *httptes
 	if w.Code < 300 || w.Code >= 400 {
 		content := response.Value.Content.Get("application/json")
 		if content == nil || content.Schema == nil {
+			binary := response.Value.Content.Get(w.Header().Get("Content-Type"))
+			if binary != nil && binary.Schema != nil && binary.Schema.Value.Format == "binary" && w.Body.Len() > 0 && w.Body.Len() <= 2*1024*1024 {
+				return nil
+			}
 			return fmt.Errorf("JSON response needs a schema for %s %s status %d", method, r.URL.Path, w.Code)
 		}
 	}
@@ -76,8 +82,8 @@ func validateContractResponse(doc *openapi3.T, method, target string, w *httptes
 					return nil
 				})),
 				openapi3.WithStringFormatValidator("uri", openapi3.NewCallbackValidator(func(value string) error {
-					u, err := url.ParseRequestURI(value)
-					if err != nil || !u.IsAbs() {
+					u, err := url.Parse(value)
+					if err != nil || !u.IsAbs() || u.Host == "" || strings.ContainsAny(value, " \t\r\n") {
 						return fmt.Errorf("invalid absolute URI: %q", value)
 					}
 					return nil
@@ -266,6 +272,77 @@ func TestOpenAPIResponses(t *testing.T) {
 		check(t, "GET", "/api/v1/admin/extension-requests", call(s, "GET", "/api/v1/admin/extension-requests", admin, "", ""), 200)
 		check(t, "PUT", "/api/v1/admin/extension-requests", call(s, "PUT", "/api/v1/admin/extension-requests", admin, s.Config.PublicOrigin, fmt.Sprintf(`{"id":%d,"status":"reviewed","note":"Vérifié"}`, item.ID)), 200)
 	})
+	t.Run("book catalog and external requests", func(t *testing.T) {
+		s, cookie, _ := booksFixture(t)
+		for _, tc := range []struct{ method, path, body string }{
+			{"GET", "/api/v1/books/link", ""},
+			{"POST", "/api/v1/books/link", `{"username":"alice-opds","password":"personal-secret"}`},
+			{"GET", "/api/v1/books?q=book", ""},
+			{"GET", "/api/v1/books/recent", ""},
+			{"GET", "/api/v1/books/7/cover", ""},
+			{"GET", "/api/v1/book-requests/link?q=book", ""},
+			{"GET", "/api/v1/book-collections", ""},
+			{"DELETE", "/api/v1/books/link", ""},
+		} {
+			check(t, tc.method, tc.path, call(s, tc.method, tc.path, cookie, s.Config.PublicOrigin, tc.body), 200)
+		}
+	})
+	t.Run("availability inbox and channel", func(t *testing.T) {
+		s, cookie, _, item, source := availabilityFixture(t)
+		source.available = true
+		check(t, "GET", "/api/v1/subscriptions/notifications", call(s, "GET", "/api/v1/subscriptions/notifications", cookie, "", ""), 200)
+		path := fmt.Sprintf("/api/v1/subscriptions/%d", item.ID)
+		check(t, "PATCH", path, call(s, "PATCH", path, cookie, s.Config.PublicOrigin, `{"channel":"hub"}`), 200)
+	})
+	t.Run("personal Shelfmark tracking", func(t *testing.T) {
+		s, cookie, _ := shelfmarkAPIFixture(t)
+		for _, tc := range []struct{ method, path, body string }{
+			{"GET", "/api/v1/book-requests/link-session", ""},
+			{"POST", "/api/v1/book-requests/link-session", `{"username":"alice","password":"personal-password"}`},
+			{"GET", "/api/v1/book-requests", ""},
+			{"DELETE", "/api/v1/book-requests/link-session", ""},
+		} {
+			check(t, tc.method, tc.path, call(s, tc.method, tc.path, cookie, s.Config.PublicOrigin, tc.body), 200)
+		}
+	})
+	t.Run("delayed personal request reminder", func(t *testing.T) {
+		s, cookie, _ := availableRequestFixture(t)
+		check(t, "GET", "/api/v1/reminders", call(s, "GET", "/api/v1/reminders", cookie, "", ""), 200)
+	})
+	t.Run("monitoring and admin activity", func(t *testing.T) {
+		s := fixture(t)
+		s.Config.MonitoringEnabled = true
+		s.Config.TautulliURL = ""
+		s.Config.AdminIDs = []string{"11111"}
+		cookie := seed(t, s, "11111", true)
+		for _, path := range []string{"/api/v1/monitoring", "/api/v1/monitoring/history?range=1h", "/api/v1/admin/plex-activity"} {
+			check(t, "GET", path, call(s, "GET", path, cookie, "", ""), 200)
+		}
+	})
+	t.Run("admin diagnostic", func(t *testing.T) {
+		s, cookie, _ := diagnosticAPIFixture(t)
+		path := "/api/v1/admin/diagnostics?requestId=7"
+		check(t, "GET", path, call(s, "GET", path, cookie, "", ""), 200)
+	})
+	t.Run("community publication", func(t *testing.T) {
+		s := fixture(t)
+		s.Config.CommunityFeedFile = filepath.Join(t.TempDir(), "publication.json")
+		s.Config.CommunityForumIDs = []string{"11111"}
+		s.Config.RoadmapIssueIDs = []string{"example/project#1"}
+		now := time.Now().UTC()
+		published := community.Publication{Version: 1, PublishedAt: now, ExpiresAt: now.Add(time.Hour), Forums: []community.PublishedThread{{ForumID: "11111", ThreadID: "22222", Title: "Proposal", Kind: "proposal", Status: "open", UpdatedAt: now}}, Roadmap: []community.PublishedIssue{{IssueID: "example/project#1", ID: "feature", Title: "Feature", Status: "planned", Dependencies: []string{}, Date: "2027-01-01", DateConfirmed: true, ThreadID: "22222", LinkToIssue: true}}}
+		body, err := json.Marshal(published)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(s.Config.CommunityFeedFile, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		cookie := seed(t, s, "11111", true)
+		for _, path := range []string{"/api/v1/community", "/api/v1/roadmap"} {
+			check(t, "GET", path, call(s, "GET", path, cookie, "", ""), 200)
+		}
+	})
 	t.Run("errors", func(t *testing.T) {
 		for path, item := range doc.Paths.Map() {
 			for method, operation := range item.Operations() {
@@ -341,6 +418,8 @@ func contractFixture(t *testing.T) *Server {
 			body = `{"MediaContainer":{"machineIdentifier":"server-a"}}`
 		case "/library/recentlyAdded":
 			body = `{"MediaContainer":{"Metadata":[{"ratingKey":"42","title":"Fixture film","type":"movie","year":2026,"addedAt":1767268800}]}}`
+		case "/library/all":
+			body = `{"MediaContainer":{"size":0,"totalSize":0,"Metadata":[]}}`
 		case "/api/app/status":
 			body = `{"status":1,"version":"3.30.1"}`
 		case "/api/media-server/type":

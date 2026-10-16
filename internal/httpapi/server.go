@@ -12,6 +12,7 @@ import (
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/departures"
 	"github.com/hloiseau/le-concierge/internal/discord"
+	"github.com/hloiseau/le-concierge/internal/monitoring"
 	"github.com/hloiseau/le-concierge/internal/notifications"
 	"github.com/hloiseau/le-concierge/internal/store"
 	"github.com/hloiseau/le-concierge/internal/upstream"
@@ -47,19 +48,22 @@ type bucket struct {
 	Count int
 }
 type Server struct {
-	Config       config.Config
-	Store        *store.Store
-	Upstream     *upstream.Client
-	Departures   *departures.Service
-	Discord      *notifications.Discord
-	mu           sync.Mutex
-	sessions     map[string]session
-	oauth        map[string]oauthAttempt
-	pins         map[string]pendingPin
-	grants       map[string]upstream.Grant
-	limits       map[string]bucket
-	seen         map[string]time.Time
-	reminderGate chan struct{}
+	Config          config.Config
+	Store           *store.Store
+	Upstream        *upstream.Client
+	Departures      *departures.Service
+	Discord         *notifications.Discord
+	Monitoring      *monitoring.Service
+	mu              sync.Mutex
+	sessions        map[string]session
+	oauth           map[string]oauthAttempt
+	pins            map[string]pendingPin
+	grants          map[string]upstream.Grant
+	bookGrants      map[string]bookGrant
+	shelfmarkGrants map[string]shelfmarkGrant
+	limits          map[string]bucket
+	seen            map[string]time.Time
+	reminderGate    chan struct{}
 }
 
 func New(c config.Config, db *store.Store) *Server {
@@ -68,6 +72,7 @@ func New(c config.Config, db *store.Store) *Server {
 	if c.DiscordDMsEnabled {
 		s.Discord = notifications.NewDiscord(c.DiscordBotToken)
 	}
+	s.Monitoring = monitoring.New(client, db)
 	return s
 }
 func token() string {
@@ -208,6 +213,8 @@ func (s *Server) cleanup() {
 	for k, v := range s.grants {
 		if now.After(v.ExpiresAt) {
 			delete(s.grants, k)
+			s.clearBookGrantLocked(k)
+			s.clearShelfmarkGrantLocked(k)
 		}
 	}
 	for k, v := range s.seen {
@@ -249,6 +256,26 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/subscriptions", s.getSubscriptions)
 	m.HandleFunc("POST /api/v1/subscriptions", s.postSubscription)
 	m.HandleFunc("DELETE /api/v1/subscriptions/{id}", s.deleteSubscription)
+	m.HandleFunc("PATCH /api/v1/subscriptions/{id}", s.patchSubscriptionChannel)
+	m.HandleFunc("GET /api/v1/subscriptions/notifications", s.availabilityInbox)
+	m.HandleFunc("GET /api/v1/books/link", s.booksLink)
+	m.HandleFunc("POST /api/v1/books/link", s.booksLink)
+	m.HandleFunc("DELETE /api/v1/books/link", s.booksLink)
+	m.HandleFunc("GET /api/v1/books", s.booksCatalog)
+	m.HandleFunc("GET /api/v1/books/recent", s.recentBooks)
+	m.HandleFunc("GET /api/v1/book-collections", s.bookCollections)
+	m.HandleFunc("GET /api/v1/books/{id}/cover", s.booksCover)
+	m.HandleFunc("GET /api/v1/book-requests/link", s.bookRequestLink)
+	m.HandleFunc("GET /api/v1/book-requests/link-session", s.shelfmarkLink)
+	m.HandleFunc("POST /api/v1/book-requests/link-session", s.shelfmarkLink)
+	m.HandleFunc("DELETE /api/v1/book-requests/link-session", s.shelfmarkLink)
+	m.HandleFunc("GET /api/v1/book-requests", s.shelfmarkRequests)
+	m.HandleFunc("GET /api/v1/monitoring", s.getMonitoring)
+	m.HandleFunc("GET /api/v1/monitoring/history", s.getMonitoringHistory)
+	m.HandleFunc("GET /api/v1/admin/plex-activity", s.adminPlexActivity)
+	m.HandleFunc("GET /api/v1/admin/diagnostics", s.adminDiagnostic)
+	m.HandleFunc("GET /api/v1/community", s.getCommunity)
+	m.HandleFunc("GET /api/v1/roadmap", s.getRoadmap)
 	m.HandleFunc("GET /api/v1/extension-requests", s.getExtensionRequests)
 	m.HandleFunc("POST /api/v1/extension-requests", s.postExtensionRequest)
 	m.HandleFunc("GET /api/v1/admin/extension-requests", s.adminExtensionRequests)
@@ -278,7 +305,17 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, 200, map[string]any{"version": "0.5.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(), "subscriptions": s.Config.SeerrURL != "" && s.Config.PlexURL != "", "notifications": s.departuresEnabled(), "discordDMs": s.Config.DiscordDMsEnabled && s.departuresEnabled(), "extensionRequests": s.extensionsEnabled(), "books": false, "monitoring": false})
+	jsonOut(w, 200, map[string]any{
+		"version": "0.6.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
+		"requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(),
+		"subscriptions": s.subscriptionsEnabled(), "subscriptionNotifications": s.subscriptionsEnabled(),
+		"notifications":     s.departuresEnabled() || s.subscriptionsEnabled(),
+		"discordDMs":        s.Config.DiscordDMsEnabled && (s.departuresEnabled() || s.subscriptionsEnabled()),
+		"extensionRequests": s.extensionsEnabled(), "books": s.Config.GrimmoryURL != "", "booksCatalog": s.Config.GrimmoryURL != "", "recentBooks": s.Config.GrimmoryURL != "",
+		"bookRequests": s.bookServiceURL("shelfmark") != "", "bookRequestTracking": s.Config.ShelfmarkURL != "", "bookCollections": s.Config.GrimmoryURL != "", "monitoring": s.Config.MonitoringEnabled,
+		"community": s.Config.CommunityFeedFile != "" && len(s.Config.CommunityForumIDs) > 0,
+		"roadmap":   s.Config.CommunityFeedFile != "" && len(s.Config.RoadmapIssueIDs) > 0,
+	})
 }
 func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 	_, v, ok := s.session(r)
@@ -388,6 +425,8 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		delete(s.grants, merged)
+		s.clearBookGrantLocked(merged)
+		s.clearShelfmarkGrantLocked(merged)
 	}
 	value := token()
 	delete(s.sessions, attempt.SessionKey)
@@ -409,6 +448,8 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		delete(s.grants, v.UserID)
+		s.clearBookGrantLocked(v.UserID)
+		s.clearShelfmarkGrantLocked(v.UserID)
 	}
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
@@ -435,6 +476,8 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	delete(s.grants, u.ID)
+	s.clearBookGrantLocked(u.ID)
+	s.clearShelfmarkGrantLocked(u.ID)
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
 	jsonOut(w, 200, map[string]bool{"ok": true})
@@ -572,6 +615,8 @@ func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 	}
 	s.sessions[digest(value)] = session{u.ID, expires}
 	g.ExpiresAt = expires
+	s.clearBookGrantLocked(u.ID)
+	s.clearShelfmarkGrantLocked(u.ID)
 	s.grants[u.ID] = g
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), value, 12*3600, false)
@@ -593,6 +638,8 @@ func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error
 		if errors.Is(e, upstream.ErrDenied) {
 			s.mu.Lock()
 			delete(s.grants, u.ID)
+			s.clearBookGrantLocked(u.ID)
+			s.clearShelfmarkGrantLocked(u.ID)
 			s.mu.Unlock()
 		}
 		return upstream.Grant{}, e
@@ -721,7 +768,7 @@ func (s *Server) recent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getPreferences(w http.ResponseWriter, r *http.Request) {
 	_, u, ok := s.user(w, r)
 	if ok {
-		jsonOut(w, 200, map[string]any{"notifications": u.Notifications, "notificationsAvailable": s.departuresEnabled(), "timezone": "Europe/Paris"})
+		jsonOut(w, 200, map[string]any{"notifications": u.Notifications, "notificationsAvailable": s.departuresEnabled() || s.subscriptionsEnabled(), "timezone": "Europe/Paris"})
 	}
 }
 func (s *Server) putPreferences(w http.ResponseWriter, r *http.Request) {
@@ -745,7 +792,7 @@ func (s *Server) putPreferences(w http.ResponseWriter, r *http.Request) {
 		problem(w, 500, "storage_error", "Enregistrement impossible.")
 		return
 	}
-	jsonOut(w, 200, map[string]any{"notifications": *p.Notifications, "notificationsAvailable": s.departuresEnabled(), "timezone": "Europe/Paris"})
+	jsonOut(w, 200, map[string]any{"notifications": *p.Notifications, "notificationsAvailable": s.departuresEnabled() || s.subscriptionsEnabled(), "timezone": "Europe/Paris"})
 }
 func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	expected := "Bearer " + s.Config.BotAPISecret
@@ -778,8 +825,8 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	var pagination *discord.RequestPagination
 	var recentPagination *discord.RecentPagination
 	if command == "aide" {
-		text = discord.Help(s.Config.PublicOrigin)
-	} else if command == "mes-demandes" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "mes-suivis" {
+		text = discord.Help(s.Config.PublicOrigin, s.Config.Services)
+	} else if command == "mes-demandes" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "mes-suivis" || command == "livres" || command == "demander-livre" || command == "diagnostic" {
 		u, e := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
 		if e == nil {
@@ -789,6 +836,15 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 			text = "Connectez-vous au Hub avec Plex, puis liez Discord dans Mon compte : " + s.Config.PublicOrigin + "/compte"
 		} else if s.rate("discord-personal:"+u.ID, 30) {
 			text = "Patientez avant de relancer une commande personnelle."
+		} else if command == "diagnostic" {
+			options, _ := discord.CommandOptions(i)
+			text = s.diagnosticMessage(r.Context(), u, int64(options.RequestID))
+		} else if command == "livres" {
+			options, _ := discord.CommandOptions(i)
+			text = s.booksMessage(r.Context(), u, options.Query, options.Page)
+		} else if command == "demander-livre" {
+			options, _ := discord.CommandOptions(i)
+			text = s.bookRequestMessage(options.Query)
 		} else if command == "surprise" || command == "recap" {
 			options, _ := discord.CommandOptions(i)
 			text = s.discoveryMessage(r.Context(), g, command, options.Kind, time.Now())
@@ -898,7 +954,7 @@ func safeText(v string) string {
 	return v
 }
 func statusLabel(v string) string {
-	m := map[string]string{"pending": "En attente", "approved": "Approuvée", "declined": "Refusée", "processing": "En cours", "partial": "Partiellement disponible", "available": "Disponible", "unknown": "État inconnu"}
+	m := map[string]string{"pending": "En attente", "approved": "Approuvée", "declined": "Refusée", "error": "En erreur", "processing": "En cours", "partial": "Partiellement disponible", "available": "Disponible", "unknown": "État inconnu"}
 	if x := m[v]; x != "" {
 		return x
 	}

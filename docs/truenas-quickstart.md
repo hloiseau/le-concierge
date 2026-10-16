@@ -1,12 +1,12 @@
 # Déployer et tester sur TrueNAS SCALE 25.10
 
-Les deux premières versions sont fusionnées dans `main`. Les images ci-dessous ont été construites et publiées par GitHub Actions ; leur téléchargement anonyme a été vérifié le 15 octobre 2026. Le fonctionnement sur le NAS et avec tes comptes reste à tester.
+Les deux premières versions sont fusionnées dans `main`. Les images de cette version initiale ont été construites et publiées par GitHub Actions ; leur téléchargement anonyme a été vérifié le 15 octobre 2026. Les évolutions décrites dans la [roadmap](roadmap.md) nécessitent les images issues de leur fusion et de leur CI, dont la publication reste à vérifier. Le fonctionnement sur le NAS et avec tes comptes reste à tester.
 
 ## 1. Choisir le YAML
 
 | Fichier | Usage |
 | --- | --- |
-| [truenas.yaml](../deploy/truenas.yaml) | API + Hub ; démarre sans identifiants pour vérifier l'accueil et les liens |
+| [truenas.yaml](../deploy/truenas.yaml) | API + Hub ; démarre sans identifiants pour vérifier la santé des services et l’écran de connexion, puis exige une configuration Plex pour accéder aux pages et liens |
 | [truenas-discord.yaml](../deploy/truenas-discord.yaml) | API + Hub + bot ; renseigner d'abord l'application Discord |
 | [Caddyfile.truenas](../deploy/Caddyfile.truenas) | Deux blocs à ajouter au Caddy existant |
 | [truenas-admin.sh](../deploy/truenas-admin.sh) | Vérification, enregistrement Discord et sauvegarde |
@@ -84,7 +84,7 @@ Les YAML utilisent **`edge`**, publié après chaque fusion validée sur `main` 
 
 Pour figer une version, remplacer `edge` par `sha-<SHA complet du commit publié>` après vérification du succès de la CI. `main` et `latest` ne sont pas des tags publiés. Après une mise à jour, demander à TrueNAS de **récupérer les nouvelles images puis redéployer les trois services**. Un simple redémarrage peut réutiliser l'image en cache. Si ton YAML utilise encore les anciens tags `sha-…`, remplacer uniquement les trois lignes `image:` en conservant tes paramètres et ton dataset.
 
-Cette version migre SQLite vers le schéma v2 en conservant les comptes et préférences. Une ancienne image nécessite la restauration d’une sauvegarde antérieure pour revenir en arrière.
+Cette version migre SQLite vers le schéma v5 en conservant les comptes et préférences. Une ancienne image nécessite la restauration d’une sauvegarde antérieure pour revenir en arrière.
 
 Avant une mise à jour :
 
@@ -111,6 +111,6 @@ Conserver aussi une copie hors du dataset de l'application et noter les tags pr�
 | Bot hors ligne dans la liste Discord | Normal pour cette version HTTP sans Gateway ; tester `/aide` |
 | Image refusée au téléchargement | Vérifier le nom/tag exact ; les deux images listées ont été vérifiées accessibles sans connexion |
 
-Les rappels Maintainerr/Tautulli, le catalogue livres et le monitoring restent à développer. Ne pas utiliser ces pages comme preuve qu'un envoi ou une collecte est déjà actif.
+Les rappels Maintainerr/Tautulli, le catalogue livres et le monitoring sont implémentés et testés avec des sources simulées. Leur configuration et leur validation sur le NAS restent nécessaires ; les fonctions optionnelles sont désactivées dans les YAML fournis. Une page ou une capacité annoncée ne prouve pas qu’un envoi ou une collecte est déjà actif.
 
 Sources : [interface Apps TrueNAS 25.10](https://www.truenas.com/docs/scale/25.10/scaleuireference/apps/), [installation d'applications personnalisées](https://apps.truenas.com/managing-apps/installing-custom-apps/).

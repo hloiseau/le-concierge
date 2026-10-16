@@ -30,6 +30,84 @@ func TestDiscordDMRequiresExplicitServerEnable(t *testing.T) {
 	}
 }
 
+func TestOptionalBooksAndMonitoringConfiguration(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("PUBLIC_ORIGIN", "https://hub.example")
+	t.Setenv("GRIMMORY_URL", "http://books.example")
+	if _, err := Load(); err == nil {
+		t.Fatal("personal book credentials allowed over plaintext")
+	}
+	t.Setenv("GRIMMORY_URL", "https://books.example")
+	t.Setenv("METRICS_FILE", "relative/snapshot.json")
+	if _, err := Load(); err == nil {
+		t.Fatal("relative metrics file accepted")
+	}
+	t.Setenv("METRICS_FILE", filepath.Join(t.TempDir(), "metrics.json"))
+	t.Setenv("MONITORING_ENABLED", "invalid")
+	if _, err := Load(); err == nil {
+		t.Fatal("invalid monitoring switch accepted")
+	}
+	t.Setenv("MONITORING_ENABLED", "false")
+	if c, err := Load(); err != nil || c.MonitoringEnabled || c.GrimmoryURL != "https://books.example" {
+		t.Fatalf("optional setup: %v", err)
+	}
+}
+
+func TestDiagnosticCredentialsMustMatchTheirService(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	for _, service := range []string{"RADARR", "SONARR"} {
+		t.Run(service, func(t *testing.T) {
+			t.Setenv(service+"_URL", "http://arr.test")
+			t.Setenv(service+"_API_KEY", "")
+			t.Setenv(service+"_API_KEY_FILE", "")
+			if _, err := Load(); err == nil {
+				t.Fatal("service accepted without credentials")
+			}
+			file := filepath.Join(t.TempDir(), "key")
+			if err := os.WriteFile(file, []byte("fixture-key\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(service+"_API_KEY_FILE", file)
+			c, err := Load()
+			if err != nil || (service == "RADARR" && c.RadarrAPIKey != "fixture-key") || (service == "SONARR" && c.SonarrAPIKey != "fixture-key") {
+				t.Fatalf("file credential: %v", err)
+			}
+			t.Setenv(service+"_URL", "")
+			if _, err := Load(); err == nil {
+				t.Fatal("orphan credential accepted")
+			}
+		})
+	}
+}
+
+func TestCommunityConfigurationRequiresExplicitValidSelections(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	t.Setenv("COMMUNITY_FEED_FILE", filepath.Join(t.TempDir(), "community.json"))
+	t.Setenv("COMMUNITY_FORUM_IDS", "12345")
+	t.Setenv("DISCORD_GUILD_ID", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("forum accepted without guild")
+	}
+	t.Setenv("DISCORD_GUILD_ID", "67890")
+	t.Setenv("ROADMAP_ISSUE_IDS", "hloiseau/le-concierge#23")
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"12345,12345", "https://discord.com/channels/67890/12345", "*"} {
+		t.Setenv("COMMUNITY_FORUM_IDS", value)
+		if _, err := Load(); err == nil {
+			t.Fatalf("invalid forum selection accepted: %s", value)
+		}
+	}
+	t.Setenv("COMMUNITY_FORUM_IDS", "12345")
+	t.Setenv("ROADMAP_ISSUE_IDS", "*")
+	if _, err := Load(); err == nil {
+		t.Fatal("wildcard issue publication accepted")
+	}
+}
+
 func TestRemovalSourceConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")

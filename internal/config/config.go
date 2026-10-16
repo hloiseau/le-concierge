@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hloiseau/le-concierge/internal/community"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,11 +22,16 @@ type Service struct {
 	Category    string `json:"category"`
 }
 type Config struct {
+	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
+	CommunityFeedFile                                                                       string
+	CommunityForumIDs, RoadmapIssueIDs                                                      []string
 	Env, Listen, BotListen, PublicOrigin, DatabasePath                                      string
 	DiscordClientID, DiscordClientSecret, DiscordGuildID, DiscordPublicKey, DiscordBotToken string
 	BotAPIURL, BotAPISecret                                                                 string
 	PlexURL, PlexServerID, SeerrURL, SeerrAPIKey                                            string
 	MaintainerrURL, TautulliURL, TautulliAPIKey                                             string
+	GrimmoryURL, ShelfmarkURL, MetricsFile                                                  string
+	MonitoringEnabled                                                                       bool
 	AdminIDs                                                                                []string
 	DiscordDMsEnabled                                                                       bool
 	Services                                                                                []Service
@@ -64,10 +71,37 @@ func Load() (Config, error) {
 	c := Config{Env: fallback("APP_ENV", "production"), Listen: fallback("LISTEN_ADDR", ":8080"), BotListen: fallback("BOT_LISTEN_ADDR", ":8081"), PublicOrigin: strings.TrimRight(fallback("PUBLIC_ORIGIN", "http://localhost:3000"), "/"), DatabasePath: fallback("DATABASE_PATH", "data/concierge.db"), DiscordClientID: os.Getenv("DISCORD_CLIENT_ID"), DiscordGuildID: os.Getenv("DISCORD_GUILD_ID"), DiscordPublicKey: os.Getenv("DISCORD_PUBLIC_KEY"), BotAPIURL: strings.TrimRight(fallback("BOT_API_URL", "http://api:8080"), "/"), PlexURL: strings.TrimRight(os.Getenv("PLEX_URL"), "/"), PlexServerID: os.Getenv("PLEX_SERVER_ID"), SeerrURL: strings.TrimRight(os.Getenv("SEERR_URL"), "/")}
 	c.MaintainerrURL = strings.TrimRight(os.Getenv("MAINTAINERR_URL"), "/")
 	c.TautulliURL = strings.TrimRight(os.Getenv("TAUTULLI_URL"), "/")
+	c.GrimmoryURL = strings.TrimRight(os.Getenv("GRIMMORY_URL"), "/")
+	c.ShelfmarkURL = strings.TrimRight(os.Getenv("SHELFMARK_URL"), "/")
+	c.MetricsFile = os.Getenv("METRICS_FILE")
+	c.RadarrURL = strings.TrimRight(os.Getenv("RADARR_URL"), "/")
+	c.SonarrURL = strings.TrimRight(os.Getenv("SONARR_URL"), "/")
+	c.CommunityFeedFile = os.Getenv("COMMUNITY_FEED_FILE")
+	for _, entry := range []struct {
+		name  string
+		dest  *[]string
+		valid func(string) bool
+	}{
+		{"COMMUNITY_FORUM_IDS", &c.CommunityForumIDs, community.ValidForumID},
+		{"ROADMAP_ISSUE_IDS", &c.RoadmapIssueIDs, community.ValidIssueID},
+	} {
+		seen := map[string]bool{}
+		for _, value := range strings.Split(os.Getenv(entry.name), ",") {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if !entry.valid(value) || seen[value] || len(*entry.dest) >= 100 {
+				return c, fmt.Errorf("invalid %s allowlist", entry.name)
+			}
+			seen[value] = true
+			*entry.dest = append(*entry.dest, value)
+		}
+	}
 	for _, p := range []struct {
 		name string
 		dest *string
-	}{{"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}} {
+	}{{"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}, {"RADARR_API_KEY", &c.RadarrAPIKey}, {"SONARR_API_KEY", &c.SonarrAPIKey}} {
 		v, e := secret(p.name)
 		if e != nil {
 			return c, e
@@ -78,6 +112,16 @@ func Load() (Config, error) {
 		return c, errors.New("APP_ENV must be production or development")
 	}
 	var err error
+	if len(c.CommunityForumIDs) > 0 && !community.ValidForumID(c.DiscordGuildID) {
+		return c, errors.New("community forums require DISCORD_GUILD_ID")
+	}
+	if c.CommunityFeedFile != "" && !filepath.IsAbs(c.CommunityFeedFile) {
+		return c, errors.New("COMMUNITY_FEED_FILE requires an absolute path")
+	}
+	c.MonitoringEnabled, err = strconv.ParseBool(fallback("MONITORING_ENABLED", "false"))
+	if err != nil || (c.MetricsFile != "" && !filepath.IsAbs(c.MetricsFile)) {
+		return c, errors.New("MONITORING_ENABLED requires a boolean; METRICS_FILE requires an absolute path")
+	}
 	c.DiscordDMsEnabled, err = strconv.ParseBool(fallback("DISCORD_DMS_ENABLED", "false"))
 	if err != nil || (c.DiscordDMsEnabled && c.DiscordBotToken == "") {
 		return c, errors.New("DISCORD_DMS_ENABLED requires a boolean and a bot token when enabled")
@@ -89,16 +133,25 @@ func Load() (Config, error) {
 	if origin.Scheme != "https" && (c.Env != "development" || (origin.Hostname() != "localhost" && origin.Hostname() != "127.0.0.1")) {
 		return c, errors.New("PUBLIC_ORIGIN requires HTTPS outside local development")
 	}
-	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL, c.MaintainerrURL, c.TautulliURL} {
+	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL, c.MaintainerrURL, c.TautulliURL, c.GrimmoryURL, c.ShelfmarkURL, c.RadarrURL, c.SonarrURL} {
 		if v != "" && !ValidURL(v, false) {
 			return c, errors.New("invalid service URL")
 		}
+	}
+	if c.GrimmoryURL != "" && c.Env != "development" && !strings.HasPrefix(c.GrimmoryURL, "https://") {
+		return c, errors.New("GRIMMORY_URL requires HTTPS outside local development")
+	}
+	if c.ShelfmarkURL != "" && c.Env != "development" && !strings.HasPrefix(c.ShelfmarkURL, "https://") {
+		return c, errors.New("SHELFMARK_URL requires HTTPS outside local development")
 	}
 	if (c.PlexURL == "") != (c.PlexServerID == "") {
 		return c, errors.New("PLEX_URL and PLEX_SERVER_ID must be set together")
 	}
 	if (c.SeerrURL == "") != (c.SeerrAPIKey == "") {
 		return c, errors.New("SEERR_URL and SEERR_API_KEY must be set together")
+	}
+	if (c.RadarrURL == "") != (c.RadarrAPIKey == "") || (c.SonarrURL == "") != (c.SonarrAPIKey == "") {
+		return c, errors.New("Arr URL and API key must be set together")
 	}
 	if (c.TautulliURL == "") != (c.TautulliAPIKey == "") {
 		return c, errors.New("TAUTULLI_URL and TAUTULLI_API_KEY must be set together")

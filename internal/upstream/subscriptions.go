@@ -86,7 +86,7 @@ func (c *Client) CheckSubscription(ctx context.Context, seerrURL, key string, us
 	}
 	requested := false
 	for _, request := range detail.Media.Requests {
-		if request.Status != 1 && request.Status != 2 {
+		if request.Status != 1 && request.Status != 2 && request.Status != 5 {
 			continue
 		}
 		matches := season == nil
@@ -99,7 +99,8 @@ func (c *Client) CheckSubscription(ctx context.Context, seerrURL, key string, us
 			if request.RequestedBy.ID <= 0 {
 				return SubscriptionMedia{}, ErrIncomplete
 			}
-			requested = true
+			// Completion still identifies Seerr's recipient, but is not a new pending request.
+			requested = requested || request.Status != 5
 			out.RequestedBySelf = out.RequestedBySelf || request.RequestedBy.ID == user
 		}
 	}
@@ -172,7 +173,14 @@ func (c *Client) subscriptionPlexPage(ctx context.Context, base, path string, gr
 			Metadata []subscriptionPlexMetadata `json:"Metadata"`
 		} `json:"MediaContainer"`
 	}
-	err := c.JSON(ctx, "GET", base+path+"?skipRefresh=1", headers, "", &result)
+	query := url.Values{"skipRefresh": {"1"}}
+	// File checks are documented for item metadata, not descendant listings.
+	if strings.Count(path, "/") == 3 {
+		query.Set("checkFiles", "1")
+		query.Set("checkFileAvailability", "1")
+		query.Set("includeGuids", "1")
+	}
+	err := c.JSON(ctx, "GET", base+path+"?"+query.Encode(), headers, "", &result)
 	if errors.Is(err, ErrNotFound) {
 		return nil, 0, nil
 	}
@@ -265,6 +273,7 @@ func (c *Client) subscriptionPlexAvailable(ctx context.Context, base string, gra
 		}
 		path = "/library/metadata/" + parent + "/children"
 	}
+	episodeChecks := 0
 	for offset := 0; offset < 1000; {
 		episodes, total, err := c.subscriptionPlexPage(ctx, base, path, grant, offset, 20)
 		if err != nil {
@@ -274,7 +283,15 @@ func (c *Client) subscriptionPlexAvailable(ctx context.Context, base string, gra
 			if episode.Kind != "episode" || string(episode.GrandparentID) != ratingKey || (season != nil && string(episode.ParentID) != parent) {
 				return false, ErrIncomplete
 			}
-			if playableSubscriptionItem(episode) {
+			if episodeChecks >= 20 {
+				return false, ErrIncomplete
+			}
+			episodeChecks++
+			playable, err := c.subscriptionEpisodePlayable(ctx, base, grant, episode)
+			if err != nil {
+				return false, err
+			}
+			if playable {
 				return true, nil
 			}
 		}
@@ -289,11 +306,30 @@ func (c *Client) subscriptionPlexAvailable(ctx context.Context, base string, gra
 	return false, ErrIncomplete
 }
 
+func (c *Client) subscriptionEpisodePlayable(ctx context.Context, base string, grant Grant, listed subscriptionPlexMetadata) (bool, error) {
+	id := string(listed.ID)
+	if n, err := strconv.ParseInt(id, 10, 64); err != nil || n <= 0 || strconv.FormatInt(n, 10) != id {
+		return false, ErrIncomplete
+	}
+	items, _, err := c.subscriptionPlexPage(ctx, base, "/library/metadata/"+id, grant, 0, 1)
+	if errors.Is(err, ErrDenied) || (err == nil && len(items) == 0) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	item := items[0]
+	if item.ID != listed.ID || item.Kind != "episode" || item.GrandparentID != listed.GrandparentID || (listed.ParentID != "" && item.ParentID != listed.ParentID) || (listed.GUID != "" && item.GUID != listed.GUID) {
+		return false, ErrIncomplete
+	}
+	return playableSubscriptionItem(item), nil
+}
+
 func playableSubscriptionItem(item subscriptionPlexMetadata) bool {
 	for _, media := range item.Media {
 		playable := len(media.Parts) > 0
 		for _, part := range media.Parts {
-			if !strings.HasPrefix(part.Key, "/library/parts/") || unavailablePlexPart(part.Exists) || unavailablePlexPart(part.Accessible) {
+			if !strings.HasPrefix(part.Key, "/library/parts/") || !availablePlexPart(part.Exists) || !availablePlexPart(part.Accessible) {
 				playable = false
 				break
 			}
@@ -305,6 +341,6 @@ func playableSubscriptionItem(item subscriptionPlexMetadata) bool {
 	return false
 }
 
-func unavailablePlexPart(value json.RawMessage) bool {
-	return len(value) > 0 && string(value) != "true" && string(value) != "1"
+func availablePlexPart(value json.RawMessage) bool {
+	return string(value) == "true" || string(value) == "1"
 }

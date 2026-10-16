@@ -103,7 +103,10 @@ func TestDiscoverySignedCommandsRecheckIdentity(t *testing.T) {
 						if state == "revoked" {
 							return response(403, `{}`), nil
 						}
-						return response(200, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"1","type":"movie","Media":[{"Part":[{"key":"/library/parts/1/file.mkv"}]}]}]}}`), nil
+						if command == "surprise" && (r.URL.Query().Get("checkFiles") != "1" || r.URL.Query().Get("checkFileAvailability") != "1") {
+							t.Fatal("surprise omitted fresh playback checks")
+						}
+						return response(200, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"1","type":"movie","Media":[{"Part":[{"key":"/library/parts/1/file.mkv","exists":true,"accessible":true}]}]}]}}`), nil
 					default:
 						t.Fatalf("unexpected discovery request: %s", r.URL.Path)
 						return nil, nil

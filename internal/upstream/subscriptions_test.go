@@ -55,14 +55,20 @@ func TestSubscriptionAvailabilityRequiresPersonalPlexMatch(t *testing.T) {
 		season           *int
 		deny             bool
 		offline          bool
+		unknownFile      bool
+		self             bool
+		requestStatus    int
 		wantErr          error
 	}{
 		{name: "movie", kind: "movie", guid: "tmdb://12"},
+		{name: "completed own movie", kind: "movie", guid: "tmdb://12", requestStatus: 5, self: true},
 		{name: "wrong movie", kind: "movie", guid: "tmdb://13", wantErr: ErrIncomplete},
 		{name: "hidden movie", kind: "movie", guid: "tmdb://12", deny: true, wantErr: ErrDenied},
 		{name: "offline movie", kind: "movie", guid: "tmdb://12", offline: true, wantErr: ErrDenied},
+		{name: "unknown movie file", kind: "movie", guid: "tmdb://12", unknownFile: true, wantErr: ErrDenied},
 		{name: "series first episode", kind: "tv", guid: "tmdb://12"},
 		{name: "season first episode", kind: "tv", guid: "tmdb://12", season: new(2)},
+		{name: "completed own season", kind: "tv", guid: "tmdb://12", season: new(2), requestStatus: 5, self: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			plexReads := 0
@@ -74,7 +80,14 @@ func TestSubscriptionAvailabilityRequiresPersonalPlexMatch(t *testing.T) {
 				case r.URL.Path == "/api/v1/auth/me":
 					fmt.Fprint(w, `{"id":7}`)
 				case strings.HasPrefix(r.URL.Path, "/api/v1/"):
-					fmt.Fprintf(w, `{"id":12,"title":"Film","name":"Series","seasons":[{"seasonNumber":2}],"mediaInfo":{"tmdbId":12,"mediaType":%q,"status":5,"ratingKey":"42","requests":[{"status":2,"requestedBy":{"id":8},"seasons":[{"seasonNumber":2}]}]}}`, tc.kind)
+					status, owner := tc.requestStatus, 8
+					if status == 0 {
+						status = 2
+					}
+					if tc.self {
+						owner = 7
+					}
+					fmt.Fprintf(w, `{"id":12,"title":"Film","name":"Series","seasons":[{"seasonNumber":2}],"mediaInfo":{"tmdbId":12,"mediaType":%q,"status":5,"ratingKey":"42","requests":[{"status":%d,"requestedBy":{"id":%d},"seasons":[{"seasonNumber":2}]}]}}`, tc.kind, status, owner)
 				case r.URL.Path == "/identity":
 					if r.Header.Get("X-Plex-Token") != "" {
 						t.Error("credential sent before server check")
@@ -84,6 +97,9 @@ func TestSubscriptionAvailabilityRequiresPersonalPlexMatch(t *testing.T) {
 					plexReads++
 					if r.Header.Get("X-Plex-Token") != "personal" || r.URL.Query().Get("skipRefresh") != "1" {
 						t.Error("availability not using personal non-refresh read")
+					}
+					if strings.Count(r.URL.Path, "/") == 3 && (r.URL.Query().Get("checkFiles") != "1" || r.URL.Query().Get("checkFileAvailability") != "1") {
+						t.Error("file existence/access was not requested")
 					}
 					if tc.deny {
 						w.WriteHeader(404)
@@ -95,11 +111,17 @@ func TestSubscriptionAvailabilityRequiresPersonalPlexMatch(t *testing.T) {
 					}
 					switch r.URL.Path {
 					case "/library/metadata/42":
-						fmt.Fprintf(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"42","type":%q,"guid":"plex://movie/local","Guid":[{"id":%q}],"Media":[{"Part":[{"key":"/library/parts/1/file.mkv","exists":%v}]}]}]}}`, kind, tc.guid, !tc.offline)
+						flags := fmt.Sprintf(`,"exists":%v,"accessible":true`, !tc.offline)
+						if tc.unknownFile {
+							flags = ""
+						}
+						fmt.Fprintf(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"42","type":%q,"guid":"plex://movie/local","Guid":[{"id":%q}],"Media":[{"Part":[{"key":"/library/parts/1/file.mkv"%s}]}]}]}}`, kind, tc.guid, flags)
 					case "/library/metadata/42/children":
 						fmt.Fprint(w, `{"MediaContainer":{"size":1,"totalSize":1,"Metadata":[{"ratingKey":"43","type":"season","parentRatingKey":"42","index":2}]}}`)
 					case "/library/metadata/42/grandchildren", "/library/metadata/43/children":
 						fmt.Fprint(w, `{"MediaContainer":{"size":1,"totalSize":1,"Metadata":[{"ratingKey":"44","type":"episode","parentRatingKey":"43","grandparentRatingKey":"42","Media":[{"Part":[{"key":"/library/parts/2/file.mkv"}]}]}]}}`)
+					case "/library/metadata/44":
+						fmt.Fprint(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"44","type":"episode","parentRatingKey":"43","grandparentRatingKey":"42","Media":[{"Part":[{"key":"/library/parts/2/file.mkv","exists":true,"accessible":true}]}]}]}}`)
 					default:
 						t.Errorf("unexpected Plex route %s", r.URL.Path)
 						w.WriteHeader(500)
@@ -110,6 +132,9 @@ func TestSubscriptionAvailabilityRequiresPersonalPlexMatch(t *testing.T) {
 			media, err := New().CheckSubscription(context.Background(), server.URL, "key", 7, server.URL, "server-a", Grant{ServerToken: "personal"}, tc.kind, 12, tc.season)
 			if !errors.Is(err, tc.wantErr) || media.Available != (tc.wantErr == nil) || plexReads == 0 {
 				t.Fatalf("media=%+v err=%v reads=%d", media, err, plexReads)
+			}
+			if err == nil && media.RequestedBySelf != tc.self {
+				t.Fatalf("incorrect Seerr notification recipient: %+v", media)
 			}
 			if err == nil && !strings.HasPrefix(media.URL, "https://app.plex.tv/") {
 				t.Fatalf("unexpected public link %s", media.URL)

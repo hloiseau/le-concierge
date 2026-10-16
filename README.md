@@ -17,18 +17,20 @@ Le Hub utilise une connexion Plex obligatoire avec vérification de l’accès a
 
 Voir le [guide de déploiement](docs/deployment.md) pour Go, Discord, Plex, Seerr, Docker, TrueNAS et Caddy. `make test`, `make build`, puis `./bin/api` après chargement de `.env` permettent de tester le backend. Le bot est un second processus : `./bin/bot`.
 
-Le [contrat HTTP 0.5.0](api/openapi.json) décrit l’API du portail. Les réponses réelles des handlers Go sont vérifiées contre ce contrat dans les tests, y compris les erreurs, champs requis, types, statuts et dates UTC. Le Hub utilise une copie synchronisée et des types TypeScript générés.
+Le [contrat HTTP 0.6.0](api/openapi.json) décrit l’API du portail. Les réponses réelles des handlers Go sont vérifiées contre ce contrat dans les tests, y compris les erreurs, champs requis, types, statuts et dates UTC. Le Hub utilise une copie synchronisée et des types TypeScript générés.
 
 Les nouveautés Plex sont paginées dans le Hub et `/nouveautes`. `/mes-demandes` possède sa navigation Discord. Les [suivis communs](docs/subscriptions.md) se gèrent dans le Hub et avec `/suivre` et `/mes-suivis` ; leur disponibilité est vérifiée avec les droits Plex personnels. Les commandes privées [`/surprise` et `/recap`](docs/discord-discovery.md) complètent la découverte.
 
-Les [rappels avant retrait](docs/removal-reminders.md) proposent une boîte Hub et des [DM Discord facultatifs](docs/discord-reminders.md), avec consentement distinct, file durable et vérification des accès juste avant envoi. « Demander un délai » ouvre une file administrateur sans modifier Maintainerr. La portée des rappels reste limitée aux films et épisodes commencés. La mise à jour migre SQLite vers le schéma **v4** : sauvegarder la base avant le premier démarrage. Aucun DM ni déploiement réel n’a été exécuté pendant le développement.
+Les [rappels avant retrait](docs/removal-reminders.md) proposent une boîte Hub et des [DM Discord facultatifs](docs/discord-reminders.md), avec consentement distinct, file durable et vérification des accès juste avant envoi. Ils couvrent lectures commencées, demandes, suivis et, sur option, contenus marqués non vus par Plex. « Demander un délai » ouvre une file administrateur sans modifier Maintainerr. La mise à jour migre SQLite vers le schéma **v5** : sauvegarder la base avant le premier démarrage. Aucun DM ni déploiement réel n’a été exécuté pendant le développement.
+
+Le [catalogue de livres](docs/books-contracts.md) et les [collections](docs/book-collections.md) utilisent les identifiants OPDS personnels Grimmory. Les demandes ouvrent la recherche Shelfmark et restent confirmées dans ce service. Le [monitoring optionnel](docs/monitoring.md) fournit l’activité Plex agrégée et les historiques d’un collecteur isolé en lecture seule ; les détails nominatifs et d’hôte sont réservés aux administrateurs. Les [diagnostics Radarr/Sonarr](docs/diagnostics.md) corrèlent une demande Seerr à son instance de téléchargement, sans exposer les chemins privés. Les [pages communautaires](docs/community-publication.md) utilisent une sélection explicitement publiée.
 
 ## Périmètre
 
 - V1 : `/mes-demandes`, `/nouveautes`, `/aide`.
-- Rappels : boîte personnelle Hub, DM facultatifs et demandes de délai ; les lectures jamais commencées et saisons complètes restent à raccorder.
-- V2 : `/suivre`, `/mes-suivis`, `/surprise` et `/recap` implémentés ; alertes proactives de disponibilité à compléter.
-- V3 : `/livres`, `/demander-livre` et disponibilité des lectures selon les API.
+- Rappels : boîte personnelle Hub, DM facultatifs, ciblage des demandes/suivis et demandes de délai.
+- V2 : `/suivre`, `/mes-suivis`, `/surprise`, `/recap` et alertes proactives de disponibilité.
+- V3 : `/livres`, `/demander-livre` ; suivi d’import des lectures restant dépendant des API utilisateur installées.
 - V4 : `/diagnostic`, réservé aux administrateurs.
 - Socle commun : identité, API, données et intégrations nécessaires au Hub.
 

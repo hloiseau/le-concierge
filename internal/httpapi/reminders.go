@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/hloiseau/le-concierge/internal/departures"
-	"github.com/hloiseau/le-concierge/internal/reminders"
 	"github.com/hloiseau/le-concierge/internal/store"
 	"github.com/hloiseau/le-concierge/internal/upstream"
 )
@@ -37,13 +36,14 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var input struct {
-		Enabled        *bool `json:"enabled"`
-		DaysBefore     []int `json:"daysBefore"`
-		QuietStartHour *int  `json:"quietStartHour"`
-		QuietEndHour   *int  `json:"quietEndHour"`
-		DailyCap       *int  `json:"dailyCap"`
-		AllUnwatched   *bool `json:"allUnwatched"`
-		DiscordDM      *bool `json:"discordDmEnabled"`
+		Enabled            *bool `json:"enabled"`
+		DaysBefore         []int `json:"daysBefore"`
+		QuietStartHour     *int  `json:"quietStartHour"`
+		QuietEndHour       *int  `json:"quietEndHour"`
+		DailyCap           *int  `json:"dailyCap"`
+		AllUnwatched       *bool `json:"allUnwatched"`
+		DiscordDM          *bool `json:"discordDmEnabled"`
+		AvailableUnwatched *bool `json:"availableUnwatched"`
 	}
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
@@ -55,6 +55,13 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 	// Omission preserves the old Hub's inbox-only behavior; never infer DM consent.
 	if input.DiscordDM != nil {
 		p.DiscordDM = *input.DiscordDM
+	}
+	if input.AvailableUnwatched != nil {
+		p.AvailableUnwatched = *input.AvailableUnwatched
+	}
+	if p.AvailableUnwatched && (!s.subscriptionsEnabled() || !s.departuresEnabled()) {
+		problem(w, 409, "available_reminders_unavailable", "Les sources des relances personnelles ne sont pas configurées.")
+		return
 	}
 	if p.DiscordDM && (!s.Config.DiscordDMsEnabled || u.DiscordID == "") {
 		problem(w, 409, "discord_dm_unavailable", "Les DM nécessitent Discord lié et un service activé par l’administrateur.")
@@ -91,14 +98,15 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 }
 
 type inboxItem struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Kind          string    `json:"type"`
-	EstimatedAt   time.Time `json:"estimatedAt"`
-	URL           string    `json:"url"`
-	Reason        string    `json:"reason"`
-	MilestoneDays int       `json:"milestoneDays"`
-	SentAt        time.Time `json:"sentAt"`
+	ID            int64      `json:"id"`
+	Title         string     `json:"title"`
+	Kind          string     `json:"type"`
+	EstimatedAt   *time.Time `json:"estimatedAt,omitempty"`
+	AvailableAt   *time.Time `json:"availableAt,omitempty"`
+	URL           string     `json:"url"`
+	Reason        string     `json:"reason"`
+	MilestoneDays int        `json:"milestoneDays"`
+	SentAt        time.Time  `json:"sentAt"`
 }
 
 func (s *Server) reminderInbox(w http.ResponseWriter, r *http.Request) {
@@ -142,59 +150,64 @@ func (s *Server) reminderInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := []inboxItem{}
+	p, err := s.Store.GetReminderPreferences(r.Context(), u.ID)
+	if err != nil {
+		problem(w, 500, "storage_error", "Lecture des préférences impossible.")
+		return
+	}
 	if currentUser.Notifications {
 		for _, saved := range history {
 			if saved.State != "sent" || saved.SentAt == nil {
 				continue
 			}
+			if live := currentAvailable(saved, page, time.Now(), p); live != nil {
+				items = append(items, inboxItem{ID: saved.ID, Title: live.Title, Kind: live.Kind, AvailableAt: live.AvailableAt, URL: live.PlexURL, Reason: live.Reason, SentAt: *saved.SentAt})
+				continue
+			}
 			for _, live := range page.Items {
-				if saved.MediaKey == reminderMediaKey(live) && saved.DueAt.UnixMilli() == live.EstimatedAt.UnixMilli() && live.Watch == "in_progress" {
-					items = append(items, inboxItem{saved.ID, live.Title, live.Kind, live.EstimatedAt, live.URL, saved.Reason, saved.MilestoneDays, *saved.SentAt})
+				decision := reminderDecision(time.Now(), u, s.Config.PlexServerID, live, page.Page, p)
+				if saved.MediaKey == reminderMediaKey(live) && saved.DueAt.UnixMilli() == live.EstimatedAt.UnixMilli() && decision.Notify {
+					items = append(items, inboxItem{ID: saved.ID, Title: live.Title, Kind: live.Kind, EstimatedAt: &live.EstimatedAt, URL: live.URL, Reason: decision.Reason, MilestoneDays: saved.MilestoneDays, SentAt: *saved.SentAt})
 					break
 				}
 			}
 		}
 	}
-	jsonOut(w, 200, map[string]any{"items": items, "scope": "recorded_history", "updatedAt": page.UpdatedAt, "expiresAt": page.ExpiresAt})
+	jsonOut(w, 200, map[string]any{"items": items, "scope": page.Scope, "updatedAt": page.UpdatedAt, "expiresAt": page.ExpiresAt})
 }
 
 func reminderMediaKey(item departures.Item) string { return item.ID + ":" + item.ActionID }
 
 // Every delivery uses a complete fresh observation; persisted titles alone never
 // establish current access or a removal risk after a restart or source failure.
-func (s *Server) refreshReminders(ctx context.Context, u store.User) (departures.Page, error) {
+func (s *Server) refreshReminders(ctx context.Context, u store.User) (personalReminderPage, error) {
 	select {
 	case s.reminderGate <- struct{}{}:
 		defer func() { <-s.reminderGate }()
 	case <-ctx.Done():
-		return departures.Page{}, ctx.Err()
+		return personalReminderPage{}, ctx.Err()
 	}
 	p, err := s.Store.GetReminderPreferences(ctx, u.ID)
 	if err != nil {
-		return departures.Page{}, err
+		return personalReminderPage{}, err
 	}
 	if !p.Enabled {
 		now := time.Now().UTC()
-		return departures.Page{Items: []departures.Item{}, Scope: "recorded_history", UpdatedAt: now, ExpiresAt: now.Add(time.Minute)}, s.Store.CancelObsoleteReminders(ctx, u.ID, nil)
+		return personalReminderPage{Page: departures.Page{Items: []departures.Item{}, Scope: "recorded_history", UpdatedAt: now, ExpiresAt: now.Add(time.Minute)}}, s.Store.CancelObsoleteReminders(ctx, u.ID, nil)
 	}
 	g, err := s.grant(ctx, u)
 	if err != nil {
-		return departures.Page{}, err
+		return personalReminderPage{}, err
 	}
-	page, err := s.Departures.ListFresh(ctx, s.Config, g)
+	page, err := s.personalReminders(ctx, u, g, p)
 	if err != nil {
-		return departures.Page{}, err
+		return personalReminderPage{}, err
 	}
 	now := time.Now().UTC()
 	queue := []store.Reminder{}
 	keys := []string{}
 	for _, item := range page.Items {
-		decision := reminders.Decide(now, reminders.Candidate{
-			UserID: u.ID, ServerID: s.Config.PlexServerID, MediaID: item.ID, ActionID: item.ActionID,
-			Accessible: true, Watch: reminders.WatchState(item.Watch), Kind: item.Kind,
-			RuleActive: true, DeletesFiles: true, LeavesAt: item.EstimatedAt, SourceUpdatedAt: page.UpdatedAt,
-		}, reminders.Preferences{Enabled: p.Enabled, AllUnwatched: p.AllUnwatched, DaysBefore: p.DaysBefore,
-			QuietStart: p.QuietStartHour, QuietEnd: p.QuietEndHour, Timezone: "Europe/Paris", MaxSourceAge: time.Minute})
+		decision := reminderDecision(now, u, s.Config.PlexServerID, item, page.Page, p)
 		if decision.Notify {
 			keys = append(keys, decision.Key)
 			queue = append(queue, store.Reminder{DecisionKey: decision.Key, MediaKey: reminderMediaKey(item), Title: item.Title,
@@ -202,13 +215,22 @@ func (s *Server) refreshReminders(ctx context.Context, u store.User) (departures
 				NotBefore: decision.NotBefore, ExpiresAt: item.EstimatedAt})
 		}
 	}
+	for _, item := range page.Available {
+		keys = append(keys, item.DecisionKey)
+		queue = append(queue, item.Reminder)
+	}
 	// Serialize the final local delivery with logout and grant replacement.
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now = time.Now().UTC()
+	_, state, err := s.reminderSubscriptions(ctx, u.ID)
+	if err != nil || state != page.FollowState {
+		return personalReminderPage{}, upstream.ErrDenied
+	}
 	current, exists := s.grants[u.ID]
 	owner, err := s.Store.User(ctx, u.ID)
 	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !now.Before(current.ExpiresAt) || !now.Before(page.ExpiresAt) {
-		return departures.Page{}, upstream.ErrDenied
+		return personalReminderPage{}, upstream.ErrDenied
 	}
 	if err = s.Store.CancelObsoleteReminders(ctx, u.ID, keys); err == nil {
 		err = s.Store.EnqueueReminders(ctx, u.ID, queue)

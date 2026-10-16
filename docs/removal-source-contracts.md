@@ -141,7 +141,7 @@ Un `ratingKey` doit rester associé à son serveur. En cas de réimport, changem
 4. Cache borné par serveur/utilisateur, invalidé sur changement de version, révocation, échec ou incohérence. Un dépassement de borne n’est jamais un relevé complet. Revalider avant chaque futur envoi.
 5. Avant activation des rappels : valider la correspondance avec le serveur de l’API et les identités Discord/Plex ; lire les exclusions/hiérarchies ; confirmer la politique de complétion et les éditions ; tester calendrier et annulation après retrait d’une collection. Aucune de ces conditions n’est remplacée par le seul succès HTTP d’un collecteur.
 
-Ces choix sont des recommandations du projet, et doivent rester cohérents avec [la politique existante](removal-reminders.md). La liste personnelle utilise maintenant les droits individuels, règles et exclusions dans le périmètre `recorded_history`. Elle ne permet pas d’affirmer « jamais commencé », de fixer une date effective de suppression, ni d’envoyer des alertes personnalisées.
+Ces choix sont des recommandations du projet, et doivent rester cohérents avec [la politique existante](removal-reminders.md). La liste personnelle utilise maintenant les droits individuels, règles et exclusions dans le périmètre `recorded_history`. Le ciblage `personal_interest` ajoute les demandes/suivis et le filtre positif « non vu » personnel de Plex. L’absence d’historique seule ne signifie jamais « non vu » ; aucune date effective de suppression n’est garantie. Les alertes et leur revalidation sont décrites dans le guide des rappels.
 
 ## Métadonnées Plex individuelles
 

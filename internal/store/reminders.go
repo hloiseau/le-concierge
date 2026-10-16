@@ -54,13 +54,14 @@ INSERT INTO schema_migrations(version) VALUES(3);`
 
 // DailyCap limits items in the single daily inbox digest, in Europe/Paris.
 type ReminderPreferences struct {
-	Enabled        bool  `json:"enabled"`
-	DiscordDM      bool  `json:"discordDmEnabled"`
-	DaysBefore     []int `json:"daysBefore"`
-	QuietStartHour int   `json:"quietStartHour"`
-	QuietEndHour   int   `json:"quietEndHour"`
-	DailyCap       int   `json:"dailyCap"`
-	AllUnwatched   bool  `json:"allUnwatched"`
+	Enabled            bool  `json:"enabled"`
+	DiscordDM          bool  `json:"discordDmEnabled"`
+	DaysBefore         []int `json:"daysBefore"`
+	QuietStartHour     int   `json:"quietStartHour"`
+	QuietEndHour       int   `json:"quietEndHour"`
+	DailyCap           int   `json:"dailyCap"`
+	AllUnwatched       bool  `json:"allUnwatched"`
+	AvailableUnwatched bool  `json:"availableUnwatched"`
 }
 
 type Reminder struct {
@@ -72,6 +73,7 @@ type Reminder struct {
 	Reason        string     `json:"reason"`
 	MilestoneDays int        `json:"milestoneDays"`
 	DueAt         time.Time  `json:"dueAt"`
+	AvailableAt   *time.Time `json:"availableAt,omitempty"`
 	NotBefore     time.Time  `json:"notBefore"`
 	ExpiresAt     time.Time  `json:"expiresAt"`
 	State         string     `json:"state"`
@@ -88,8 +90,8 @@ type reminderQuerier interface {
 func reminderPreferences(ctx context.Context, db reminderQuerier, user string) (ReminderPreferences, error) {
 	var p ReminderPreferences
 	var days string
-	err := db.QueryRowContext(ctx, `SELECT u.notifications,COALESCE(p.days_before,'[7,2]'),COALESCE(p.quiet_start,22),COALESCE(p.quiet_end,8),COALESCE(p.daily_cap,10),COALESCE(p.all_unwatched,0),COALESCE(p.discord_dm,0)
-FROM users u LEFT JOIN reminder_preferences p ON p.user_id=u.id WHERE u.id=?`, user).Scan(&p.Enabled, &days, &p.QuietStartHour, &p.QuietEndHour, &p.DailyCap, &p.AllUnwatched, &p.DiscordDM)
+	err := db.QueryRowContext(ctx, `SELECT u.notifications,COALESCE(p.days_before,'[7,2]'),COALESCE(p.quiet_start,22),COALESCE(p.quiet_end,8),COALESCE(p.daily_cap,10),COALESCE(p.all_unwatched,0),COALESCE(p.discord_dm,0),COALESCE(p.available_unwatched,0)
+	FROM users u LEFT JOIN reminder_preferences p ON p.user_id=u.id WHERE u.id=?`, user).Scan(&p.Enabled, &days, &p.QuietStartHour, &p.QuietEndHour, &p.DailyCap, &p.AllUnwatched, &p.DiscordDM, &p.AvailableUnwatched)
 	if err != nil {
 		return p, err
 	}
@@ -134,8 +136,8 @@ func (s *Store) SaveReminderPreferences(ctx context.Context, user string, p Remi
 	if _, err = tx.ExecContext(ctx, `UPDATE users SET notifications=? WHERE id=?`, p.Enabled, user); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO reminder_preferences(user_id,days_before,quiet_start,quiet_end,daily_cap,all_unwatched,discord_dm) VALUES(?,?,?,?,?,?,?)
-ON CONFLICT(user_id) DO UPDATE SET days_before=excluded.days_before,quiet_start=excluded.quiet_start,quiet_end=excluded.quiet_end,daily_cap=excluded.daily_cap,all_unwatched=excluded.all_unwatched,discord_dm=excluded.discord_dm`, user, string(days), p.QuietStartHour, p.QuietEndHour, p.DailyCap, p.AllUnwatched, p.DiscordDM); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO reminder_preferences(user_id,days_before,quiet_start,quiet_end,daily_cap,all_unwatched,discord_dm,available_unwatched) VALUES(?,?,?,?,?,?,?,?)
+ON CONFLICT(user_id) DO UPDATE SET days_before=excluded.days_before,quiet_start=excluded.quiet_start,quiet_end=excluded.quiet_end,daily_cap=excluded.daily_cap,all_unwatched=excluded.all_unwatched,discord_dm=excluded.discord_dm,available_unwatched=excluded.available_unwatched`, user, string(days), p.QuietStartHour, p.QuietEndHour, p.DailyCap, p.AllUnwatched, p.DiscordDM, p.AvailableUnwatched); err != nil {
 		return err
 	}
 	// Revalidate queued decisions against the new preferences before delivery.
@@ -150,10 +152,16 @@ func (s *Store) EnqueueReminders(ctx context.Context, user string, reminders []R
 		return errors.New("too many reminders")
 	}
 	for _, r := range reminders {
-		if r.DecisionKey == "" || len(r.DecisionKey) > 256 || r.MediaKey == "" || len(r.MediaKey) > 256 || strings.TrimSpace(r.Title) == "" || len(r.Title) > 1000 || len(r.PlexURL) > 4096 || len(r.Reason) > 256 || r.DueAt.IsZero() || r.MilestoneDays < 1 || r.MilestoneDays > 30 {
+		if r.DecisionKey == "" || len(r.DecisionKey) > 256 || r.MediaKey == "" || len(r.MediaKey) > 256 || strings.TrimSpace(r.Title) == "" || len(r.Title) > 1000 || len(r.PlexURL) > 4096 || len(r.Reason) > 256 {
 			return errors.New("invalid reminder")
 		}
-		if !r.ExpiresAt.IsZero() && r.ExpiresAt.After(r.DueAt) {
+		if r.Reason == "available_unwatched" {
+			if r.AvailableAt == nil || r.AvailableAt.IsZero() || !r.DueAt.IsZero() || r.MilestoneDays != 0 || r.NotBefore.Before(r.AvailableAt.Add(30*24*time.Hour)) || !r.ExpiresAt.After(r.NotBefore) || r.ExpiresAt.After(r.NotBefore.Add(60*24*time.Hour)) {
+				return errors.New("invalid available request reminder")
+			}
+		} else if r.AvailableAt != nil || r.DueAt.IsZero() || r.MilestoneDays < 1 || r.MilestoneDays > 30 {
+			return errors.New("invalid removal reminder")
+		} else if !r.ExpiresAt.IsZero() && r.ExpiresAt.After(r.DueAt) {
 			return errors.New("reminder cannot expire after its removal deadline")
 		}
 	}
@@ -170,15 +178,23 @@ func (s *Store) EnqueueReminders(ctx context.Context, user string, reminders []R
 		return nil
 	}
 	for _, r := range reminders {
+		if r.Reason == "available_unwatched" && !p.AvailableUnwatched {
+			continue
+		}
 		if r.ExpiresAt.IsZero() {
 			r.ExpiresAt = r.DueAt
 		}
 		if r.NotBefore.IsZero() {
 			r.NotBefore = time.Now()
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO reminder_outbox(user_id,decision_key,media_key,title,plex_url,reason,milestone_days,due_at,not_before,expires_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
-ON CONFLICT(user_id,decision_key) DO UPDATE SET title=excluded.title,plex_url=excluded.plex_url,reason=excluded.reason,due_at=excluded.due_at,not_before=excluded.not_before,expires_at=excluded.expires_at,state='pending',attempts=0,last_error=''
-WHERE reminder_outbox.state='cancelled'`, user, r.DecisionKey, r.MediaKey, r.Title, r.PlexURL, r.Reason, r.MilestoneDays, r.DueAt.UnixMilli(), r.NotBefore.UnixMilli(), r.ExpiresAt.UnixMilli(), time.Now().UnixMilli()); err != nil {
+		var added any
+		due := r.DueAt.UnixMilli()
+		if r.AvailableAt != nil {
+			added, due = r.AvailableAt.UnixMilli(), 0
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO reminder_outbox(user_id,decision_key,media_key,title,plex_url,reason,milestone_days,due_at,not_before,expires_at,created_at,available_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+ON CONFLICT(user_id,decision_key) DO UPDATE SET media_key=excluded.media_key,title=excluded.title,plex_url=excluded.plex_url,reason=excluded.reason,due_at=excluded.due_at,available_at=excluded.available_at,not_before=CASE WHEN reminder_outbox.state='pending' THEN MAX(reminder_outbox.not_before,excluded.not_before) ELSE excluded.not_before END,expires_at=excluded.expires_at,state='pending',attempts=CASE WHEN reminder_outbox.state='cancelled' THEN 0 ELSE reminder_outbox.attempts END,last_error=CASE WHEN reminder_outbox.state='cancelled' THEN '' ELSE reminder_outbox.last_error END
+WHERE reminder_outbox.state='cancelled' OR (reminder_outbox.state='pending' AND excluded.reason='available_unwatched')`, user, r.DecisionKey, r.MediaKey, r.Title, r.PlexURL, r.Reason, r.MilestoneDays, due, r.NotBefore.UnixMilli(), r.ExpiresAt.UnixMilli(), time.Now().UnixMilli(), added); err != nil {
 			return err
 		}
 	}
@@ -202,14 +218,19 @@ func (s *Store) CancelObsoleteReminders(ctx context.Context, user string, validD
 	return err
 }
 
-const reminderColumns = `id,decision_key,media_key,title,plex_url,reason,milestone_days,due_at,not_before,expires_at,state,attempts,last_error,created_at,sent_at`
+const reminderColumns = `id,decision_key,media_key,title,plex_url,reason,milestone_days,due_at,not_before,expires_at,state,attempts,last_error,created_at,sent_at,available_at`
 
 func scanReminder(rows *sql.Rows) (Reminder, error) {
 	var r Reminder
 	var due, notBefore, expires, created int64
 	var sent sql.NullInt64
-	err := rows.Scan(&r.ID, &r.DecisionKey, &r.MediaKey, &r.Title, &r.PlexURL, &r.Reason, &r.MilestoneDays, &due, &notBefore, &expires, &r.State, &r.Attempts, &r.LastError, &created, &sent)
+	var added sql.NullInt64
+	err := rows.Scan(&r.ID, &r.DecisionKey, &r.MediaKey, &r.Title, &r.PlexURL, &r.Reason, &r.MilestoneDays, &due, &notBefore, &expires, &r.State, &r.Attempts, &r.LastError, &created, &sent, &added)
 	r.DueAt, r.NotBefore, r.ExpiresAt, r.CreatedAt = time.UnixMilli(due).UTC(), time.UnixMilli(notBefore).UTC(), time.UnixMilli(expires).UTC(), time.UnixMilli(created).UTC()
+	if added.Valid {
+		value := time.UnixMilli(added.Int64).UTC()
+		r.AvailableAt, r.DueAt = &value, time.Time{}
+	}
 	if sent.Valid {
 		value := time.UnixMilli(sent.Int64).UTC()
 		r.SentAt = &value
@@ -260,7 +281,12 @@ func (s *Store) DeliverRemindersWithDiscord(ctx context.Context, user string, no
 	if exists {
 		return delivered, tx.Commit()
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT `+reminderColumns+` FROM reminder_outbox WHERE user_id=? AND state='pending' AND not_before<=? AND expires_at>? ORDER BY due_at,id LIMIT ?`, user, now.UnixMilli(), now.UnixMilli(), p.DailyCap)
+	used, err := notificationItemsDeliveredToday(ctx, tx, user, now)
+	if err != nil {
+		return nil, err
+	}
+	limit := max(0, p.DailyCap-used)
+	rows, err := tx.QueryContext(ctx, `SELECT `+reminderColumns+` FROM reminder_outbox WHERE user_id=? AND state='pending' AND not_before<=? AND expires_at>? AND (available_at IS NULL OR ?=1) ORDER BY available_at IS NOT NULL,due_at,id LIMIT ?`, user, now.UnixMilli(), now.UnixMilli(), p.AvailableUnwatched, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -28,6 +28,7 @@ type reminderSources struct {
 func reminderFixture(t *testing.T) (*Server, string, *reminderSources) {
 	t.Helper()
 	s := fixture(t)
+	s.Config.SeerrURL, s.Config.SeerrAPIKey = "", ""
 	s.Config.MaintainerrURL = "http://maintainerr.test"
 	s.Config.TautulliURL = "http://tautulli.test"
 	s.Config.TautulliAPIKey = "private-reminder-source-key"

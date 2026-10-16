@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -543,7 +543,7 @@
             }
           }
         },
-        "description": "Freshly authorized private inbox for current recorded viewing. No caller-selected identity; source failure returns an error with no stale items."
+        "description": "Fresh private reminders for started, requested or followed media, optionally all personal Plex-unwatched media. Unknown viewing state never means unwatched. Revoked access and obsolete removal actions invalidate delivery."
       }
     },
     "/api/v1/reminders/preferences": {
@@ -746,6 +746,58 @@
             }
           }
         ]
+      },
+      "patch": {
+        "operationId": "patchSubscriptionChannel",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationOK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionChannel"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "description": "Owner only; matching Origin required."
       }
     },
     "/api/v1/extension-requests": {
@@ -894,6 +946,757 @@
           }
         },
         "description": "Configured administrator only, matching Origin. Records manual handling or refusal; does not modify Maintainerr."
+      }
+    },
+    "/api/v1/subscriptions/notifications": {
+      "get": {
+        "operationId": "getAvailabilityInbox",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityInbox"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/link": {
+      "get": {
+        "operationId": "getBookLink",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "linkBooks",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookCredentials"
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin required."
+      },
+      "delete": {
+        "operationId": "unlinkBooks",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin required."
+      }
+    },
+    "/api/v1/books": {
+      "get": {
+        "operationId": "getBooks",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1001
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/book-requests/link": {
+      "get": {
+        "operationId": "getBookRequestLink",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRequestLink"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/books/{id}/cover": {
+      "get": {
+        "operationId": "getBookCover",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Privately authorized cover, maximum 2 MiB, no-store.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/gif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/monitoring": {
+      "get": {
+        "operationId": "getMonitoring",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringSnapshot"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/monitoring/history": {
+      "get": {
+        "operationId": "getMonitoringHistory",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringHistory"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "range",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1h",
+                "24h",
+                "7d"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/plex-activity": {
+      "get": {
+        "operationId": "getAdminPlexActivity",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlexActivity"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Verified configured administrator only. Ordinary members never receive host details or session identities."
+      }
+    },
+    "/api/v1/community": {
+      "get": {
+        "operationId": "getCommunity",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/roadmap": {
+      "get": {
+        "operationId": "getRoadmap",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoadmapPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/diagnostics": {
+      "get": {
+        "operationId": "getAdminDiagnostic",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Diagnostic"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "requestId",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true
+          }
+        ],
+        "description": "Verified configured administrator only. Read-only correlated Seerr/Arr diagnostic with sanitized evidence; no private paths or download identifiers."
+      }
+    },
+    "/api/v1/book-collections": {
+      "get": {
+        "operationId": "getBookCollections",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookCollectionPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "series",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1001
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/books/recent": {
+      "get": {
+        "operationId": "getRecentBooks",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentBookPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1001
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/book-requests/link-session": {
+      "get": {
+        "operationId": "getShelfmarkLink",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "linkShelfmark",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookCredentials"
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin required."
+      },
+      "delete": {
+        "operationId": "unlinkShelfmark",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin required."
+      }
+    },
+    "/api/v1/book-requests": {
+      "get": {
+        "operationId": "getBookRequests",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRequestPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1001
+            }
+          }
+        ]
       }
     }
   },
@@ -1077,6 +1880,30 @@
           "extensionRequests": {
             "type": "boolean",
             "description": "Fresh departure requests can be submitted to configured administrators."
+          },
+          "booksCatalog": {
+            "type": "boolean"
+          },
+          "bookRequests": {
+            "type": "boolean"
+          },
+          "subscriptionNotifications": {
+            "type": "boolean"
+          },
+          "community": {
+            "type": "boolean"
+          },
+          "roadmap": {
+            "type": "boolean"
+          },
+          "bookCollections": {
+            "type": "boolean"
+          },
+          "recentBooks": {
+            "type": "boolean"
+          },
+          "bookRequestTracking": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -1188,7 +2015,8 @@
               "processing",
               "partial",
               "available",
-              "unknown"
+              "unknown",
+              "error"
             ]
           },
           "createdAt": {
@@ -1347,6 +2175,7 @@
           "watch": {
             "type": "string",
             "enum": [
+              "unstarted",
               "in_progress",
               "completed",
               "unknown"
@@ -1384,7 +2213,8 @@
           "scope": {
             "type": "string",
             "enum": [
-              "recorded_history"
+              "recorded_history",
+              "personal_interest"
             ]
           },
           "updatedAt": {
@@ -1438,12 +2268,17 @@
           },
           "allUnwatched": {
             "type": "boolean",
-            "description": "Reserved preference; only verified in-progress films/episodes in recorded history currently produce reminders."
+            "description": "Explicit opt-in to reminders for all personally accessible media positively marked unwatched by Plex."
           },
           "discordDmEnabled": {
             "type": "boolean",
             "default": false,
             "description": "Separate explicit consent for Discord removal reminders; omission on PUT disables DMs."
+          },
+          "availableUnwatched": {
+            "type": "boolean",
+            "default": false,
+            "description": "Separate opt-in to one delayed reminder per personal request/season, 30 to 90 days after both request and Plex addition, with no current removal risk. Omission on PUT disables it."
           }
         },
         "required": [
@@ -1483,15 +2318,22 @@
           "reason": {
             "type": "string",
             "enum": [
-              "unfinished_before_removal"
+              "unfinished_before_removal",
+              "unstarted_before_removal",
+              "episodes_remaining_before_removal",
+              "available_unwatched"
             ]
           },
           "milestoneDays": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 30
           },
           "sentAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "availableAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -1500,13 +2342,63 @@
           "id",
           "title",
           "type",
-          "estimatedAt",
           "url",
           "reason",
           "milestoneDays",
           "sentAt"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "available_unwatched"
+                ]
+              },
+              "milestoneDays": {
+                "type": "integer",
+                "enum": [
+                  0
+                ]
+              }
+            },
+            "required": [
+              "availableAt"
+            ],
+            "not": {
+              "required": [
+                "estimatedAt"
+              ]
+            }
+          },
+          {
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "unfinished_before_removal",
+                  "unstarted_before_removal",
+                  "episodes_remaining_before_removal"
+                ]
+              },
+              "milestoneDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30
+              }
+            },
+            "required": [
+              "estimatedAt"
+            ],
+            "not": {
+              "required": [
+                "availableAt"
+              ]
+            }
+          }
+        ]
       },
       "ReminderInbox": {
         "type": "object",
@@ -1521,7 +2413,8 @@
           "scope": {
             "type": "string",
             "enum": [
-              "recorded_history"
+              "recorded_history",
+              "personal_interest"
             ]
           },
           "updatedAt": {
@@ -1857,6 +2750,1688 @@
           "ok"
         ],
         "additionalProperties": false
+      },
+      "SubscriptionChannel": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "hub",
+              "discord"
+            ]
+          }
+        },
+        "required": [
+          "channel"
+        ]
+      },
+      "AvailabilityNotification": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "subscriptionId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "tv"
+            ]
+          },
+          "tmdbId": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "season": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "availableAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deliveredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "subscriptionId",
+          "type",
+          "tmdbId",
+          "title",
+          "url",
+          "availableAt",
+          "deliveredAt"
+        ]
+      },
+      "AvailabilityInbox": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityNotification"
+            }
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "updatedAt",
+          "expiresAt"
+        ]
+      },
+      "Book": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "series": {
+            "type": "string"
+          },
+          "volume": {
+            "type": "string"
+          },
+          "isbn": {
+            "type": "string"
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "coverUrl": {
+            "type": "string",
+            "pattern": "^/api/v1/books/[1-9][0-9]*/cover$"
+          },
+          "language": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "authors",
+          "formats"
+        ]
+      },
+      "BookPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Book"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1001
+          },
+          "pageSize": {
+            "type": "integer",
+            "enum": [
+              20
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "hasMore"
+        ]
+      },
+      "BookLinkStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "linked": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "linked"
+        ]
+      },
+      "BookCredentials": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "BookRequestLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "external"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "mode",
+          "message"
+        ]
+      },
+      "MetricValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "value": {
+            "type": "number",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "error",
+              "stale"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "bytes",
+              "bytes_per_second",
+              "celsius",
+              "count",
+              "load",
+              "mhz",
+              "percent",
+              "watts"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "status",
+          "unit"
+        ]
+      },
+      "Metrics": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cpu_percent": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "percent"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "cpu_temperature": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "celsius"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "load_1m": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "load"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "memory_used_bytes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "memory_total_bytes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "gpu_video_percent": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "percent"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "gpu_render_percent": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "percent"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "gpu_temperature": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "celsius"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "gpu_power_watts": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "watts"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "gpu_frequency_mhz": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "mhz"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "disk_read_bytes_per_second": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes_per_second"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "disk_write_bytes_per_second": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes_per_second"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "network_receive_bytes_per_second": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes_per_second"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "network_send_bytes_per_second": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes_per_second"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "storage_used_bytes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "storage_total_bytes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "bytes"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "plex_sessions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "count"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "plex_transcodes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "count"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          },
+          "plex_hardware_transcodes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "value": {
+                "type": "number",
+                "nullable": true
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "available",
+                  "unavailable",
+                  "error",
+                  "stale"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "count"
+                ]
+              }
+            },
+            "required": [
+              "value",
+              "status",
+              "unit"
+            ]
+          }
+        },
+        "required": [
+          "cpu_percent",
+          "cpu_temperature",
+          "load_1m",
+          "memory_used_bytes",
+          "memory_total_bytes",
+          "gpu_video_percent",
+          "gpu_render_percent",
+          "gpu_temperature",
+          "gpu_power_watts",
+          "gpu_frequency_mhz",
+          "disk_read_bytes_per_second",
+          "disk_write_bytes_per_second",
+          "network_receive_bytes_per_second",
+          "network_send_bytes_per_second",
+          "storage_used_bytes",
+          "storage_total_bytes",
+          "plex_sessions",
+          "plex_transcodes",
+          "plex_hardware_transcodes"
+        ]
+      },
+      "MetricSample": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "values": {
+            "$ref": "#/components/schemas/Metrics"
+          }
+        },
+        "required": [
+          "at",
+          "values"
+        ]
+      },
+      "ActivitySummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "unavailable",
+              "error"
+            ]
+          },
+          "sessions": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "directPlay": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "directStream": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "transcodes": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hardwareTranscodes": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0
+          },
+          "bandwidthKbps": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "status",
+          "sessions",
+          "directPlay",
+          "directStream",
+          "transcodes",
+          "hardwareTranscodes",
+          "bandwidthKbps"
+        ]
+      },
+      "ActivitySession": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "user": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "videoCodec": {
+            "type": "string"
+          },
+          "audioCodec": {
+            "type": "string"
+          },
+          "bandwidthKbps": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0
+          },
+          "hardwareDecoding": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "hardwareEncoding": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "required": [
+          "user",
+          "title",
+          "state",
+          "decision",
+          "videoCodec",
+          "audioCodec",
+          "bandwidthKbps",
+          "hardwareDecoding",
+          "hardwareEncoding"
+        ]
+      },
+      "HostDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cpu_percent": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "cpu_temperature": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "load_1m": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "memory_used_bytes": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "memory_total_bytes": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "gpu_video_percent": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "gpu_render_percent": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "gpu_temperature": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "gpu_power_watts": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "gpu_frequency_mhz": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "disk_read_bytes_per_second": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "disk_write_bytes_per_second": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "network_receive_bytes_per_second": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "network_send_bytes_per_second": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "storage_used_bytes": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "storage_total_bytes": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "plex_sessions": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "plex_transcodes": {
+                "$ref": "#/components/schemas/MetricValue"
+              },
+              "plex_hardware_transcodes": {
+                "$ref": "#/components/schemas/MetricValue"
+              }
+            },
+            "required": []
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "status",
+          "values"
+        ]
+      },
+      "MonitoringSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hostUpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "activityUpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/Metrics"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/ActivitySummary"
+          }
+        },
+        "required": [
+          "updatedAt",
+          "expiresAt",
+          "hostUpdatedAt",
+          "activityUpdatedAt",
+          "metrics",
+          "activity"
+        ]
+      },
+      "MonitoringHistory": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetricSample"
+            }
+          },
+          "range": {
+            "type": "string",
+            "enum": [
+              "1h",
+              "24h",
+              "7d"
+            ]
+          },
+          "stepSeconds": {
+            "type": "integer",
+            "minimum": 60
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "mean"
+            ]
+          },
+          "retentionDays": {
+            "type": "integer",
+            "enum": [
+              7
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "range",
+          "stepSeconds",
+          "aggregation",
+          "retentionDays",
+          "updatedAt"
+        ]
+      },
+      "PlexActivity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivitySession"
+            }
+          },
+          "hostVersion": {
+            "type": "string"
+          },
+          "hostDetails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HostDetail"
+            }
+          },
+          "activity": {
+            "$ref": "#/components/schemas/ActivitySummary"
+          }
+        },
+        "required": [
+          "updatedAt",
+          "expiresAt",
+          "sessions",
+          "hostVersion",
+          "hostDetails",
+          "activity"
+        ]
+      },
+      "CommunityThread": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "forumId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "proposal",
+              "problem"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "planned",
+              "in_progress",
+              "resolved",
+              "declined"
+            ]
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "forumId",
+          "title",
+          "kind",
+          "status",
+          "archived",
+          "updatedAt",
+          "url"
+        ]
+      },
+      "RoadmapItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "in_progress",
+              "delivered"
+            ]
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confirmedDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "discussionUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "issueUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "dependencies"
+        ]
+      },
+      "CommunityPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommunityThread"
+            }
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "publishedAt",
+          "expiresAt"
+        ]
+      },
+      "RoadmapPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoadmapItem"
+            }
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "publishedAt",
+          "expiresAt"
+        ]
+      },
+      "DiagnosticEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "approval",
+              "declined",
+              "not_found",
+              "downloading",
+              "download_failed",
+              "importing",
+              "manual_import",
+              "space",
+              "permissions",
+              "rename_import",
+              "imported",
+              "plex_indexing"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "stage",
+          "message"
+        ]
+      },
+      "Diagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "radarr",
+              "sonarr"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "approval",
+              "declined",
+              "not_found",
+              "downloading",
+              "download_failed",
+              "importing",
+              "manual_import",
+              "space",
+              "permissions",
+              "rename_import",
+              "imported",
+              "plex_indexing"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticEvidence"
+            }
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "queueTruncated": {
+            "type": "boolean"
+          },
+          "historyTruncated": {
+            "type": "boolean"
+          },
+          "plexStatus": {
+            "type": "string",
+            "enum": [
+              "indexed",
+              "not_verified"
+            ]
+          },
+          "guideUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "source",
+          "version",
+          "stage",
+          "summary",
+          "evidence",
+          "checkedAt",
+          "queueTruncated",
+          "historyTruncated",
+          "plexStatus"
+        ]
+      },
+      "BookCollection": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "books": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Book"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "books"
+        ]
+      },
+      "BookCollectionPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookCollection"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1001
+          },
+          "pageSize": {
+            "type": "integer",
+            "enum": [
+              20
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "grimmory_opds"
+            ]
+          },
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "referenceStatus": {
+            "type": "string",
+            "enum": [
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "hasMore",
+          "source",
+          "fetchedAt",
+          "expiresAt",
+          "referenceStatus"
+        ]
+      },
+      "RecentBookPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Book"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1001
+          },
+          "pageSize": {
+            "type": "integer",
+            "enum": [
+              20
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "hasMore",
+          "updatedAt",
+          "expiresAt"
+        ]
+      },
+      "BookRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "fulfilled",
+              "rejected",
+              "cancelled"
+            ]
+          },
+          "deliveryState": {
+            "type": "string",
+            "enum": [
+              "none",
+              "queued",
+              "resolving",
+              "locating",
+              "downloading",
+              "complete",
+              "error",
+              "cancelled"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deliveryUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "catalogStatus": {
+            "type": "string",
+            "enum": [
+              "unverified"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "authors",
+          "status",
+          "deliveryState",
+          "createdAt",
+          "catalogStatus"
+        ]
+      },
+      "BookRequestPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookRequest"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1001
+          },
+          "pageSize": {
+            "type": "integer",
+            "enum": [
+              20
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "hasMore",
+          "checkedAt"
+        ]
       }
     }
   }

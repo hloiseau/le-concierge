@@ -63,7 +63,7 @@ func subscriptionFixture(t *testing.T) (*Server, string, *subscriptionSource) {
 			if f.denied {
 				return response(404, "hidden"), nil
 			}
-			return response(200, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"42","type":"movie","guid":"plex://movie/x","Guid":[{"id":"tmdb://12"}],"Media":[{"Part":[{"key":"/library/parts/1/file.mkv"}]}]}]}}`), nil
+			return response(200, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"42","type":"movie","guid":"plex://movie/x","Guid":[{"id":"tmdb://12"}],"Media":[{"Part":[{"key":"/library/parts/1/file.mkv","exists":true,"accessible":true}]}]}]}}`), nil
 		default:
 			t.Errorf("unexpected subscription upstream: %s", r.URL.Path)
 			return response(500, "unexpected"), nil

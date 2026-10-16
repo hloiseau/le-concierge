@@ -16,6 +16,20 @@ func TestCommandOptionsValidateNamesTypesAndBounds(t *testing.T) {
 		id, season, page       int
 	}{
 		{name: "unfiltered surprise", command: "surprise", options: `[]`, valid: true, page: 1, season: -1},
+		{name: "books browse", command: "livres", options: `[]`, valid: true, page: 1, season: -1},
+		{name: "diagnostic", command: "diagnostic", options: `[{"name":"demande","type":4,"value":17}]`, valid: true, page: 1, season: -1},
+		{name: "diagnostic missing", command: "diagnostic", options: `[]`},
+		{name: "diagnostic zero", command: "diagnostic", options: `[{"name":"demande","type":4,"value":0}]`},
+		{name: "diagnostic duplicate", command: "diagnostic", options: `[{"name":"demande","type":4,"value":1},{"name":"demande","type":4,"value":2}]`},
+		{name: "diagnostic wrong command", command: "livres", options: `[{"name":"demande","type":4,"value":17}]`},
+		{name: "books search", command: "livres", options: `[{"name":"recherche","type":3,"value":"Dune"},{"name":"page","type":4,"value":2}]`, valid: true, page: 2, season: -1},
+		{name: "book request", command: "demander-livre", options: `[{"name":"recherche","type":3,"value":"Dune"}]`, valid: true, page: 1, season: -1},
+		{name: "request missing search", command: "demander-livre", options: `[]`},
+		{name: "request no page", command: "demander-livre", options: `[{"name":"recherche","type":3,"value":"Dune"},{"name":"page","type":4,"value":2}]`},
+		{name: "empty search", command: "livres", options: `[{"name":"recherche","type":3,"value":"  "}]`},
+		{name: "null search", command: "livres", options: `[{"name":"recherche","type":3,"value":null}]`},
+		{name: "search control", command: "livres", options: `[{"name":"recherche","type":3,"value":"Dune\n"}]`},
+		{name: "search wrong command", command: "recap", options: `[{"name":"recherche","type":3,"value":"Dune"}]`},
 		{name: "show surprise", command: "surprise", options: `[{"name":"type","type":3,"value":"show"}]`, valid: true, kind: "show", page: 1, season: -1},
 		{name: "wrong surprise kind", command: "surprise", options: `[{"name":"type","type":3,"value":"tv"}]`},
 		{name: "movie follow", command: "suivre", options: `[{"name":"type","type":3,"value":"movie"},{"name":"tmdb-id","type":4,"value":2147483647}]`, valid: true, kind: "movie", id: 2147483647, page: 1, season: -1},
@@ -97,7 +111,7 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&commands); err != nil {
 			t.Fatal(err)
 		}
-		want := map[string]int{"aide": 0, "mes-demandes": 0, "nouveautes": 0, "surprise": 1, "recap": 0, "suivre": 3, "mes-suivis": 1}
+		want := map[string]int{"aide": 0, "mes-demandes": 0, "nouveautes": 0, "surprise": 1, "recap": 0, "suivre": 3, "mes-suivis": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
 		if len(commands) != len(want) {
 			t.Fatalf("wrong command count: %d", len(commands))
 		}
@@ -109,6 +123,14 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 			delete(want, command.Name)
 			for index, option := range command.Options {
 				switch option.Name {
+				case "demande":
+					if option.Type != 4 || !option.Required || option.MinValue != 1 || option.MaxValue != 2147483647 {
+						t.Fatalf("bad request option %+v", option)
+					}
+				case "recherche":
+					if option.Type != 3 || option.Required != (command.Name == "demander-livre") {
+						t.Fatalf("bad search option %+v", option)
+					}
 				case "type":
 					second := "show"
 					if command.Name == "suivre" {

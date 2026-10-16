@@ -8,13 +8,13 @@ Après mise à jour du bot, réenregistrer les commandes avec la procédure habi
 
 Le filtre facultatif permet de choisir films ou séries ; sans filtre, les deux types sont réunis. Le tirage utilise `crypto/rand` sur les identifiants Plex uniques de tout le catalogue autorisé qui a été lu. Les titres marqués supprimés et les séries explicitement sans épisode sont exclus. Les candidats sont examinés dans un ordre aléatoire sans répétition : un film doit avoir un média dont toutes les parties sont présentes et accessibles selon Plex ; une série doit avoir au moins un épisode répondant à ce critère. Un catalogue vide donne une réponse explicite. Le titre retenu est contrôlé à nouveau avec le jeton du membre avant sa restitution.
 
-La disponibilité correspond aux médias déclarés par Plex : les indicateurs explicites de fichier absent ou inaccessible sont respectés. Aucun fichier du NAS n’est ouvert et aucune lecture vidéo n’est déclenchée. Une modification du catalogue pendant la lecture peut imposer de relancer la commande.
+La disponibilité est vérifiée par une lecture personnelle du détail avec `checkFiles=1`, `checkFileAvailability=1` et `skipRefresh=1`. Chaque partie d’au moins une version doit porter les indicateurs `exists` et `accessible` à `true` ou `1` ; des champs absents ne valent pas confirmation. Une liste d’épisodes sert seulement à sélectionner une clé, puis le détail de cet épisode est relu dans le budget annoncé. Le Concierge ne télécharge aucun fichier et ne lance aucune lecture vidéo. Une modification du catalogue pendant la vérification peut imposer de relancer la commande.
 
 ## `/recap`
 
 La période couvre les **sept jours calendaires terminés**, de minuit J−7 inclus à minuit J exclu, dans le fuseau **Europe/Paris**. Les deux dates sont affichées. Exemple : le 16 octobre 2026, la période est du 9 au 15 octobre inclus. Les changements d’heure sont respectés : cette période peut durer 167, 168 ou 169 heures.
 
-Les films et épisodes ajoutés pendant cette période sont sélectionnés avant le regroupement. Chaque série n’apparaît qu’une fois, même si ses épisodes occupent plusieurs pages ; les identifiants d’épisodes répétés sont ignorés. Les droits sont revérifiés sur les épisodes eux-mêmes. Les titres sont triés du plus récent au plus ancien. Les ajouts du jour ne font pas partie du récapitulatif.
+Les films et épisodes ajoutés pendant cette période sont sélectionnés avant le regroupement. Chaque série n’apparaît qu’une fois, même si ses épisodes occupent plusieurs pages ; les identifiants d’épisodes répétés sont ignorés. Les droits sont revérifiés sur les épisodes eux-mêmes. Les titres sont triés du plus récent au plus ancien. Les ajouts du jour ne font pas partie du récapitulatif. Le récapitulatif décrit les ajouts : il exclut les fichiers explicitement absents ou inaccessibles dans la liste, et conserve les ajouts dont les indicateurs de fichier sont omis, sans annoncer leur disponibilité de lecture.
 
 ## Limites et validation
 

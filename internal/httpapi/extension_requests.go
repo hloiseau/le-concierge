@@ -64,7 +64,12 @@ func (s *Server) postExtensionRequest(w http.ResponseWriter, r *http.Request) {
 		problem(w, 403, "plex_required", "Reconnectez-vous avec Plex.")
 		return
 	}
-	page, err := s.Departures.ListFresh(r.Context(), s.Config, g)
+	p, err := s.Store.GetReminderPreferences(r.Context(), u.ID)
+	if err != nil {
+		problem(w, 500, "storage_error", "Lecture des préférences impossible.")
+		return
+	}
+	page, err := s.personalDepartures(r.Context(), u, g, p, true)
 	if err != nil {
 		problem(w, 503, "departures_unavailable", "Le départ ne peut pas être vérifié actuellement.")
 		return

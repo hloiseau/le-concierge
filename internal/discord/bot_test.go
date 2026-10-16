@@ -44,6 +44,7 @@ func signedInteraction(t *testing.T, body string) (*Bot, *http.Request) {
 }
 func TestHelpRepliesInlineWithoutUpstream(t *testing.T) {
 	b, r := signedCommand(t, "aide")
+	b.Config.Services = []config.Service{{ID: "plex", URL: "https://plex.example"}, {ID: "grimmory"}}
 	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
 		t.Error("help must not need the API or a webhook")
 		return botResponse(503, `{}`), nil
@@ -58,8 +59,30 @@ func TestHelpRepliesInlineWithoutUpstream(t *testing.T) {
 			Content string `json:"content"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(w.Body.Bytes(), &reply) != nil || w.Code != 200 || reply.Type != 4 || reply.Data.Flags != 64 || !strings.Contains(reply.Data.Content, "https://hub.example") {
+	if json.Unmarshal(w.Body.Bytes(), &reply) != nil || w.Code != 200 || reply.Type != 4 || reply.Data.Flags != 64 || !strings.Contains(reply.Data.Content, "https://plex.example") || !strings.Contains(reply.Data.Content, "https://hub.example/aide") || !strings.Contains(reply.Data.Content, "https://hub.example/compte") {
 		t.Fatalf("invalid help: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestHelpUsesOnlyConfiguredPublicServiceLinksWithinDiscordLimit(t *testing.T) {
+	text := Help("https://hub.example", []config.Service{
+		{ID: "plex", URL: "https://plex.example/path(with)"},
+		{ID: "seerr", URL: "https://user:secret@seerr.example"},
+		{ID: "downloadarr", URL: "javascript:alert(1)"},
+		{ID: "shelfmark", URL: "https://shelfmark.example/" + strings.Repeat("x", 2000)},
+		{ID: "unknown", Name: "@everyone", URL: "https://unknown.example"},
+		{ID: "plex", URL: "https://duplicate.example"},
+	})
+	if len(text) > 2000 || !strings.Contains(text, "https://plex.example/path%28with%29") || !strings.Contains(text, "https://hub.example/aide") {
+		t.Fatalf("invalid help links or bounds: %s", text)
+	}
+	for _, excluded := range []string{"secret", "javascript", "shelfmark.example", "unknown.example", "@everyone", "duplicate.example"} {
+		if strings.Contains(text, excluded) {
+			t.Fatalf("unsafe help contained %q", excluded)
+		}
+	}
+	if len(Help("https://"+strings.Repeat("x", 3000)+".example", nil)) > 2000 {
+		t.Fatal("long configured origin exceeded Discord limit")
 	}
 }
 func TestDeferredReplyWaitsForAcknowledgement(t *testing.T) {

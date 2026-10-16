@@ -140,7 +140,29 @@ func (s *Store) DeleteSubscriptionTarget(ctx context.Context, userID string, tar
 	return err
 }
 
+func (s *Store) UpdateSubscriptionChannel(ctx context.Context, userID string, id int64, channel string) error {
+	if channel != "hub" && channel != "discord" {
+		return errors.New("invalid subscription channel")
+	}
+	result, err := s.DB.ExecContext(ctx, `UPDATE subscriptions SET channel=? WHERE id=? AND user_id=?`, channel, id, userID)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err == nil && count == 0 {
+		return sql.ErrNoRows
+	}
+	return err
+}
+
 func mergeSubscriptions(ctx context.Context, tx *sql.Tx, userID, oldID string) error {
+	// A merged identity must re-consent; pending Discord messages keep their original owner.
+	if _, err := tx.ExecContext(ctx, `UPDATE availability_discord_deliveries SET state='failed',last_error='authorization_changed' WHERE user_id=? AND state IN ('queued','claimed')`, oldID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO availability_digests(user_id,local_day,delivered_at,item_count) SELECT ?,local_day,delivered_at,item_count FROM availability_digests WHERE user_id=? ON CONFLICT(user_id,local_day) DO UPDATE SET item_count=item_count+excluded.item_count`, userID, oldID); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `UPDATE OR IGNORE subscriptions SET user_id=? WHERE user_id=?`, userID, oldID)
 	return err
 }

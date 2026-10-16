@@ -52,8 +52,8 @@ func (s *Server) createFollow(ctx context.Context, u store.User, input subscript
 	if err := store.ValidateSubscription(input.SubscriptionTarget, input.Channel); err != nil {
 		return subscriptionResult{}, err
 	}
-	if input.Channel == "discord" {
-		return subscriptionResult{}, errSubscriptionChannel
+	if err := s.subscriptionChannelAllowed(ctx, u, input.Channel); err != nil {
+		return subscriptionResult{}, err
 	}
 	g, err := s.grant(ctx, u)
 	if err != nil {
@@ -71,6 +71,9 @@ func (s *Server) createFollow(ctx context.Context, u store.User, input subscript
 	owner, err := s.Store.User(ctx, u.ID)
 	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !time.Now().Before(current.ExpiresAt) {
 		return subscriptionResult{}, upstream.ErrDenied
+	}
+	if err := s.subscriptionChannelAllowed(ctx, owner, input.Channel); err != nil {
+		return subscriptionResult{}, err
 	}
 	result := subscriptionResult{Title: media.Title, URL: media.URL}
 	if media.Available {
@@ -137,14 +140,13 @@ func (s *Server) recordSubscriptionAvailability(ctx context.Context, u store.Use
 	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !time.Now().Before(current.ExpiresAt) {
 		return upstream.ErrDenied
 	}
-	_, err = s.Store.MarkSubscriptionAvailable(ctx, u.ID, id, time.Now())
-	return err
+	return s.Store.ObserveAvailability(ctx, u.ID, id, time.Now(), false)
 }
 
 func subscriptionError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errSubscriptionChannel):
-		problem(w, 409, "channel_unavailable", "Les suivis sont disponibles dans le Hub. Les alertes Discord de disponibilité ne sont pas encore activées.")
+		problem(w, 409, "channel_unavailable", "Pour recevoir les disponibilités sur Discord, liez votre compte puis activez les notifications et les messages privés dans Mon compte. Le serveur doit également autoriser ce canal.")
 	case errors.Is(err, store.ErrSubscriptionLimit):
 		problem(w, 409, "subscription_limit", "La limite de 100 suivis est atteinte. Désabonnez-vous d’un contenu pour en suivre un autre.")
 	case errors.Is(err, upstream.ErrSeerrUserNotFound):
@@ -154,6 +156,86 @@ func subscriptionError(w http.ResponseWriter, err error) {
 	default:
 		problem(w, 503, "subscriptions_unavailable", "Les suivis ne peuvent pas être vérifiés actuellement. Réessayez plus tard.")
 	}
+}
+
+func (s *Server) subscriptionChannelAllowed(ctx context.Context, u store.User, channel string) error {
+	if channel != "discord" {
+		return nil
+	}
+	if !s.Config.DiscordDMsEnabled || u.DiscordID == "" {
+		return errSubscriptionChannel
+	}
+	p, err := s.Store.GetReminderPreferences(ctx, u.ID)
+	if err != nil {
+		return err
+	}
+	if !p.Enabled || !p.DiscordDM {
+		return errSubscriptionChannel
+	}
+	return nil
+}
+
+func (s *Server) patchSubscriptionChannel(w http.ResponseWriter, r *http.Request) {
+	if !s.origin(w, r) {
+		return
+	}
+	key, u, ok := s.user(w, r)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 || strconv.FormatInt(id, 10) != r.PathValue("id") || len(r.URL.Query()) != 0 {
+		problem(w, 400, "invalid_id", "Identifiant de suivi invalide.")
+		return
+	}
+	var input struct {
+		Channel string `json:"channel"`
+	}
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if d.Decode(&input) != nil || d.Decode(new(any)) != io.EOF || (input.Channel != "hub" && input.Channel != "discord") {
+		problem(w, 400, "invalid_body", "Canal du suivi invalide.")
+		return
+	}
+	g, err := s.grant(r.Context(), u)
+	if err != nil {
+		subscriptionError(w, err)
+		return
+	}
+	select {
+	case s.reminderGate <- struct{}{}:
+		defer func() { <-s.reminderGate }()
+	case <-r.Context().Done():
+		problem(w, 503, "subscriptions_unavailable", "Réessayez dans un instant.")
+		return
+	}
+	if !s.revalidateUser(w, r, key, u) {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err = s.availabilityOwner(r.Context(), u, g); err != nil {
+		subscriptionError(w, err)
+		return
+	}
+	owner, err := s.Store.User(r.Context(), u.ID)
+	if err != nil {
+		subscriptionError(w, err)
+		return
+	}
+	if err = s.subscriptionChannelAllowed(r.Context(), owner, input.Channel); err != nil {
+		subscriptionError(w, err)
+		return
+	}
+	if err = s.Store.UpdateSubscriptionChannel(r.Context(), u.ID, id, input.Channel); errors.Is(err, sql.ErrNoRows) {
+		problem(w, 404, "subscription_not_found", "Suivi introuvable.")
+		return
+	}
+	if err != nil {
+		problem(w, 500, "storage_error", "Enregistrement du canal impossible.")
+		return
+	}
+	jsonOut(w, 200, map[string]bool{"ok": true})
 }
 
 func (s *Server) getSubscriptions(w http.ResponseWriter, r *http.Request) {
@@ -238,6 +320,8 @@ func (s *Server) deleteSubscription(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_id", "Identifiant de suivi invalide.")
 		return
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err = s.Store.DeleteSubscription(r.Context(), u.ID, id); errors.Is(err, sql.ErrNoRows) {
 		problem(w, 404, "subscription_not_found", "Suivi introuvable.")
 		return

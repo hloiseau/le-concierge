@@ -5,9 +5,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/hloiseau/le-concierge/internal/config"
 )
 
 type Interaction struct {
@@ -39,10 +44,12 @@ type InteractionOption struct {
 }
 
 type Options struct {
-	Kind   string
-	TMDBID int
-	Season *int
-	Page   int
+	Query     string
+	RequestID int
+	Kind      string
+	TMDBID    int
+	Season    *int
+	Page      int
 }
 
 // Validate values again after signature verification; Discord registration is not an authorization boundary.
@@ -59,6 +66,11 @@ func CommandOptions(i Interaction) (Options, error) {
 		}
 		seen[option.Name] = true
 		switch option.Name {
+		case "recherche":
+			if (i.Data.Name != "livres" && i.Data.Name != "demander-livre") || option.Type != 3 || string(option.Value) == "null" || json.Unmarshal(option.Value, &options.Query) != nil || strings.TrimSpace(options.Query) == "" || utf8.RuneCountInString(options.Query) > 200 || strings.ContainsFunc(options.Query, unicode.IsControl) {
+				return Options{}, invalid
+			}
+			options.Query = strings.TrimSpace(options.Query)
 		case "type":
 			if (i.Data.Name != "surprise" && i.Data.Name != "suivre") || option.Type != 3 || json.Unmarshal(option.Value, &options.Kind) != nil {
 				return Options{}, invalid
@@ -66,12 +78,17 @@ func CommandOptions(i Interaction) (Options, error) {
 			if (i.Data.Name == "surprise" && options.Kind != "movie" && options.Kind != "show") || (i.Data.Name == "suivre" && options.Kind != "movie" && options.Kind != "tv") {
 				return Options{}, invalid
 			}
-		case "tmdb-id", "season", "page":
+		case "tmdb-id", "season", "page", "demande":
 			var number int
 			if option.Type != 4 || string(option.Value) == "null" || json.Unmarshal(option.Value, &number) != nil {
 				return Options{}, invalid
 			}
 			switch option.Name {
+			case "demande":
+				if i.Data.Name != "diagnostic" || number < 1 || number > 2147483647 {
+					return Options{}, invalid
+				}
+				options.RequestID = number
 			case "tmdb-id":
 				if i.Data.Name != "suivre" || number < 1 || number > 2147483647 {
 					return Options{}, invalid
@@ -83,7 +100,7 @@ func CommandOptions(i Interaction) (Options, error) {
 				}
 				options.Season = &number
 			case "page":
-				if i.Data.Name != "mes-suivis" || number < 1 || number > 1001 {
+				if (i.Data.Name != "mes-suivis" && i.Data.Name != "livres") || number < 1 || number > 1001 {
 					return Options{}, invalid
 				}
 				options.Page = number
@@ -93,6 +110,12 @@ func CommandOptions(i Interaction) (Options, error) {
 		}
 	}
 	if i.Data.Name == "suivre" && (options.Kind == "" || options.TMDBID == 0 || (options.Kind == "movie" && options.Season != nil)) {
+		return Options{}, invalid
+	}
+	if i.Data.Name == "demander-livre" && options.Query == "" {
+		return Options{}, invalid
+	}
+	if i.Data.Name == "diagnostic" && options.RequestID == 0 {
 		return Options{}, invalid
 	}
 	return options, nil
@@ -198,6 +221,30 @@ func Message(content string) map[string]any {
 	return map[string]any{"content": content, "allowed_mentions": map[string]any{"parse": []string{}}, "flags": 64, "components": []map[string]any{}}
 }
 
-func Help(origin string) string {
-	return "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/suivre — Suivre un film ou une série par identifiant TMDB\n/mes-suivis — Consulter vos suivis\n\n[Ouvrir le Hub](" + origin + ")\nConnectez-vous au Hub avec Plex, puis liez Discord dans **Mon compte** pour utiliser les commandes personnelles. Seerr est associé automatiquement via votre identité Plex."
+func Help(origin string, services []config.Service) string {
+	text := "**Le Concierge**\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/suivre — Suivre un film ou une série par identifiant TMDB\n/mes-suivis — Consulter vos suivis\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\n"
+	// Encode Markdown delimiters without changing the configured public destination.
+	link := func(label, target string) string {
+		return "[" + label + "](" + strings.NewReplacer("(", "%28", ")", "%29", "[", "%5B", "]", "%5D", "<", "%3C", ">", "%3E").Replace(target) + ")"
+	}
+	origin = strings.TrimRight(origin, "/")
+	footer := link("Services du Hub", origin) + " · " + link("FAQ et guides", origin+"/aide") + "\nConnectez-vous au Hub avec Plex, puis liez Discord dans " + link("Mon compte", origin+"/compte") + " pour les commandes personnelles. Seerr est associé automatiquement via votre identité Plex."
+	if len(text)+len(footer) > 1900 {
+		footer = "Ouvrez le Hub pour les services, la FAQ et les guides. Connectez-vous avec Plex, puis liez Discord dans Mon compte pour les commandes personnelles."
+	}
+	labels := map[string]string{"plex": "Plex", "seerr": "Seerr", "downloadarr": "Downloadarr", "torrent-watch": "Torrent Watch", "grimmory": "Grimmory", "shelfmark": "Shelfmark"}
+	seen := map[string]bool{}
+	for _, service := range services {
+		u, err := url.Parse(service.URL)
+		label := labels[service.ID]
+		if label == "" || seen[service.ID] || err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
+			continue
+		}
+		line := link(label, u.String()) + "\n"
+		if len(text)+len(line)+len(footer) <= 1900 {
+			text += line
+			seen[service.ID] = true
+		}
+	}
+	return text + footer
 }

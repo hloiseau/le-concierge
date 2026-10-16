@@ -25,7 +25,12 @@ func (s *Server) departures(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	page, err := s.Departures.List(r.Context(), s.Config, g)
+	p, err := s.Store.GetReminderPreferences(r.Context(), u.ID)
+	if err != nil {
+		problem(w, 500, "storage_error", "Lecture des préférences impossible.")
+		return
+	}
+	page, err := s.personalDepartures(r.Context(), u, g, p, false)
 	if err != nil {
 		problem(w, 503, "departures_unavailable", "Les départs ne peuvent pas être vérifiés actuellement. Aucune ancienne liste n’est utilisée.")
 		return

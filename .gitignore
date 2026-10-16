@@ -13,4 +13,5 @@ coverage/
 .cache/
 dist/
 bin/
+__pycache__/
 .DS_Store

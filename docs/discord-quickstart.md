@@ -1,6 +1,6 @@
 # Brancher Le Concierge à Discord
 
-Une application Discord dédiée sert à la liaison facultative du compte Discord et aux trois commandes du bot. La connexion au Hub se fait avec Plex. Le bot reçoit des interactions HTTP : aucun Gateway ni privileged intent n'est nécessaire pour cette première version.
+Une application Discord dédiée sert à la liaison facultative du compte Discord et aux commandes du bot. La connexion au Hub se fait avec Plex. Le bot reçoit des interactions HTTP : aucun Gateway ni privileged intent n'est nécessaire.
 
 ## 1. Créer l'application et récupérer les valeurs
 
@@ -14,7 +14,7 @@ Ouvrir le [Discord Developer Portal](https://discord.com/developers/applications
 | Discord → Paramètres utilisateur → Avancés → Mode développeur, puis clic droit sur le serveur → Copier l'identifiant | Server/Guild ID | `DISCORD_GUILD_ID` |
 | Shell du NAS : `openssl rand -hex 32` | Secret interne aléatoire | `BOT_API_SECRET` |
 
-Dans [truenas-discord.yaml](../deploy/truenas-discord.yaml), le bloc `x-discord` partage les valeurs entre API et bot. Le **Client Secret OAuth2** et le **token du bot** sont deux secrets différents. Le token du bot n'est pas nécessaire dans le YAML.
+Dans [truenas-discord.yaml](../deploy/truenas-discord.yaml), le bloc `x-discord` partage les valeurs entre API et bot. Le **Client Secret OAuth2** et le **token du bot** sont deux secrets différents. Le token du bot n’est pas nécessaire au processus bot après l’enregistrement des commandes. Pour activer les DM facultatifs, le processus API en a besoin via `DISCORD_BOT_TOKEN` ou un fichier secret `DISCORD_BOT_TOKEN_FILE` ; voir le [guide des DM](discord-reminders.md).
 
 Dans **OAuth2 → Redirects**, ajouter exactement :
 
@@ -46,7 +46,7 @@ Dans **Installation**, activer **Guild Install**. Le Concierge ne gère pas l'in
 
 Copier **Install Link**, l'ouvrir, choisir **Ajouter à un serveur**, puis ton serveur. Le compte qui installe doit pouvoir gérer ce serveur. Dans les paramètres d'intégration du serveur, autoriser les commandes aux rôles/salons voulus ; les membres doivent pouvoir utiliser les commandes d'application dans le salon.
 
-## 5. Enregistrer les trois commandes
+## 5. Enregistrer les commandes
 
 Dans **Bot → Reset Token**, récupérer le token dans ton gestionnaire de mots de passe. Dans le **Shell du NAS**, lancer le script fourni, depuis le dossier où tu l'as copié :
 
@@ -56,19 +56,21 @@ sudo bash truenas-admin.sh register
 
 Coller le token dans la saisie masquée. Le script l'injecte seulement dans le processus d'enregistrement, sans l'écrire dans le YAML ni l'ajouter à la ligne de commande. Ne pas le coller dans un salon Discord.
 
-Cette opération remplace les commandes de **cette application dans ce serveur** par `/aide`, `/mes-demandes` et `/nouveautes` : utiliser l'application dédiée créée à l'étape 1. On peut relancer la commande sans créer de doublons.
+Cette opération remplace les commandes de **cette application dans ce serveur** par `/aide`, `/mes-demandes`, `/nouveautes`, `/surprise`, `/recap`, `/suivre`, `/mes-suivis`, `/livres`, `/demander-livre` et `/diagnostic` : utiliser l'application dédiée créée à l'étape 1. On peut relancer la commande sans créer de doublons. Après une mise à jour ajoutant ces commandes ou leurs options, relancer cet enregistrement avec la nouvelle image du bot.
+
+`/diagnostic` est réservé aux administrateurs Discord ; son accès exige aussi une présence dans `ADMIN_DISCORD_IDS` côté API. Le bot lui-même n’a pas besoin de la permission Administrateur. Les clés Radarr/Sonarr facultatives et les limites de cette commande sont détaillées dans le [guide de diagnostic](diagnostics.md).
 
 ## 6. Tester
 
 Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement par toi. Ensuite ouvrir le Hub, se connecter avec Plex puis ouvrir **Mon compte → Lier Discord** : le compte Seerr est associé automatiquement avec cette identité. Si nécessaire, se connecter une première fois à Seerr avec le même Plex puis actualiser l’association dans le Hub. Tester `/mes-demandes` et `/nouveautes`.
 
-Le bot peut apparaître **hors ligne** dans la liste des membres : il n'ouvre pas de connexion Gateway pour afficher une présence. Ce sont les commandes qui vérifient son fonctionnement. Les réponses personnelles sont éphémères dans le salon ; les notifications proactives par DM ne sont pas encore implémentées.
+Le bot peut apparaître **hors ligne** dans la liste des membres : il n'ouvre pas de connexion Gateway pour afficher une présence. Ce sont les commandes qui vérifient son fonctionnement. Les réponses personnelles sont éphémères dans le salon. Les messages privés des [suivis](subscriptions.md) et des [rappels](removal-reminders.md) exigent une configuration et un consentement explicites.
 
 Avec plus de dix demandes Seerr, `/mes-demandes` propose **Suivant**, puis **Précédent** pour revenir en arrière. Les pages remplacent le même message, toujours visible uniquement par toi. Tester aussi la dernière page et une nouvelle commande après déconnexion du Hub : elle doit inviter à se reconnecter. Si une page devient vide après suppression de demandes dans Seerr, le bouton précédent permet de revenir. En cas de panne, les boutons sont retirés ; relancer `/mes-demandes` après rétablissement.
 
 `/nouveautes` affiche maintenant les titres, dates et liens vers Plex, avec **Suivant** puis **Début** pour revenir à la première page. Les épisodes d’une même série sont regroupés à l’intérieur de chaque page : six entrées Plex source peuvent donc donner moins de six cartes. La suite utilise le curseur réel de Plex et s’arrête à l’offset maximal 10 000 ; cette sélection n’est pas un inventaire exhaustif. **Début** revient au début, sans prétendre reconstituer une page précédente de taille variable. Tester une page courte, la dernière page et une perte d’accès pendant la navigation. Une panne retire les résultats et les boutons ; relancer la commande après rétablissement.
 
-Pour obtenir ces paginations, mettre à jour **API et bot** avec la même version. Aucun nouvel enregistrement des slash commands ni secret n’est nécessaire. Cette livraison ajoute aussi les rappels dans le Hub et migre SQLite vers **v3** : sauvegarder la base avant le premier démarrage, même si seuls les boutons Discord vous intéressent. Le [guide de déploiement](deployment.md#sauvegarde-et-retour-arrière) précise le retour arrière. Les rappels du Hub ne sont pas envoyés en DM Discord.
+Mettre à jour **API et bot** avec la même version puis enregistrer les commandes de cette version. Sauvegarder SQLite avant le premier démarrage qui applique les migrations, même si seuls les boutons Discord vous intéressent. Le [guide de déploiement](deployment.md#sauvegarde-et-retour-arrière) précise le retour arrière.
 
 Si les commandes n'apparaissent pas : vérifier le serveur configuré, le résultat de `register`, les droits d'intégration, puis recharger Discord. Si elles invitent à se reconnecter, ouvrir le Hub : les autorisations expirent au plus tard après 12 h et sont perdues au redémarrage.
 

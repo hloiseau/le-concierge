@@ -27,9 +27,13 @@ func discoveryAccess(w http.ResponseWriter, r *http.Request) {
 
 func discoveryPlayableResponse(w http.ResponseWriter, r *http.Request, kind string) {
 	id := strings.TrimPrefix(r.URL.Path, "/library/metadata/")
-	item := map[string]any{"ratingKey": id, "type": kind, "Media": []map[string]any{{"Part": []map[string]any{{"key": "/library/parts/1/file.mkv"}}}}}
+	item := map[string]any{"ratingKey": id, "type": kind, "Media": []map[string]any{{"Part": []map[string]any{{"key": "/library/parts/1/file.mkv", "exists": true, "accessible": true}}}}}
 	if strings.HasSuffix(id, "/grandchildren") {
-		item["ratingKey"], item["type"], item["grandparentRatingKey"] = "99", "episode", strings.TrimSuffix(id, "/grandchildren")
+		parent := strings.TrimSuffix(id, "/grandchildren")
+		item["ratingKey"], item["type"], item["grandparentRatingKey"] = parent+"99", "episode", parent
+		delete(item, "Media")
+	} else if strings.HasSuffix(id, "99") {
+		item["type"], item["grandparentRatingKey"] = "episode", strings.TrimSuffix(id, "99")
 	}
 	discoveryPage(w, 0, 1, []map[string]any{item})
 }
@@ -282,7 +286,7 @@ func TestRecapDoesNotReturnPartialDataAfterRevocation(t *testing.T) {
 }
 
 func TestSurpriseSkipsUnplayableCandidatesWithoutReplacement(t *testing.T) {
-	for _, state := range []string{"missing file", "inaccessible file", "no media", "removed", "empty show"} {
+	for _, state := range []string{"missing file", "inaccessible file", "missing flags", "missing exists", "missing accessible", "missing key", "no parts", "no media", "removed", "empty show"} {
 		t.Run(state, func(t *testing.T) {
 			var checked []string
 			server := recentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -296,6 +300,9 @@ func TestSurpriseSkipsUnplayableCandidatesWithoutReplacement(t *testing.T) {
 					return
 				}
 				checked = append(checked, r.URL.Path)
+				if !strings.HasSuffix(r.URL.Path, "/grandchildren") && (r.URL.Query().Get("checkFiles") != "1" || r.URL.Query().Get("checkFileAvailability") != "1") {
+					t.Fatal("playback metadata lacks availability flags")
+				}
 				if r.URL.Path == "/library/metadata/2" {
 					discoveryPlayableResponse(w, r, "movie")
 					return
@@ -311,12 +318,26 @@ func TestSurpriseSkipsUnplayableCandidatesWithoutReplacement(t *testing.T) {
 					}
 				case "no media":
 					fmt.Fprint(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"1","type":"movie"}]}}`)
+				case "no parts":
+					fmt.Fprint(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"1","type":"movie","Media":[{}]}]}}`)
 				default:
-					field := "exists"
-					if state == "inaccessible file" {
-						field = "accessible"
+					part := map[string]any{"key": "/library/parts/1/file.mkv", "exists": true, "accessible": true}
+					switch state {
+					case "missing file":
+						part["exists"] = false
+					case "inaccessible file":
+						part["accessible"] = false
+					case "missing flags":
+						delete(part, "exists")
+						delete(part, "accessible")
+					case "missing exists":
+						delete(part, "exists")
+					case "missing accessible":
+						delete(part, "accessible")
+					case "missing key":
+						delete(part, "key")
 					}
-					fmt.Fprintf(w, `{"MediaContainer":{"size":1,"Metadata":[{"ratingKey":"1","type":"movie","Media":[{"Part":[{"key":"/library/parts/1/file.mkv",%q:false}]}]}]}}`, field)
+					discoveryPage(w, 0, 1, []map[string]any{{"ratingKey": "1", "type": "movie", "Media": []map[string]any{{"Part": []map[string]any{part}}}}})
 				}
 			})
 			item, err := New().surprise(context.Background(), server.URL, "server-a", Grant{ServerToken: "user-a"}, "", bytes.NewReader([]byte{0, 0}))
@@ -353,6 +374,7 @@ func TestSurpriseBoundsPlaybackVerificationAndEmptyResult(t *testing.T) {
 
 func TestSurpriseVerifiesEpisodesAcrossPages(t *testing.T) {
 	reads := 0
+	metadataReads := 0
 	server := recentTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/library/all":
@@ -365,16 +387,24 @@ func TestSurpriseVerifiesEpisodesAcrossPages(t *testing.T) {
 			reads++
 			offset, _ := strconv.Atoi(r.Header.Get("X-Plex-Container-Start"))
 			item := map[string]any{"ratingKey": strconv.Itoa(offset + 2), "type": "episode", "grandparentRatingKey": "1"}
-			if offset == 1 {
-				item["Media"] = []map[string]any{{"Part": []map[string]any{{"key": "/library/parts/1/file.mkv"}}}}
-			}
 			discoveryPage(w, offset, 2, []map[string]any{item})
+		case "/library/metadata/2", "/library/metadata/3":
+			metadataReads++
+			if r.URL.Query().Get("checkFiles") != "1" || r.URL.Query().Get("checkFileAvailability") != "1" {
+				t.Fatal("episode metadata lacks file checks")
+			}
+			id := strings.TrimPrefix(r.URL.Path, "/library/metadata/")
+			item := map[string]any{"ratingKey": id, "type": "episode", "grandparentRatingKey": "1"}
+			if id == "3" {
+				item["Media"] = []map[string]any{{"Part": []map[string]any{{"key": "/library/parts/1/file.mkv", "exists": 1, "accessible": 1}}}}
+			}
+			discoveryPage(w, 0, 1, []map[string]any{item})
 		default:
 			t.Errorf("unexpected read %s", r.URL.Path)
 		}
 	})
 	item, err := New().Surprise(context.Background(), server.URL, "server-a", Grant{ServerToken: "user-a"}, "show")
-	if err != nil || item.ID != "plex:server-a:1" || reads != 2 {
+	if err != nil || item.ID != "plex:server-a:1" || reads != 2 || metadataReads != 2 {
 		t.Fatalf("episode verification failed %+v %v (%d pages)", item, err, reads)
 	}
 }
@@ -389,6 +419,7 @@ func TestRecapExcludesExplicitlyMissingFiles(t *testing.T) {
 				item["addedAt"] = start.Unix()
 			}
 			items[0]["Media"] = []map[string]any{{"Part": []map[string]any{{"key": "/library/parts/1/file.mkv", "exists": false}}}}
+			items[1]["Media"] = []map[string]any{{"Part": []map[string]any{{"key": "/library/parts/2/file.mkv"}}}}
 			discoveryPage(w, 0, 2, items)
 			return
 		}

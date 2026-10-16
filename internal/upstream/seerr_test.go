@@ -107,3 +107,71 @@ func TestRequestDatesAreUTCOrUnknown(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestStatusKeepsFailureAndDeclineDistinctFromMedia(t *testing.T) {
+	for _, tc := range []struct {
+		request, media int
+		want           string
+	}{
+		{1, 2, "pending"}, {2, 2, "approved"}, {2, 3, "processing"},
+		{2, 4, "partial"}, {5, 5, "available"}, {3, 5, "declined"},
+		{4, 3, "error"}, {4, 5, "error"}, {5, 1, "unknown"}, {999, 999, "unknown"},
+	} {
+		t.Run(fmt.Sprintf("%d/%d", tc.request, tc.media), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v1/user/42/requests" {
+					fmt.Fprintf(w, `{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":%d,"requestedBy":{"id":42},"media":{"tmdbId":100,"status":%d}}]}`, tc.request, tc.media)
+					return
+				}
+				fmt.Fprint(w, `{"title":"A film"}`)
+			}))
+			defer server.Close()
+			page, err := New().Requests(t.Context(), server.URL, "fixture-key", 42, 0)
+			if err != nil || len(page.Items) != 1 || page.Items[0].Status != tc.want {
+				t.Fatalf("status: %+v %v", page, err)
+			}
+		})
+	}
+}
+
+func TestRequest4KStatusDoesNotUseHDAvailability(t *testing.T) {
+	for _, tc := range []struct {
+		status4k int
+		want     string
+	}{{0, "approved"}, {2, "approved"}, {3, "processing"}, {4, "partial"}, {5, "available"}} {
+		t.Run(fmt.Sprint(tc.status4k), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v1/user/42/requests" {
+					fmt.Fprintf(w, `{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":2,"is4k":true,"requestedBy":{"id":42},"media":{"tmdbId":100,"status":5,"status4k":%d}}]}`, tc.status4k)
+					return
+				}
+				fmt.Fprint(w, `{"title":"A film"}`)
+			}))
+			defer server.Close()
+			page, err := New().Requests(t.Context(), server.URL, "fixture-key", 42, 0)
+			if err != nil || len(page.Items) != 1 || page.Items[0].Status != tc.want {
+				t.Fatalf("HD availability used for 4K: %+v %v", page, err)
+			}
+		})
+	}
+}
+
+func TestRequestPageReadBoundRejectsOversizedUpstreamBeforeEnrichment(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		fmt.Fprint(w, `{"pageInfo":{"results":11},"results":[`)
+		for i := 1; i <= 11; i++ {
+			if i > 1 {
+				fmt.Fprint(w, ",")
+			}
+			fmt.Fprintf(w, `{"id":%d,"type":"movie","status":2,"requestedBy":{"id":42},"media":{"tmdbId":100,"status":5}}`, i)
+		}
+		fmt.Fprint(w, "]}")
+	}))
+	defer server.Close()
+	page, err := New().Requests(t.Context(), server.URL, "fixture-key", 42, 0)
+	if !errors.Is(err, ErrUnavailable) || len(page.Items) != 0 || calls != 1 {
+		t.Fatalf("unbounded page accepted: %+v %v calls=%d", page, err, calls)
+	}
+}
