@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -121,48 +120,6 @@ func (c *Client) PlexVerify(ctx context.Context, account, client, serverID strin
 	return Grant{}, ErrDenied
 }
 func (c *Client) Recent(ctx context.Context, base, serverID string, g Grant, offset int) ([]Media, error) {
-	var identity struct {
-		Container struct {
-			ID string `json:"machineIdentifier"`
-		} `json:"MediaContainer"`
-	}
-	if e := c.JSON(ctx, "GET", base+"/identity", plexHeaders(g.ClientID, ""), "", &identity); e != nil {
-		return nil, e
-	}
-	if identity.Container.ID != serverID {
-		return nil, ErrDenied
-	}
-	var result struct {
-		Container struct {
-			Metadata []struct {
-				Key     string `json:"ratingKey"`
-				Title   string `json:"title"`
-				Type    string `json:"type"`
-				Year    int    `json:"year"`
-				AddedAt int64  `json:"addedAt"`
-				Series  string `json:"grandparentTitle"`
-				Parent  string `json:"parentTitle"`
-			} `json:"Metadata"`
-		} `json:"MediaContainer"`
-	}
-	h := plexHeaders(g.ClientID, g.ServerToken)
-	// Only a configured server URL is contacted, never URLs supplied by Plex resources.
-	if e := c.JSON(ctx, "GET", base+"/library/recentlyAdded?X-Plex-Container-Start="+strconv.Itoa(offset)+"&X-Plex-Container-Size=12", h, "", &result); e != nil {
-		return nil, e
-	}
-	out := []Media{}
-	for _, m := range result.Container.Metadata {
-		if m.Type != "movie" && m.Type != "show" && m.Type != "season" && m.Type != "episode" {
-			continue
-		}
-		title := m.Title
-		sub := ""
-		if m.Series != "" {
-			title = m.Series
-			sub = m.Parent + " · " + m.Title
-		}
-		link := "https://app.plex.tv/desktop/#!/server/" + url.PathEscape(serverID) + "/details?key=" + url.QueryEscape("/library/metadata/"+m.Key)
-		out = append(out, Media{ID: m.Key, Title: title, Type: m.Type, Year: m.Year, AddedAt: time.Unix(m.AddedAt, 0).UTC().Format(time.RFC3339), URL: link, Subtitle: sub})
-	}
-	return out, nil
+	p, err := c.RecentPage(ctx, base, serverID, g, offset, recentPageSize)
+	return p.Items, err
 }

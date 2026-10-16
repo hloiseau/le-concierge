@@ -134,7 +134,7 @@ func Decide(now time.Time, c Candidate, p Preferences) Decision {
 		}
 	}
 	// Include the actual deadline and action so postponement invalidates old reminders.
-	key := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s\x00%d", c.UserID, c.ServerID, c.MediaID, c.ActionID, c.LeavesAt.UTC().Format(time.RFC3339), milestone)
+	key := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%s\x00%d", c.UserID, c.ServerID, c.MediaID, c.ActionID, c.LeavesAt.UTC().Format(time.RFC3339Nano), milestone)
 	hash := sha256.Sum256([]byte(key))
 	return Decision{Notify: true, Reason: reason, MilestoneDays: milestone, Key: fmt.Sprintf("%x", hash), NotBefore: notBefore}
 }

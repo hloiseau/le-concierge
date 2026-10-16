@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -512,6 +512,112 @@
         },
         "description": "Current Plex user only. Recorded viewing history and season/show parents within 30 days. Checks active rules, exclusions and current per-item Plex access. Missing history and whole-season completion remain unknown. No query parameters or automatic reminders."
       }
+    },
+    "/api/v1/reminders": {
+      "get": {
+        "operationId": "getReminderInbox",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderInbox"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Freshly authorized private inbox for current recorded viewing. No caller-selected identity; source failure returns an error with no stale items."
+      }
+    },
+    "/api/v1/reminders/preferences": {
+      "get": {
+        "operationId": "getReminderPreferences",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderPreferences"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putReminderPreferences",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderPreferences"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Replace personal reminder settings. Requires same-origin request. One digest daily in Europe/Paris; daysBefore is 1?30 days.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReminderPreferences"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -540,12 +646,14 @@
             "required": [
               "code",
               "message"
-            ]
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
           "error"
-        ]
+        ],
+        "additionalProperties": false
       },
       "User": {
         "type": "object",
@@ -571,7 +679,8 @@
           "name",
           "plexId",
           "notifications"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Session": {
         "type": "object",
@@ -597,7 +706,8 @@
         },
         "required": [
           "user"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Service": {
         "type": "object",
@@ -628,7 +738,8 @@
           "name",
           "description",
           "category"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Services": {
         "type": "object",
@@ -642,7 +753,8 @@
         },
         "required": [
           "items"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Capabilities": {
         "type": "object",
@@ -668,7 +780,8 @@
             "type": "boolean"
           },
           "notifications": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Private inbox reminders are configured. Discord DM delivery is not available."
           },
           "books": {
             "type": "boolean"
@@ -690,8 +803,10 @@
           "subscriptions",
           "notifications",
           "books",
-          "monitoring"
-        ]
+          "monitoring",
+          "departures"
+        ],
+        "additionalProperties": false
       },
       "Media": {
         "type": "object",
@@ -724,7 +839,8 @@
           "title",
           "type",
           "addedAt"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Recent": {
         "type": "object",
@@ -744,14 +860,23 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "nextOffset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "nullable": true,
+            "description": "Raw Plex cursor; null on the final page or at the 10000 offset boundary. Episode grouping never changes this cursor."
           }
         },
         "required": [
           "items",
           "offset",
           "limit",
-          "updatedAt"
-        ]
+          "updatedAt",
+          "nextOffset"
+        ],
+        "additionalProperties": false
       },
       "MediaRequest": {
         "type": "object",
@@ -782,7 +907,19 @@
             ]
           },
           "createdAt": {
-            "type": "string"
+            "description": "Request creation time normalized to RFC3339 UTC. An empty string explicitly means the source date is missing or invalid.",
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  ""
+                ]
+              }
+            ]
           },
           "mediaId": {
             "type": "integer"
@@ -802,7 +939,8 @@
           "createdAt",
           "mediaId",
           "seasons"
-        ]
+        ],
+        "additionalProperties": false
       },
       "RequestPage": {
         "type": "object",
@@ -828,7 +966,8 @@
           "total",
           "offset",
           "limit"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Preferences": {
         "type": "object",
@@ -847,7 +986,8 @@
           "notifications",
           "notificationsAvailable",
           "timezone"
-        ]
+        ],
+        "additionalProperties": false
       },
       "PreferenceUpdate": {
         "type": "object",
@@ -858,7 +998,8 @@
         },
         "required": [
           "notifications"
-        ]
+        ],
+        "additionalProperties": false
       },
       "PlexStart": {
         "type": "object",
@@ -873,7 +1014,8 @@
         "required": [
           "url",
           "expiresIn"
-        ]
+        ],
+        "additionalProperties": false
       },
       "PlexPoll": {
         "type": "object",
@@ -884,7 +1026,8 @@
         },
         "required": [
           "connected"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Success": {
         "type": "object",
@@ -895,7 +1038,8 @@
         },
         "required": [
           "ok"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Departure": {
         "type": "object",
@@ -939,7 +1083,8 @@
           "watch",
           "estimatedAt",
           "url"
-        ]
+        ],
+        "additionalProperties": false
       },
       "Departures": {
         "type": "object",
@@ -971,7 +1116,140 @@
           "scope",
           "updatedAt",
           "expiresAt"
-        ]
+        ],
+        "additionalProperties": false
+      },
+      "ReminderPreferences": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "daysBefore": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            }
+          },
+          "quietStartHour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+          },
+          "quietEndHour": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 23
+          },
+          "dailyCap": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "allUnwatched": {
+            "type": "boolean",
+            "description": "Reserved preference; only verified in-progress films/episodes in recorded history currently produce reminders."
+          }
+        },
+        "required": [
+          "enabled",
+          "daysBefore",
+          "quietStartHour",
+          "quietEndHour",
+          "dailyCap",
+          "allUnwatched"
+        ],
+        "additionalProperties": false
+      },
+      "Reminder": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "episode"
+            ]
+          },
+          "estimatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unfinished_before_removal"
+            ]
+          },
+          "milestoneDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "type",
+          "estimatedAt",
+          "url",
+          "reason",
+          "milestoneDays",
+          "sentAt"
+        ],
+        "additionalProperties": false
+      },
+      "ReminderInbox": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/Reminder"
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "recorded_history"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "scope",
+          "updatedAt",
+          "expiresAt"
+        ],
+        "additionalProperties": false
       }
     }
   }

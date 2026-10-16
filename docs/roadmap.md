@@ -1,8 +1,23 @@
 # Roadmap — Le Concierge
 
-26 issues de développement, dont 2 priorités ajoutées pour les retraits. Le statut actuel est celui de chaque issue GitHub ; cette page organise le périmètre, sans échéances promises.
+Le découpage initial comprend 26 issues de développement, dont 2 priorités ajoutées pour les retraits. Des correctifs et compléments s’y ajoutent ensuite. Le statut actuel est celui de chaque issue GitHub ; cette page organise le périmètre, sans échéances promises.
 
 Les dépendances sont des liens vers les issues des deux dépôts. Les références Cxx/Hxx permettent de relier le découpage initial aux numéros GitHub.
+
+## Avancement local au 16 octobre 2026
+
+Les éléments ci-dessous sont implémentés dans l’arbre de travail et vérifiés localement avec des fournisseurs simulés. Ils ne constituent pas une annonce de publication d’image, de CI distante réussie ou de recette sur le NAS. Les observations antérieures des API sources ne remplacent pas la validation réelle des nouveaux parcours.
+
+| Tickets concernés | Résultat local | Limites restantes |
+| --- | --- | --- |
+| [#2 — Contrat commun](https://github.com/hloiseau/le-concierge/issues/2) | OpenAPI 0.4.0, copie Hub synchronisée, types TypeScript régénérés ; tests Go des réponses réelles, routes, erreurs, types, champs requis/supplémentaires et dates UTC. Les tests prouvent aussi le rejet de dérives volontaires. | Le job CI existant exécute cette suite ; son prochain résultat distant reste à vérifier. |
+| [#6 — Nouveautés](https://github.com/hloiseau/le-concierge/issues/6), [#9 — Commande Discord](https://github.com/hloiseau/le-concierge/issues/9) | Curseur Plex, regroupement par série dans chaque page et identifiants stables ; pages de 12 entrées brutes pour le Hub, 6 pour le bot ; cache utilisateur de 30 s plafonné à 128 entrées, avec nouvelle vérification des accès. `/nouveautes` présente dates, liens, Début et Suivant. | Sélection bornée à l’offset 10 000, regroupement limité à la page, aucune affiche ; essais nécessaires avec les bibliothèques réellement partagées. Une panne ne sert pas de cache périmé. |
+| [#8 — Demandes Discord](https://github.com/hloiseau/le-concierge/issues/8), [PR #37 — Pagination](https://github.com/hloiseau/le-concierge/pull/37) | Code de pagination `/mes-demandes` repris localement par cherry-pick, sans fusion distante de la PR : dix demandes, Précédent/Suivant, réponse éphémère et contrôle de l’identité à chaque clic. | Recette Discord réelle à refaire avec API et bot de même version. |
+| [#3 — Persistance](https://github.com/hloiseau/le-concierge/issues/3), [#20 — Livraison](https://github.com/hloiseau/le-concierge/issues/20), [#26 — Rappels](https://github.com/hloiseau/le-concierge/issues/26) | Migration SQLite v3, préférences, file durable et boîte Hub ; regroupement quotidien, paliers J-7/J-2 configurables, heures calmes Paris, annulation et rétention. Sources et accès relus sans cache avant livraison et affichage. | Livraison limitée aux films/épisodes commencés présents dans l’historique. Pas de DM Discord, demandes jamais commencées, abonnements, saisons complètes ni demandes de délai administrateur. #20 et #26 restent partiellement réalisés. |
+
+Les tests Go locaux et `go vet` ont été exécutés, notamment sur le contrat et la normalisation des dates Seerr. Une date source absente/invalide est explicitement inconnue ; les dates valides sont converties en UTC. Les validations du Hub sont suivies dans son propre dépôt.
+
+Avant mise à jour, sauvegarder la base avec l’ancienne version : le passage à v3 conserve les utilisateurs déjà inscrits aux notifications, qui recevront les réglages de rappel par défaut. Un retour à un ancien binaire exige aussi la restauration de son ancienne base. Le traitement des rappels parcourt les autorisations Plex actives chaque minute, séquentiellement ; expiration à 12 h maximum, déconnexion ou redémarrage suspendent ce traitement jusqu’à une nouvelle connexion. La purge à 90 jours après expiration reste active même lorsque les sources sont désactivées. Voir les [rappels et leurs limites](removal-reminders.md) et le [déploiement](deployment.md).
 
 ## Phase 1 — Fondations et bot V1
 
@@ -52,7 +67,7 @@ Les dépendances sont des liens vers les issues des deux dépôts. Les référen
 ## Priorité ajoutée — après le socle, en phase 2
 
 - [#25 — Sources Maintainerr/Tautulli](https://github.com/hloiseau/le-concierge/issues/25) : versions, échéances et historique individuel.
-- [#26 — Rappels personnalisés avant retrait](https://github.com/hloiseau/le-concierge/issues/26) : moteur de décision local livré dans cette branche ; connecteurs, outbox et envois à réaliser.
+- [#26 — Rappels personnalisés avant retrait](https://github.com/hloiseau/le-concierge/issues/26) : moteur, connecteurs de lectures enregistrées, préférences et boîte Hub durable implémentés ; élargissement des candidats, transport Discord et demandes de délai à réaliser.
 - [Hub #16](https://github.com/hloiseau/le-hub/issues/16) : vue personnelle et réglages.
 
-Le mécanisme d’outbox prévu en #20 passe en amont pour servir cette priorité ; les abonnements communautaires complets peuvent rester en phase 5.
+La file durable prévue en #20 sert désormais cette première boîte de rappels. Les abonnements communautaires complets et les transports externes restent à réaliser ; cette réutilisation ne clôt pas #20.

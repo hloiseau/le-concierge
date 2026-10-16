@@ -38,14 +38,43 @@ func Command(i Interaction) (string, int, error) {
 		return i.Data.Name, 0, nil
 	}
 	parts := strings.Split(i.Data.CustomID, ":")
-	if i.Type != 3 || i.Data.ComponentType != 2 || i.Message.Flags&64 == 0 || len(parts) != 3 || parts[0] != "requests" || parts[1] != i.Member.User.ID {
+	if i.Type != 3 || i.Data.ComponentType != 2 || i.Message.Flags&64 == 0 || len(parts) != 3 || (parts[0] != "requests" && parts[0] != "recent") || parts[1] != i.Member.User.ID {
 		return "", 0, errors.New("invalid pagination interaction")
 	}
 	offset, err := strconv.Atoi(parts[2])
-	if err != nil || offset < 0 || offset > 10000 || offset%10 != 0 || strconv.Itoa(offset) != parts[2] {
+	if err != nil || offset < 0 || offset > 10000 || (parts[0] == "requests" && offset%10 != 0) || strconv.Itoa(offset) != parts[2] {
 		return "", 0, errors.New("invalid pagination offset")
 	}
+	if parts[0] == "recent" {
+		return "nouveautes", offset, nil
+	}
 	return "mes-demandes", offset, nil
+}
+
+type RecentPagination struct {
+	Offset     int  `json:"offset"`
+	NextOffset *int `json:"nextOffset"`
+}
+
+func (p RecentPagination) Components(userID string) []map[string]any {
+	rows := []map[string]any{}
+	if p.Offset < 0 || p.Offset > 10000 {
+		return rows
+	}
+	buttons := []map[string]any{}
+	button := func(label string, offset int) map[string]any {
+		return map[string]any{"type": 2, "style": 2, "label": label, "custom_id": "recent:" + userID + ":" + strconv.Itoa(offset)}
+	}
+	if p.Offset > 0 {
+		buttons = append(buttons, button("Début", 0))
+	}
+	if p.NextOffset != nil && *p.NextOffset > p.Offset && *p.NextOffset <= p.Offset+6 && *p.NextOffset <= 10000 {
+		buttons = append(buttons, button("Suivant", *p.NextOffset))
+	}
+	if len(buttons) > 0 {
+		rows = append(rows, map[string]any{"type": 1, "components": buttons})
+	}
+	return rows
 }
 
 type RequestPagination struct {

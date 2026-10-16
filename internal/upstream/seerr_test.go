@@ -67,3 +67,43 @@ func TestSeerrLookupScansAllPages(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestDatesAreUTCOrUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, want string
+	}{
+		{"UTC", `"2026-10-16T12:00:00Z"`, "2026-10-16T12:00:00Z"},
+		{"offset with fractions", `"2026-10-16T01:30:00.123+02:00"`, "2026-10-15T23:30:00.123Z"},
+		{"missing", "", ""},
+		{"empty", `""`, ""},
+		{"null", `null`, ""},
+		{"no timezone", `"2026-10-16T12:00:00"`, ""},
+		{"invalid date", `"2026-02-30T12:00:00Z"`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v1/user/42/requests" {
+					field := ""
+					if tc.source != "" {
+						field = `,"createdAt":` + tc.source
+					}
+					fmt.Fprintf(w, `{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":999,"requestedBy":{"id":42},"media":{"tmdbId":100,"status":999}%s}]}`, field)
+					return
+				}
+				if r.URL.Path != "/api/v1/movie/100" {
+					t.Errorf("unexpected request: %s", r.URL.Path)
+				}
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}))
+			defer server.Close()
+			page, err := New().Requests(t.Context(), server.URL, "fixture-key", 42, 0)
+			if err != nil || len(page.Items) != 1 {
+				t.Fatalf("request lost on incomplete upstream data: %+v %v", page, err)
+			}
+			item := page.Items[0]
+			if item.CreatedAt != tc.want || item.Status != "unknown" || item.Title != "Film #100" || item.Seasons == nil {
+				t.Fatalf("incorrect fallback or UTC date: %+v", item)
+			}
+		})
+	}
+}

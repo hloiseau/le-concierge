@@ -43,9 +43,13 @@ func run() error {
 		return errors.New("cannot open database")
 	}
 	defer db.Close()
-	server := &http.Server{Addr: c.Listen, Handler: httpapi.New(c, db).Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
+	api := httpapi.New(c, db)
+	server := &http.Server{Addr: c.Listen, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	workerDone := make(chan struct{})
+	go func() { defer close(workerDone); api.RunReminders(ctx) }()
+	defer func() { stop(); <-workerDone }()
 	done := make(chan error, 1)
 	go func() { slog.Info("API listening", "address", c.Listen); done <- server.ListenAndServe() }()
 	select {

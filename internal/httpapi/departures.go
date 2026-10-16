@@ -31,17 +31,7 @@ func (s *Server) departures(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Logout, unlink and account deletion invalidate an in-flight personal result.
-	currentKey, current, ok := s.session(r)
-	if !ok || currentKey != key || current.UserID != u.ID {
-		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Plex.")
-		return
-	}
-	user, err := s.Store.User(r.Context(), u.ID)
-	if err != nil || user.PlexID != u.PlexID {
-		problem(w, 403, "plex_required", "Reconnectez-vous avec Plex.")
-		return
-	}
-	if _, ok = s.requireGrant(w, r, user); !ok {
+	if !s.revalidateUser(w, r, key, u) {
 		return
 	}
 	jsonOut(w, 200, page)

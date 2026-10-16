@@ -56,22 +56,22 @@ func TestSourceCacheExpiresAndNeverFallsBackAfterFailure(t *testing.T) {
 	defer server.Close()
 	s := New(upstream.New())
 	c := config.Config{MaintainerrURL: server.URL, PlexServerID: "server-a"}
-	if _, _, err := s.sources(context.Background(), c); err != nil {
+	if _, _, err := s.sources(context.Background(), c, false); err != nil {
 		t.Fatal(err)
 	}
 	first := calls
-	if _, _, err := s.sources(context.Background(), c); err != nil || calls != first {
+	if _, _, err := s.sources(context.Background(), c, false); err != nil || calls != first {
 		t.Fatal("fresh cache unused")
 	}
 	s.snapshot.UpdatedAt = time.Now().Add(-time.Minute)
 	broken = true
-	if snap, _, err := s.sources(context.Background(), c); err == nil || !snap.UpdatedAt.IsZero() || !s.snapshot.UpdatedAt.IsZero() {
+	if snap, _, err := s.sources(context.Background(), c, false); err == nil || !snap.UpdatedAt.IsZero() || !s.snapshot.UpdatedAt.IsZero() {
 		t.Fatal("expired snapshot served or retained")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	s.gate <- struct{}{}
-	if _, _, err := s.sources(ctx, c); err == nil {
+	if _, _, err := s.sources(ctx, c, false); err == nil {
 		t.Fatal("canceled waiter kept waiting")
 	}
 	<-s.gate

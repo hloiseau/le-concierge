@@ -20,6 +20,8 @@ Dans le Hub : `npm ci`, puis `npm run dev`. Le proxy Nuxt utilise `NUXT_API_BASE
 
 Pour une démonstration visuelle isolée : `NUXT_PUBLIC_DEMO=true npm run dev`. Toutes les données y sont fictives et signalées ; aucune authentification de démonstration n'existe dans l'API.
 
+Le contrat canonique [OpenAPI 0.4.0](../api/openapi.json) est vérifié par `go test ./internal/httpapi -run '^TestOpenAPI'`. Cette suite contrôle les réponses des handlers, l’inventaire des routes, les erreurs, les types, les champs supplémentaires et les dates UTC, avec des fournisseurs simulés. Elle fait partie de `go test ./...` et donc du job CI existant. Après modification du contrat, synchroniser `le-hub/api/openapi.json`, puis exécuter `npm run generate:api` dans le Hub ; `npm run check:api` contrôle la dérive des types générés. La présence de ces contrôles ne vaut pas confirmation d’un passage CI réussi.
+
 ## Discord (facultatif)
 
 Plex ouvre l’accès au Hub. Discord sert uniquement à associer les commandes du bot à ce compte ; le Hub fonctionne sans identifiants Discord.
@@ -32,11 +34,15 @@ Plex ouvre l’accès au Hub. Discord sert uniquement à associer les commandes 
 6. Installer l'application dédiée dans la guild avec la portée `applications.commands` et le bot si requis par la configuration Discord ; ne pas lui donner la permission Administrateur.
 7. Renseigner temporairement `DISCORD_BOT_TOKEN` et exécuter `./bin/bot --register`. Cette opération remplace la liste des commandes de cette application dans cette guild par `/aide`, `/mes-demandes`, `/nouveautes` ; utiliser une application dédiée. Le token de bot n'est plus nécessaire au fonctionnement des réponses HTTP après l'enregistrement.
 
-Les commandes sont privées. `/aide` répond directement, sans appeler l’API. Les commandes personnelles reçoivent un acquittement différé via le callback Discord, confirmé avant de modifier le message. `/mes-demandes` affiche dix demandes par page avec les boutons **Précédent** et **Suivant**, dans le même message privé. Chaque clic vérifie de nouveau la liaison Discord, l’autorisation Plex (avec sa fenêtre de fraîcheur habituelle de cinq minutes) et l’identité Seerr ; aucune identité fournie par un bouton ne remplace celle de l’interaction signée. La navigation est bornée au même offset maximal de 10 000 que l’API du Hub. Une panne ou une autorisation expirée remplace les résultats par une explication et retire les boutons ; relancer la commande après correction. `/nouveautes` montre encore une sélection initiale et un lien vers le Hub. Le bot vérifie les signatures, le serveur, l'application, les rejouements et limite les traitements simultanés. L'API revérifie la signature originale : le seul secret de service ne permet pas d'inventer une identité utilisateur.
+Les commandes sont privées. `/aide` répond directement, sans appeler l’API. Les commandes personnelles reçoivent un acquittement différé via le callback Discord, confirmé avant de modifier le message. `/mes-demandes` affiche dix demandes par page avec **Précédent** et **Suivant** ; le code de la [PR #37](https://github.com/hloiseau/le-concierge/pull/37) a été repris localement. `/nouveautes` affiche les titres, dates et liens Plex avec **Début** et **Suivant**. Chaque page de nouveautés lit au plus six entrées Plex brutes ; le regroupement peut afficher moins de cartes. **Début** revient à l’offset zéro, car des pages source de taille variable ne permettent pas de déduire un offset précédent fiable.
+
+Les pages remplacent le même message éphémère. Chaque clic vérifie de nouveau la liaison Discord et l’autorisation Plex (avec sa fenêtre de fraîcheur habituelle de cinq minutes), ainsi que l’identité Seerr pour les demandes ; aucune identité fournie par un bouton ne remplace celle de l’interaction signée. La navigation est bornée au même offset maximal de 10 000 que l’API du Hub. Une panne ou une autorisation expirée remplace les résultats par une explication et retire les boutons ; relancer la commande après correction. Le bot vérifie les signatures, le serveur, l’application, les rejouements et limite les traitements simultanés. L’API revérifie la signature originale et l’identité après les lectures : le seul secret de service ne permet pas d’inventer une identité utilisateur.
 
 ## Plex et Seerr
 
 Configurer `PLEX_URL` avec l'adresse privée du PMS et `PLEX_SERVER_ID` avec son `machineIdentifier`. Le backend vérifie le serveur retourné par `/identity` avant de lire les nouveautés. Il n'utilise jamais les adresses contenues dans la réponse Plex resources. Les lectures se font avec le token de ressource de l'utilisateur, pas un token propriétaire global.
+
+`GET /api/v1/recent` lit au plus douze entrées Plex brutes et retourne `nextOffset`, ou `null` en fin de parcours ou lorsque le prochain offset dépasserait 10 000. Cette sélection est bornée et ne promet pas un inventaire exhaustif de la bibliothèque. Le curseur avance selon les entrées source, pas le nombre de cartes après filtrage ou regroupement. Le regroupement d’épisodes et de saisons par série est limité à chaque page ; les identifiants stables permettent au Hub de fusionner les cartes lors du chargement suivant. Un cache mémoire de 30 secondes, isolé par identité et jetons utilisateur, est plafonné à 128 entrées au total. Même en cas de cache valide, l’identité du serveur et les accès aux contenus sont revérifiés avec le jeton individuel. Une erreur ne sert aucune ancienne page en secours.
 
 L’utilisateur ouvre le Hub, choisit **Se connecter avec Plex**, puis **Continuer sur Plex** et autorise l’application dans l’onglet Plex. Le Hub vérifie automatiquement le résultat. Le PIN est lié à un cookie HttpOnly du navigateur, expire après cinq minutes maximum et est consommé une seule fois. Aucune session n’est créée avant la vérification de l’accès au serveur configuré. L’accueil, les guides et les liens des services ne sont pas affichés avant cette connexion ; les endpoints de données sont également protégés côté API. Les comptes Plex Home gérés/restrictifs ne sont pas pris en charge par ce premier parcours.
 
@@ -46,7 +52,15 @@ Si le compte est absent, ouvrir Seerr et se connecter une première fois **avec 
 
 Le backend compare des identifiants stables, jamais les pseudos ou emails. La recherche paginée est limitée à 5 000 utilisateurs et quatre secondes ; une liste incomplète, des identités ambiguës ou une panne sont refusées. L'association est revérifiée avant chaque lecture de demandes, y compris les anciennes associations manuelles. La commande historique `manage link-seerr` n'est plus nécessaire et ne permet pas de contourner cette vérification. Une réponse contenant une demande d'un autre utilisateur est entièrement refusée.
 
+Les dates de création Seerr valides sont normalisées en RFC3339 UTC. Une date absente ou invalide devient une chaîne vide, affichée comme inconnue dans le Hub ; un statut source non reconnu devient `unknown`. Une métadonnée de titre absente conserve un libellé de repli.
+
 Une erreur d'association se corrige avec `manage unlink --discord ID`, puis une nouvelle liaison. Les anciennes autorisations en mémoire deviennent inutilisables dès que l'identité de la base ne correspond plus.
+
+## Rappels dans le Hub
+
+Configurer `MAINTAINERR_URL`, `TAUTULLI_URL` et `TAUTULLI_API_KEY` ou sa variante `_FILE`, en plus de Plex, selon le [guide des sources et rappels](removal-reminders.md). Les versions prises en charge sont Maintainerr 3.30.1 et Tautulli 2.18.2. `notifications` annonce alors la boîte personnelle du Hub ; vérifier séparément les sources avec `manage check-sources`. Aucun adaptateur de messages Discord proactifs n’est installé.
+
+La boîte actuelle cible les films et épisodes commencés présents dans l’historique enregistré. Ses défauts sont J-7/J-2, heures calmes 22 h–8 h à Paris et un regroupement quotidien de dix rappels maximum ; les réglages autorisent jusqu’à cinq paliers entre 1 et 30 jours et un plafond de 1 à 100 contenus. Le traitement des comptes dotés d’une autorisation Plex active est déclenché chaque minute et reste séquentiel. Sources et accès sont relus sans cache avant toute livraison ou liste active. Une panne conserve les décisions en attente mais masque l’ancienne liste. La file survit au redémarrage ; le traitement reprend seulement après la prochaine connexion Plex, puisque les jetons restent en mémoire.
 
 ## Conteneurs et TrueNAS
 
@@ -70,6 +84,8 @@ Pour installer aussi le bot, utiliser le fichier complet `deploy/truenas-discord
 
 `manage backup --database /app/data/concierge.db --destination /app/data/backup-YYYYMMDD.db` utilise une sauvegarde SQLite cohérente (`VACUUM INTO`) même avec WAL. Un fichier existant n'est jamais écrasé. Conserver la sauvegarde dans un emplacement privé et tester sa lecture avant une mise à jour.
 
+La première ouverture de cette version migre la base vers SQLite **v3**. Effectuer la sauvegarde avec la version actuellement installée, avant de démarrer la nouvelle API. La migration ajoute préférences, file de rappels et historique de livraison ; elle conserve `notifications`. Un utilisateur déjà inscrit aux notifications reçoit donc les réglages de rappels par défaut lorsque les sources sont configurées. Désactiver cette préférence annule ses rappels en attente. L’API purge les rappels 90 jours après leur expiration, même avec les sources désactivées.
+
 Pour restaurer : arrêter l'API et le bot, conserver l'ancienne base et ses fichiers `-wal`/`-shm` ensemble dans un dossier de secours, placer la sauvegarde validée sous le nom de base configuré avec les droits UID 65532, puis redémarrer avec l'image correspondante. Ne pas laisser d'anciens fichiers WAL au nom de la base restaurée. Une base provenant d'une version de schéma plus récente est refusée par le binaire.
 
 ## Validation sur l'installation réelle
@@ -77,6 +93,9 @@ Pour restaurer : arrêter l'API et le bot, conserver l'ancienne base et ses fich
 - Deux comptes Discord/Plex distincts, un compte sans partage Plex, un membre hors guild.
 - Liaison de chaque compte, vérification que les demandes personnelles ne se mélangent pas.
 - Comparaison des nouveautés visibles avec les bibliothèques réellement partagées.
+- Navigation `/nouveautes` avec pages courtes, séries regroupées, révocation pendant la navigation et reprise après panne.
+- Rappels d’un film et d’un épisode commencés, exclusion d’un contenu terminé, préférences, heures calmes, quota quotidien et absence de doublon après redémarrage/reconnexion.
+- Panne Maintainerr ou Tautulli : ancienne liste masquée ; désactivation des notifications : file en attente annulée.
 - Révocation Plex puis nouvel appel après cinq minutes ; la panne de vérification doit bloquer l'accès.
 - Reconnexion après redémarrage, déconnexion, suppression du compte local et sauvegarde/restauration.
 - Commandes sur la guild autorisée, titre contenant une mention, panne Seerr et bot temporairement occupé.
@@ -87,7 +106,7 @@ Les sessions et tokens sont uniquement en mémoire, expirent après 12 heures, e
 
 Le partage Plex est revérifié toutes les cinq minutes lors des accès protégés. L’appartenance Discord est vérifiée lors de la liaison facultative ; elle ne conditionne pas l’accès au portail, qui dépend de Plex. Le client revérifie sa session chaque minute et au retour dans l’onglet. Les routes publiques se limitent à l’état de connexion, aux capacités sans URLs privées, au flux d’authentification et aux contrôles de santé. Les quotas sont basés sur l'adresse directe, sans faire confiance aux en-têtes de proxy : derrière Caddy, les visiteurs partagent ce quota.
 
-Les nouveautés n'ont pas encore de regroupement avancé ni d'affiches ; l'API ne fait aucun cache partagé de données privées. Le titre des demandes est enrichi par Seerr avec une valeur de repli si les métadonnées manquent. La préférence de notifications est stockée mais aucun envoi proactif n'est actif. Maintainerr/Tautulli, livres, métriques et conversions restent à intégrer.
+Le regroupement des nouveautés reste limité à chaque page et aucune affiche n’est chargée. Les rappels ne couvrent pas encore les demandes jamais commencées, les abonnements, les saisons complètes ou une demande de délai à l’administrateur. La fonction SQLite de reprise avec délai progressif existe, mais aucun transport externe ne l’appelle ; une erreur de source est réessayée lors d’un prochain passage. Les notifications Discord proactives, livres, métriques et conversions restent à intégrer.
 
 ## Migration vers la connexion Plex
 

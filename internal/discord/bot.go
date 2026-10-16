@@ -112,13 +112,17 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		if e == nil {
 			if resp.StatusCode == 200 {
 				var m struct {
-					Content    string             `json:"content"`
-					Pagination *RequestPagination `json:"pagination"`
+					Content          string             `json:"content"`
+					Pagination       *RequestPagination `json:"pagination"`
+					RecentPagination *RecentPagination  `json:"recentPagination"`
 				}
 				if json.NewDecoder(io.LimitReader(resp.Body, 16*1024)).Decode(&m) == nil && len(m.Content) > 0 && len([]rune(m.Content)) <= 2000 {
 					reply = Message(m.Content)
 					if command == "mes-demandes" && m.Pagination != nil && m.Pagination.Offset == offset {
 						reply["components"] = m.Pagination.Components(i.Member.User.ID)
+					}
+					if command == "nouveautes" && m.RecentPagination != nil && m.RecentPagination.Offset == offset {
+						reply["components"] = m.RecentPagination.Components(i.Member.User.ID)
 					}
 				}
 			}

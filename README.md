@@ -17,12 +17,15 @@ Le Hub utilise une connexion Plex obligatoire avec vérification de l’accès a
 
 Voir le [guide de déploiement](docs/deployment.md) pour Go, Discord, Plex, Seerr, Docker, TrueNAS et Caddy. `make test`, `make build`, puis `./bin/api` après chargement de `.env` permettent de tester le backend. Le bot est un second processus : `./bin/bot`.
 
-Le [contrat HTTP](api/openapi.json) décrit l’API du portail. La [politique de rappels avant retrait](docs/removal-reminders.md) est codée et testée, mais ses connecteurs et envois ne sont pas encore actifs.
+Le [contrat HTTP 0.4.0](api/openapi.json) décrit l’API du portail. Les réponses réelles des handlers Go sont vérifiées contre ce contrat dans les tests, y compris les erreurs, champs requis, types, statuts et dates UTC. Le Hub utilise une copie synchronisée et des types TypeScript générés.
+
+Les nouveautés Plex sont paginées et regroupées par série à l’intérieur de chaque page, dans le Hub et `/nouveautes`. `/mes-demandes` possède aussi sa navigation Discord. Les [rappels avant retrait](docs/removal-reminders.md) disposent désormais de préférences, d’une file SQLite durable et d’une boîte personnelle dans le Hub, limitée aux films et épisodes commencés dont les sources et les accès sont encore vérifiés. Aucun envoi Discord proactif n’est raccordé. La mise à jour migre SQLite vers le schéma v3 : sauvegarder la base avant le premier démarrage.
 
 ## Périmètre
 
 - V1 : `/mes-demandes`, `/nouveautes`, `/aide`.
-- V2 : `/suivre`, `/mes-suivis`, `/surprise`, `/recap` et notifications ciblées.
+- Première livraison des rappels : boîte personnelle Hub et réglages ; les demandes jamais commencées, abonnements, saisons complètes et demandes de délai restent à développer.
+- V2 à compléter : `/suivre`, `/mes-suivis`, `/surprise`, `/recap` et autres notifications ciblées.
 - V3 : `/livres`, `/demander-livre` et disponibilité des lectures selon les API.
 - V4 : `/diagnostic`, réservé aux administrateurs.
 - Socle commun : identité, API, données et intégrations nécessaires au Hub.

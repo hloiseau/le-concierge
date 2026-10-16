@@ -4,6 +4,7 @@ package departures
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"sort"
 	"time"
@@ -13,6 +14,7 @@ import (
 )
 
 type Item struct {
+	ActionID    string    `json:"-"`
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
 	Kind        string    `json:"type"`
@@ -40,7 +42,7 @@ func New(client *upstream.Client) *Service {
 
 // Only the bounded, non-personal Maintainerr snapshot is cached, under 30 seconds.
 // History and Plex access are read for every request; no stale fallback on error.
-func (s *Service) sources(ctx context.Context, c config.Config) (upstream.RemovalSnapshot, map[int64]upstream.RemovalRule, error) {
+func (s *Service) sources(ctx context.Context, c config.Config, fresh bool) (upstream.RemovalSnapshot, map[int64]upstream.RemovalRule, error) {
 	select {
 	case s.gate <- struct{}{}:
 	case <-ctx.Done():
@@ -48,7 +50,7 @@ func (s *Service) sources(ctx context.Context, c config.Config) (upstream.Remova
 	}
 	defer func() { <-s.gate }()
 	key := c.MaintainerrURL + "\x00" + c.PlexServerID
-	if key == s.key && time.Since(s.snapshot.UpdatedAt) < 25*time.Second {
+	if !fresh && key == s.key && time.Since(s.snapshot.UpdatedAt) < 25*time.Second {
 		return s.snapshot, s.rules, nil
 	}
 	s.snapshot, s.rules = upstream.RemovalSnapshot{}, nil
@@ -65,6 +67,15 @@ func (s *Service) sources(ctx context.Context, c config.Config) (upstream.Remova
 }
 
 func (s *Service) List(ctx context.Context, c config.Config, g upstream.Grant) (Page, error) {
+	return s.list(ctx, c, g, false)
+}
+
+// ListFresh bypasses the shared snapshot before a reminder is delivered.
+func (s *Service) ListFresh(ctx context.Context, c config.Config, g upstream.Grant) (Page, error) {
+	return s.list(ctx, c, g, true)
+}
+
+func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, fresh bool) (Page, error) {
 	ctx, cancel := context.WithTimeout(ctx, 18*time.Second)
 	defer cancel()
 	if g.PlexID == "" || g.ServerToken == "" || !time.Now().Before(g.ExpiresAt) {
@@ -73,7 +84,7 @@ func (s *Service) List(ctx context.Context, c config.Config, g upstream.Grant) (
 	if err := s.client.PlexIdentity(ctx, c.PlexURL, c.PlexServerID); err != nil {
 		return Page{}, err
 	}
-	snapshot, rules, err := s.sources(ctx, c)
+	snapshot, rules, err := s.sources(ctx, c, fresh)
 	if err != nil {
 		return Page{}, err
 	}
@@ -142,6 +153,7 @@ func (s *Service) List(ctx context.Context, c config.Config, g upstream.Grant) (
 			title = m.GrandparentTitle + " · " + m.ParentTitle + " · " + m.Title
 		}
 		item := Item{ID: m.ID, Title: title, Kind: m.Kind, Watch: watch, EstimatedAt: *r.EstimatedAt, URL: "https://app.plex.tv/desktop/#!/server/" + url.PathEscape(c.PlexServerID) + "/details?key=" + url.QueryEscape("/library/metadata/"+m.ID)}
+		item.ActionID = fmt.Sprintf("%d:%d:%d", r.CollectionID, r.MembershipID, r.Action)
 		if old, exists := items[m.ID]; !exists || item.EstimatedAt.Before(old.EstimatedAt) {
 			items[m.ID] = item
 		}

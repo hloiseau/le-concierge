@@ -106,7 +106,11 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 		for _, s := range r.Seasons {
 			seasons = append(seasons, s.Number)
 		}
-		out.Items = append(out.Items, Request{ID: r.ID, Title: title, Type: kind, Status: status, CreatedAt: r.CreatedAt, MediaID: r.Media.TmdbID, Seasons: seasons})
+		createdAt := ""
+		if date, err := time.Parse(time.RFC3339Nano, r.CreatedAt); err == nil {
+			createdAt = date.UTC().Format(time.RFC3339Nano)
+		}
+		out.Items = append(out.Items, Request{ID: r.ID, Title: title, Type: kind, Status: status, CreatedAt: createdAt, MediaID: r.Media.TmdbID, Seasons: seasons})
 	}
 	return out, nil
 }

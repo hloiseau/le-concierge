@@ -2,7 +2,9 @@
 
 Suivi : [sources #25](https://github.com/hloiseau/le-concierge/issues/25), [politique et livraison #26](https://github.com/hloiseau/le-concierge/issues/26), [interface Hub #16](https://github.com/hloiseau/le-hub/issues/16).
 
-Le package `internal/reminders` contient un moteur de décision pur, testé. Il ne collecte aucune donnée et ne délivre aucun message. Les collecteurs sont dans `internal/upstream`. Le service `internal/departures` les raccorde à une première liste personnelle des départs, limitée aux lectures enregistrées. Les demandes jamais commencées, suivis explicites, inventaires complets d’épisodes, préférences de rappel, outbox durable, planification et demandes de délai restent à développer. Aucun rappel automatique n’est envoyé.
+Le package `internal/reminders` contient le moteur de décision pur ; `internal/upstream` collecte les sources et `internal/departures` produit la liste personnelle des départs. L’API raccorde désormais ces composants à des préférences, une file SQLite durable et une boîte de rappels dans le Hub. Cette première livraison concerne uniquement les films et épisodes commencés, encore accessibles et menacés par une action destructive vérifiée. Aucun message Discord proactif n’est envoyé.
+
+Les demandes jamais commencées, suivis explicites, inventaires complets d’épisodes, rappels de saisons entières et demandes de délai à l’administrateur restent à développer. La présence de cette boîte ne clôt pas l’ensemble des objectifs de [#20](https://github.com/hloiseau/le-concierge/issues/20) ou de [#26](https://github.com/hloiseau/le-concierge/issues/26).
 
 ## Liste personnelle des départs
 
@@ -14,22 +16,36 @@ Un film ou épisode peut être commencé, terminé ou incertain. Le rapprochemen
 
 Seul le relevé Maintainerr est partagé en mémoire pendant moins de 30 secondes. L’historique et les droits Plex sont relus à chaque requête ; les listes personnelles ne sont pas conservées. La collecte est bornée à 18 secondes et 100 métadonnées distinctes. Les relevés expirent au plus tard une minute après leur collecte. Une erreur invalide toute la réponse ; le Hub retire la liste au rechargement, à l’expiration ou à la déconnexion. La session est revérifiée après les lectures distantes. Les dates restent estimées : aucun bouton ne promet la conservation du contenu.
 
-## Politique des futurs rappels
+## Politique et portée des rappels
 
 | Situation vérifiée | Décision |
 | --- | --- |
-| Film demandé/suivi, jamais commencé, retrait imminent | Candidat à un rappel privé |
-| Film commencé mais non terminé | Candidat, même sans abonnement explicite |
-| Saison/série suivie avec épisodes confirmés restant à voir | Candidat pour le périmètre concerné |
+| Film ou épisode commencé mais non terminé | Candidat à la boîte personnelle actuelle, même sans abonnement explicite |
+| Film demandé/suivi, jamais commencé, retrait imminent | Parcours futur : demandes et suivis non raccordés à la collecte actuelle |
+| Saison/série suivie avec épisodes confirmés restant à voir | Parcours futur : inventaire complet non disponible |
 | Contenu terminé | Pas de rappel |
 | Historique absent/incomplet ou état non reconnu | Pas d'affirmation « non vu », pas d'envoi automatique |
 | Règle inactive ou action qui conserve les fichiers | Pas d'alerte de suppression |
 | Source périmée, accès révoqué ou échéance inconnue/passée | Pas d'envoi |
 | Retrait pendant les heures calmes | Pas d'envoi forcé pendant la plage silencieuse |
 
-Les paliers de référence sont J-7 et J-2. Si un candidat est découvert tardivement, seul le palier courant le plus proche est retenu. La clé de déduplication inclut l'utilisateur, le serveur, le contenu, l'action, la date et le palier. Une échéance modifiée invalide l'ancienne clé : le futur worker devra annuler les tâches caduques et revalider toutes les conditions juste avant l'envoi. Une simple clé ne constitue pas une outbox persistante.
+`GET` et `PUT /api/v1/reminders/preferences` lisent et enregistrent les réglages du compte connecté. L’activation reprend la préférence existante `notifications` : elle reste désactivée par défaut, mais un utilisateur qui l’avait déjà activée reçoit les nouveaux réglages par défaut. La capacité `notifications` et `notificationsAvailable` deviennent vraies lorsque Plex, Maintainerr et Tautulli sont configurés ; elles annoncent cette boîte Hub, pas un transport Discord ni une garantie de disponibilité des sources.
 
-Les heures calmes utilisent un fuseau IANA, Europe/Paris par défaut, et sont testées lors du changement d'heure. La portée « tous les contenus non vus » exige une préférence dédiée ; le défaut cible les demandes, suivis et lectures commencées. Les futures limites quotidiennes et regroupements doivent être appliqués par le planificateur.
+Les paliers par défaut sont J-7 et J-2 ; les réglages acceptent un à cinq jours distincts entre 1 et 30. Si un candidat est découvert tardivement, seul le palier courant le plus proche est retenu. Les heures calmes sont 22 h–8 h par défaut, en `Europe/Paris`, avec prise en compte des changements d’heure ; des heures identiques désactivent la plage silencieuse. La préférence `allUnwatched` est conservée mais n’élargit pas la portée de cette première collecte : l’absence d’historique ne prouve jamais qu’un contenu n’a pas été vu.
+
+La livraison crée au maximum un regroupement par jour et par utilisateur dans la boîte du Hub, contenant jusqu’à dix rappels par défaut, réglable de 1 à 100. La date du jour et les heures calmes sont calculées à Paris. Les candidats excédentaires restent en attente et doivent encore être valides au prochain passage ; aucune livraison ne force les heures calmes pour rattraper une échéance.
+
+## File durable et vérification avant affichage
+
+Le schéma SQLite v3 conserve les préférences, les décisions en attente, leur état et les regroupements livrés. La clé de déduplication inclut l’utilisateur, le serveur, le contenu, l’action, l’échéance et le palier. Un changement de règle, d’échéance ou de préférence annule les décisions devenues caduques lors de leur revalidation. La désactivation de `notifications` annule immédiatement les rappels en attente par un déclencheur SQLite. La livraison dans la boîte et son historique quotidien sont enregistrés dans une même transaction.
+
+Le processus API parcourt les autorisations Plex actives à chaque déclenchement d’une minute. Les comptes sont traités séquentiellement : une collecte lente peut allonger un passage ; il ne s’agit pas d’une garantie de livraison à la minute. `GET /api/v1/reminders` effectue également une actualisation. Avant chaque livraison et chaque liste active, les sources Maintainerr, Tautulli et les accès Plex sont collectés sans réutiliser le cache des départs. La session et l’identité sont revérifiées après ces lectures. Seuls les rappels livrés qui correspondent encore à un contenu commencé, une action et une échéance actuelles sont affichés.
+
+Une panne de source conserve les décisions en attente pour une prochaine vérification et refuse toute ancienne liste à l’affichage. Une révocation, une déconnexion ou une suppression du compte empêche une livraison à partir d’une autorisation périmée. Les jetons restent exclusivement en mémoire et expirent après 12 h au maximum : redémarrage et déconnexion suspendent le traitement du compte jusqu’à une nouvelle connexion Plex, même si sa file persiste.
+
+L’API purge les rappels 90 jours après leur expiration et l’historique quotidien après 90 jours, même si les sources sont désactivées. La fonction de stockage `RetryReminder` conserve un nombre d’essais et un délai progressif, mais aucun transport externe ne l’utilise actuellement. Les erreurs de collecte sont simplement reprises lors d’un prochain passage ; il n’existe pas encore d’adaptateur d’envoi Discord ni de reprise d’échecs de DM.
+
+Sauvegarder la base avant la migration v3. Pour revenir à une image antérieure, restaurer aussi la sauvegarde de son schéma : les anciens binaires refusent v3. Le [guide de déploiement](deployment.md#sauvegarde-et-retour-arrière) décrit la sauvegarde et la restauration.
 
 Avant activation des rappels, valider les API de la version installée de Maintainerr, la complétude du résultat (pas l'aperçu d'une collection), l'action de suppression effective et les dates. La date annoncée est une échéance estimée, pas une garantie sur l'heure de passage du planificateur. Tautulli doit être corrélé à l'identité Plex et son historique paginé ; absence de trace ne veut pas dire absence de visionnage.
 
@@ -57,10 +73,10 @@ Après livraison d’une image contenant le diagnostic, dans le **Shell du conte
 /app/manage check-sources --plex-user IDENTIFIANT_PLEX
 ```
 
-La commande n’ouvre pas SQLite et n’envoie aucune commande de mutation. Sa sortie JSON contient versions, correspondance avec `PLEX_SERVER_ID`, nombres de collections/appartenances destructives, groupes de règles vérifiés, échéances inconnues et instant du relevé. Avec `--plex-user`, elle ajoute seulement le nombre de lectures enregistrées. Aucun titre, identifiant personnel, historique détaillé, adresse ou secret n’est imprimé. `remindersEnabled` reste `false`. L’initialisation de la connexion Plex par Maintainerr peut mettre à jour ses propres paramètres de découverte ; voir l’audit des sources.
+La commande n’ouvre pas SQLite et n’envoie aucune commande de mutation. Sa sortie JSON contient versions, correspondance avec `PLEX_SERVER_ID`, nombres de collections/appartenances destructives, groupes de règles vérifiés, échéances inconnues et instant du relevé. Avec `--plex-user`, elle ajoute seulement le nombre de lectures enregistrées. Aucun titre, identifiant personnel, historique détaillé, adresse ou secret n’est imprimé. Son champ `remindersEnabled` reste `false` : ce diagnostic ne lance pas le planificateur de l’API. L’initialisation de la connexion Plex par Maintainerr peut mettre à jour ses propres paramètres de découverte ; voir l’audit des sources.
 
 Limites du relevé : 2 Mio par réponse, 500 collections, 10 000 appartenances destructives et 5 000 lignes d’historique par utilisateur ; pages Tautulli de 100 lignes et délai total de 15 secondes par collecte. Un dépassement, un compte discordant, un total changeant ou une page manquante invalide le résultat entier. Les identités de serveur sont comparées avant de lire les contenus ; le diagnostic Tautulli vérifie sa configuration de serveur, pas la disponibilité de Plex.
 
 Les collections inactives et actions non destructives sont écartées. Les délais nuls, zéro, négatifs ou hors borne ne deviennent pas des dates certaines. Une échéance positive est calculée depuis l’instant source par blocs de 24 heures, comme le worker audité ; elle reste estimée et peut différer de l’affichage calendaire amont lors d’un changement d’heure. L’historique Tautulli conserve ses identifiants Plex et son indicateur de complétion configuré, sans rapprochement par pseudo ni seuil arbitraire. Une absence de ligne reste inconnue, même si l’enregistrement de l’historique est activé aujourd’hui.
 
-Le diagnostic a été exécuté sur les instances réelles : versions attendues, collections Maintainerr complètes, règles et exclusions lisibles, identité serveur identique entre les sources et la configuration locale, historique Tautulli du compte administrateur parcouru jusqu’au total annoncé. L’identité Plex directe et la lecture des utilisateurs Seerr ont aussi été vérifiées avec la configuration locale. Ces vérifications ne constituent pas une recette du déploiement NAS ni des futurs rappels. La liste personnelle possède des tests d’isolation et de révocation ; sa recette réelle nécessite une connexion Plex utilisateur.
+Le diagnostic a été exécuté sur les instances réelles : versions attendues, collections Maintainerr complètes, règles et exclusions lisibles, identité serveur identique entre les sources et la configuration locale, historique Tautulli du compte administrateur parcouru jusqu’au total annoncé. L’identité Plex directe et la lecture des utilisateurs Seerr ont aussi été vérifiées avec la configuration locale. Ces vérifications antérieures ne constituent pas une recette du déploiement NAS ni de la nouvelle boîte de rappels. Les changements du 16 octobre 2026 sont validés localement avec des sources simulées ; leur recette réelle nécessite une connexion Plex utilisateur et une vérification des règles de suppression installées.
