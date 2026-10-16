@@ -4,6 +4,8 @@ Repository: `hloiseau/LibraryDownloadarr`, branch `codex/download-quality-a6fa82
 
 Related: https://github.com/hloiseau/le-concierge/issues/24 and https://github.com/hloiseau/le-hub/issues/15.
 
+Published contract and implementation: [draft pull request #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1). The repository has Issues disabled (GitHub 410), so the pull request carries this contract. It has not been merged or deployed.
+
 The fork already implements personal conversion jobs, quality/audio/subtitle options, bounded queue, real progress, reuse and single-use download tickets. Concierge should reuse these endpoints. The missing prerequisite is a versioned identity/session contract: `/api/auth/me` exposes only a local user ID/name/admin flag, and `/api/health` exposes no build revision. A separate Downloadarr Plex login cannot currently be proven to belong to the same numeric Plex account and configured server as the Hub session. Matching usernames/emails or sharing administrator tokens would be unsafe.
 
 Add a read-only, `Cache-Control: no-store` endpoint `GET /api/integrations/concierge`, authenticated with a separately issued Downloadarr personal bearer session:
