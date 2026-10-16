@@ -22,6 +22,7 @@ type Service struct {
 	Category    string `json:"category"`
 }
 type Config struct {
+	DownloadarrURL, DownloadarrRevision                                                     string
 	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
 	CommunityFeedFile                                                                       string
 	CommunityForumIDs, RoadmapIssueIDs                                                      []string
@@ -73,6 +74,8 @@ func Load() (Config, error) {
 	c.TautulliURL = strings.TrimRight(os.Getenv("TAUTULLI_URL"), "/")
 	c.GrimmoryURL = strings.TrimRight(os.Getenv("GRIMMORY_URL"), "/")
 	c.ShelfmarkURL = strings.TrimRight(os.Getenv("SHELFMARK_URL"), "/")
+	c.DownloadarrURL = strings.TrimRight(os.Getenv("DOWNLOADARR_URL"), "/")
+	c.DownloadarrRevision = os.Getenv("DOWNLOADARR_REVISION")
 	c.MetricsFile = os.Getenv("METRICS_FILE")
 	c.RadarrURL = strings.TrimRight(os.Getenv("RADARR_URL"), "/")
 	c.SonarrURL = strings.TrimRight(os.Getenv("SONARR_URL"), "/")
@@ -133,7 +136,7 @@ func Load() (Config, error) {
 	if origin.Scheme != "https" && (c.Env != "development" || (origin.Hostname() != "localhost" && origin.Hostname() != "127.0.0.1")) {
 		return c, errors.New("PUBLIC_ORIGIN requires HTTPS outside local development")
 	}
-	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL, c.MaintainerrURL, c.TautulliURL, c.GrimmoryURL, c.ShelfmarkURL, c.RadarrURL, c.SonarrURL} {
+	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL, c.MaintainerrURL, c.TautulliURL, c.GrimmoryURL, c.ShelfmarkURL, c.RadarrURL, c.SonarrURL, c.DownloadarrURL} {
 		if v != "" && !ValidURL(v, false) {
 			return c, errors.New("invalid service URL")
 		}
@@ -143,6 +146,12 @@ func Load() (Config, error) {
 	}
 	if c.ShelfmarkURL != "" && c.Env != "development" && !strings.HasPrefix(c.ShelfmarkURL, "https://") {
 		return c, errors.New("SHELFMARK_URL requires HTTPS outside local development")
+	}
+	if (c.DownloadarrURL == "") != (c.DownloadarrRevision == "") || (c.DownloadarrRevision != "" && !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(c.DownloadarrRevision)) {
+		return c, errors.New("DOWNLOADARR_URL and DOWNLOADARR_REVISION require a paired URL and full Git revision")
+	}
+	if c.DownloadarrURL != "" && (c.PlexURL == "" || (c.Env != "development" && !strings.HasPrefix(c.DownloadarrURL, "https://"))) {
+		return c, errors.New("Downloadarr requires Plex and HTTPS outside local development")
 	}
 	if (c.PlexURL == "") != (c.PlexServerID == "") {
 		return c, errors.New("PLEX_URL and PLEX_SERVER_ID must be set together")

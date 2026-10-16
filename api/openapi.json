@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -1698,6 +1698,367 @@
           }
         ]
       }
+    },
+    "/api/v1/downloads/link": {
+      "get": {
+        "operationId": "getDownloadarrLink",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadarrLinkStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "startDownloadarrLogin",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadarrLogin"
+                }
+              }
+            }
+          }
+        },
+        "description": "Current owner and Hub session only; matching Origin required. Bearers and source tickets remain server-side."
+      },
+      "delete": {
+        "operationId": "unlinkDownloadarr",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadarrLinkStatus"
+                }
+              }
+            }
+          }
+        },
+        "description": "Current owner and Hub session only; matching Origin required. Bearers and source tickets remain server-side."
+      }
+    },
+    "/api/v1/downloads/link/poll": {
+      "post": {
+        "operationId": "pollDownloadarrLogin",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadarrLinkStatus"
+                }
+              }
+            }
+          }
+        },
+        "description": "Current owner and Hub session only; matching Origin required. Bearers and source tickets remain server-side."
+      }
+    },
+    "/api/v1/downloads": {
+      "get": {
+        "operationId": "getDownloads",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadJobs"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createDownload",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadJob"
+                }
+              }
+            }
+          }
+        },
+        "description": "Current owner and Hub session only; matching Origin required. Bearers and source tickets remain server-side.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DownloadInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/downloads/options": {
+      "get": {
+        "operationId": "getDownloadOptions",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadOptions"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ratingKey",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quality",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "720p-2",
+                "720p-4",
+                "1080p-8"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "partKey",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/downloads/{id}": {
+      "delete": {
+        "operationId": "cancelDownload",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "Success"
+          }
+        },
+        "description": "Current owner and Hub session only; matching Origin required. Bearers and source tickets remain server-side.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/downloads/{id}/file": {
+      "post": {
+        "operationId": "downloadPreparedFile",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Private error with stable code and French message. Never retry a conversion automatically.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Verified prepared attachment. No-store; no secrets or upstream URLs in headers.",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "description": "Native same-origin POST with an empty body. Owner/session revalidated before bytes. No Range or URL tickets. Streaming uses bounded buffers and aborts at logout, revocation, expiry or disconnect. A lost/expired job is never recreated automatically.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1903,6 +2264,9 @@
             "type": "boolean"
           },
           "bookRequestTracking": {
+            "type": "boolean"
+          },
+          "downloads": {
             "type": "boolean"
           }
         },
@@ -4431,6 +4795,297 @@
           "pageSize",
           "hasMore",
           "checkedAt"
+        ]
+      },
+      "DownloadarrLinkStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "linked": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "qualityOptions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "720p-2",
+                "720p-4",
+                "1080p-8"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 3
+          }
+        },
+        "required": [
+          "linked"
+        ]
+      },
+      "DownloadarrLogin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "url",
+          "expiresAt"
+        ]
+      },
+      "DownloadStreamOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 1506,
+            "pattern": "^(plex|none|stream:[1-9][0-9]{0,15}|match:[A-Za-z0-9_-]+)$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "DownloadOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "audio": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DownloadStreamOption"
+            },
+            "minItems": 1,
+            "maxItems": 256
+          },
+          "subtitle": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DownloadStreamOption"
+            },
+            "minItems": 1,
+            "maxItems": 256
+          },
+          "season": {
+            "type": "boolean"
+          },
+          "fileCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "episode",
+              "season"
+            ]
+          }
+        },
+        "required": [
+          "audio",
+          "subtitle",
+          "season",
+          "fileCount",
+          "title",
+          "type"
+        ]
+      },
+      "DownloadInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ratingKey": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "720p-2",
+              "720p-4",
+              "1080p-8"
+            ]
+          },
+          "season": {
+            "type": "boolean"
+          },
+          "partKey": {
+            "type": "string",
+            "maxLength": 1024
+          },
+          "audio": {
+            "type": "string",
+            "maxLength": 1506,
+            "pattern": "^(plex|none|stream:[1-9][0-9]{0,15}|match:[A-Za-z0-9_-]+)$"
+          },
+          "subtitle": {
+            "type": "string",
+            "maxLength": 1506,
+            "pattern": "^(plex|none|stream:[1-9][0-9]{0,15}|match:[A-Za-z0-9_-]+)$"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "ratingKey",
+          "quality",
+          "confirmed"
+        ]
+      },
+      "DownloadJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "ratingKey": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "season": {
+            "type": "boolean"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "720p-2",
+              "720p-4",
+              "1080p-8"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "preparing",
+              "ready",
+              "sending",
+              "error"
+            ]
+          },
+          "readyCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "fileCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "deciding",
+              "waiting",
+              "processing",
+              "finalizing",
+              "ready"
+            ]
+          },
+          "progress": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "error": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reused": {
+            "type": "boolean"
+          },
+          "audioLabel": {
+            "type": "string"
+          },
+          "subtitleLabel": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "ratingKey",
+          "createdAt",
+          "season",
+          "quality",
+          "filename",
+          "state",
+          "readyCount",
+          "fileCount",
+          "stage",
+          "progress",
+          "expiresAt",
+          "audioLabel",
+          "subtitleLabel"
+        ]
+      },
+      "DownloadJobs": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DownloadJob"
+            },
+            "maxItems": 2
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "checkedAt",
+          "expiresAt"
         ]
       }
     }

@@ -170,3 +170,41 @@ func TestValidation(t *testing.T) {
 		t.Fatalf("bot-only config should work: %v", e)
 	}
 }
+
+func TestDownloadarrRequiresPinnedPersonalIntegration(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("PUBLIC_ORIGIN", "https://hub.example")
+	t.Setenv("PLEX_URL", "https://plex.example")
+	t.Setenv("PLEX_SERVER_ID", "server-a")
+	for _, tc := range []struct {
+		name, url, revision string
+		valid               bool
+	}{
+		{"disabled", "", "", true},
+		{"missing revision", "https://downloads.example", "", false},
+		{"missing URL", "", strings.Repeat("a", 40), false},
+		{"short revision", "https://downloads.example", "09e53fb", false},
+		{"plaintext", "http://downloads.example", strings.Repeat("a", 40), false},
+		{"credentials in URL", "https://user:secret@downloads.example", strings.Repeat("a", 40), false},
+		{"pinned", "https://downloads.example/", strings.Repeat("a", 40), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("DOWNLOADARR_URL", tc.url)
+			t.Setenv("DOWNLOADARR_REVISION", tc.revision)
+			c, err := Load()
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v: %v", tc.valid, err)
+			}
+			if err == nil && c.DownloadarrURL != strings.TrimRight(tc.url, "/") {
+				t.Fatal("unexpected URL")
+			}
+		})
+	}
+	t.Setenv("DOWNLOADARR_URL", "https://downloads.example")
+	t.Setenv("DOWNLOADARR_REVISION", strings.Repeat("a", 40))
+	t.Setenv("PLEX_URL", "")
+	t.Setenv("PLEX_SERVER_ID", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("Downloadarr enabled without Plex identity")
+	}
+}

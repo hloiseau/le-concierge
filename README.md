@@ -17,7 +17,7 @@ Le Hub utilise une connexion Plex obligatoire avec vérification de l’accès a
 
 Voir le [guide de déploiement](docs/deployment.md) pour Go, Discord, Plex, Seerr, Docker, TrueNAS et Caddy. `make test`, `make build`, puis `./bin/api` après chargement de `.env` permettent de tester le backend. Le bot est un second processus : `./bin/bot`.
 
-Le [contrat HTTP 0.6.0](api/openapi.json) décrit l’API du portail. Les réponses réelles des handlers Go sont vérifiées contre ce contrat dans les tests, y compris les erreurs, champs requis, types, statuts et dates UTC. Le Hub utilise une copie synchronisée et des types TypeScript générés.
+Le [contrat HTTP 0.7.0](api/openapi.json) décrit l’API du portail. Les réponses réelles des handlers Go sont vérifiées contre ce contrat dans les tests, y compris les erreurs, champs requis, types, statuts et dates UTC. Le Hub utilise une copie synchronisée et des types TypeScript générés. Les [téléchargements personnels Downloadarr](docs/downloadarr.md) utilisent une connexion Plex distincte et une révision de service explicitement vérifiée ; cette intégration reste désactivée par défaut.
 
 Les nouveautés Plex sont paginées dans le Hub et `/nouveautes`. `/mes-demandes` possède sa navigation Discord. Les [suivis communs](docs/subscriptions.md) se gèrent dans le Hub et avec `/suivre` et `/mes-suivis` ; leur disponibilité est vérifiée avec les droits Plex personnels. Les commandes privées [`/surprise` et `/recap`](docs/discord-discovery.md) complètent la découverte.
 

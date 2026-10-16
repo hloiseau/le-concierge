@@ -50,6 +50,9 @@ func validateContractResponse(doc *openapi3.T, method, target string, w *httptes
 	if response == nil {
 		return fmt.Errorf("undocumented response status %d for %s %s", w.Code, method, r.URL.Path)
 	}
+	if w.Code == http.StatusNoContent && len(response.Value.Content) == 0 && w.Body.Len() == 0 {
+		return nil
+	}
 	if w.Code < 300 || w.Code >= 400 {
 		content := response.Value.Content.Get("application/json")
 		if content == nil || content.Schema == nil {
@@ -303,6 +306,26 @@ func TestOpenAPIResponses(t *testing.T) {
 			{"DELETE", "/api/v1/book-requests/link-session", ""},
 		} {
 			check(t, tc.method, tc.path, call(s, tc.method, tc.path, cookie, s.Config.PublicOrigin, tc.body), 200)
+		}
+	})
+	t.Run("personal Downloadarr", func(t *testing.T) {
+		s, cookie := downloadarrAPIFixture(t)
+		for _, tc := range []struct {
+			method, path, body string
+			status             int
+		}{
+			{"GET", "/api/v1/downloads/link", "", 200},
+			{"POST", "/api/v1/downloads/link", "", 200},
+			{"POST", "/api/v1/downloads/link/poll", "", 200},
+			{"GET", "/api/v1/downloads/link", "", 200},
+			{"GET", "/api/v1/downloads/options?ratingKey=12&quality=720p-2", "", 200},
+			{"POST", "/api/v1/downloads", downloadarrConfirmedInput, 202},
+			{"GET", "/api/v1/downloads", "", 200},
+			{"POST", "/api/v1/downloads/" + downloadarrJobID + "/file", "", 200},
+			{"DELETE", "/api/v1/downloads/" + downloadarrJobID, "", 204},
+			{"DELETE", "/api/v1/downloads/link", "", 200},
+		} {
+			check(t, tc.method, tc.path, call(s, tc.method, tc.path, cookie, s.Config.PublicOrigin, tc.body), tc.status)
 		}
 	})
 	t.Run("delayed personal request reminder", func(t *testing.T) {

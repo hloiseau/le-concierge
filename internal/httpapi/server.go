@@ -48,22 +48,23 @@ type bucket struct {
 	Count int
 }
 type Server struct {
-	Config          config.Config
-	Store           *store.Store
-	Upstream        *upstream.Client
-	Departures      *departures.Service
-	Discord         *notifications.Discord
-	Monitoring      *monitoring.Service
-	mu              sync.Mutex
-	sessions        map[string]session
-	oauth           map[string]oauthAttempt
-	pins            map[string]pendingPin
-	grants          map[string]upstream.Grant
-	bookGrants      map[string]bookGrant
-	shelfmarkGrants map[string]shelfmarkGrant
-	limits          map[string]bucket
-	seen            map[string]time.Time
-	reminderGate    chan struct{}
+	Config            config.Config
+	Store             *store.Store
+	Upstream          *upstream.Client
+	Departures        *departures.Service
+	Discord           *notifications.Discord
+	Monitoring        *monitoring.Service
+	mu                sync.Mutex
+	sessions          map[string]session
+	oauth             map[string]oauthAttempt
+	pins              map[string]pendingPin
+	grants            map[string]upstream.Grant
+	bookGrants        map[string]bookGrant
+	shelfmarkGrants   map[string]shelfmarkGrant
+	downloadarrGrants map[string]downloadarrGrant
+	limits            map[string]bucket
+	seen              map[string]time.Time
+	reminderGate      chan struct{}
 }
 
 func New(c config.Config, db *store.Store) *Server {
@@ -215,6 +216,13 @@ func (s *Server) cleanup() {
 			delete(s.grants, k)
 			s.clearBookGrantLocked(k)
 			s.clearShelfmarkGrantLocked(k)
+			s.clearDownloadarrGrantLocked(k)
+		}
+	}
+	for userID, g := range s.downloadarrGrants {
+		sess, exists := s.sessions[g.SessionKey]
+		if !now.Before(g.ExpiresAt) || g.Context.Err() != nil || !exists || sess.UserID != userID || !now.Before(sess.Expires) {
+			s.clearDownloadarrGrantLocked(userID)
 		}
 	}
 	for k, v := range s.seen {
@@ -270,6 +278,15 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/book-requests/link-session", s.shelfmarkLink)
 	m.HandleFunc("DELETE /api/v1/book-requests/link-session", s.shelfmarkLink)
 	m.HandleFunc("GET /api/v1/book-requests", s.shelfmarkRequests)
+	m.HandleFunc("GET /api/v1/downloads/link", s.downloadarrLink)
+	m.HandleFunc("POST /api/v1/downloads/link", s.downloadarrLink)
+	m.HandleFunc("DELETE /api/v1/downloads/link", s.downloadarrLink)
+	m.HandleFunc("POST /api/v1/downloads/link/poll", s.downloadarrPoll)
+	m.HandleFunc("GET /api/v1/downloads", s.downloadarrJobs)
+	m.HandleFunc("POST /api/v1/downloads", s.downloadarrCreate)
+	m.HandleFunc("GET /api/v1/downloads/options", s.downloadarrOptions)
+	m.HandleFunc("DELETE /api/v1/downloads/{id}", s.downloadarrCancel)
+	m.HandleFunc("POST /api/v1/downloads/{id}/file", s.downloadarrFile)
 	m.HandleFunc("GET /api/v1/monitoring", s.getMonitoring)
 	m.HandleFunc("GET /api/v1/monitoring/history", s.getMonitoringHistory)
 	m.HandleFunc("GET /api/v1/admin/plex-activity", s.adminPlexActivity)
@@ -295,9 +312,12 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
-		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-		defer cancel()
-		r = r.WithContext(ctx)
+		_, pattern := m.Handler(r)
+		if pattern != "POST /api/v1/downloads/{id}/file" {
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			defer cancel()
+			r = r.WithContext(ctx)
+		}
 		start := time.Now()
 		s.cleanup()
 		m.ServeHTTP(w, r)
@@ -306,7 +326,7 @@ func (s *Server) Handler() http.Handler {
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, map[string]any{
-		"version": "0.6.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
+		"version": "0.7.0", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
 		"requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(),
 		"subscriptions": s.subscriptionsEnabled(), "subscriptionNotifications": s.subscriptionsEnabled(),
 		"notifications":     s.departuresEnabled() || s.subscriptionsEnabled(),
@@ -427,6 +447,7 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		delete(s.grants, merged)
 		s.clearBookGrantLocked(merged)
 		s.clearShelfmarkGrantLocked(merged)
+		s.clearDownloadarrGrantLocked(merged)
 	}
 	value := token()
 	delete(s.sessions, attempt.SessionKey)
@@ -450,6 +471,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		delete(s.grants, v.UserID)
 		s.clearBookGrantLocked(v.UserID)
 		s.clearShelfmarkGrantLocked(v.UserID)
+		s.clearDownloadarrGrantLocked(v.UserID)
 	}
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
@@ -478,6 +500,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	delete(s.grants, u.ID)
 	s.clearBookGrantLocked(u.ID)
 	s.clearShelfmarkGrantLocked(u.ID)
+	s.clearDownloadarrGrantLocked(u.ID)
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
 	jsonOut(w, 200, map[string]bool{"ok": true})
@@ -617,6 +640,7 @@ func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 	g.ExpiresAt = expires
 	s.clearBookGrantLocked(u.ID)
 	s.clearShelfmarkGrantLocked(u.ID)
+	s.clearDownloadarrGrantLocked(u.ID)
 	s.grants[u.ID] = g
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), value, 12*3600, false)
@@ -640,6 +664,7 @@ func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error
 			delete(s.grants, u.ID)
 			s.clearBookGrantLocked(u.ID)
 			s.clearShelfmarkGrantLocked(u.ID)
+			s.clearDownloadarrGrantLocked(u.ID)
 			s.mu.Unlock()
 		}
 		return upstream.Grant{}, e

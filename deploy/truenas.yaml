@@ -47,6 +47,9 @@ services:
       # Livres : HTTPS et identifiants OPDS personnels, saisis dans le Hub.
       GRIMMORY_URL: ''
       SHELFMARK_URL: ''
+      # Downloadarr : HTTPS + revision Git complete de l'image compatible installee.
+      DOWNLOADARR_URL: ''
+      DOWNLOADARR_REVISION: ''
       # Mesures optionnelles ; fichiers sur un volume distinct monte en lecture seule.
       MONITORING_ENABLED: 'false'
       METRICS_FILE: ''
