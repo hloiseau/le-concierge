@@ -27,12 +27,15 @@ func botResponse(status int, body string) *http.Response {
 }
 func signedCommand(t *testing.T, name string) (*Bot, *http.Request) {
 	t.Helper()
+	return signedInteraction(t, fmt.Sprintf(`{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"token":"private-interaction-token","member":{"user":{"id":"11111"}},"data":{"name":%q}}`, name))
+}
+func signedInteraction(t *testing.T, body string) (*Bot, *http.Request) {
+	t.Helper()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bot := NewBot(config.Config{DiscordClientID: "12345", DiscordGuildID: "23456", DiscordPublicKey: hex.EncodeToString(public), PublicOrigin: "https://hub.example", BotAPIURL: "http://api.test", BotAPISecret: strings.Repeat("s", 32)})
-	body := fmt.Sprintf(`{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"token":"private-interaction-token","member":{"user":{"id":"11111"}},"data":{"name":%q}}`, name)
 	stamp := strconv.FormatInt(time.Now().Unix(), 10)
 	r := httptest.NewRequest("POST", "/interactions", strings.NewReader(body))
 	r.Header.Set("X-Signature-Timestamp", stamp)
