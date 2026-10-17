@@ -12,6 +12,10 @@ DISCORD_BOT_TOKEN_FILE=/run/secrets/discord_bot_token
 
 Le fichier doit être monté en lecture seule et contenir le token du bot, pas le secret OAuth. `DISCORD_BOT_TOKEN` est l'alternative ; ne pas définir les deux. Le bot doit voir le salon et pouvoir y envoyer des messages. Le transport vérifie l'identifiant du serveur et le type du salon avant chaque envoi. Aucun message de test n'est envoyé au démarrage.
 
+Si aucun token du bot n'est fourni à l'API, les annonces du salon et les DM restent désactivés avec un avertissement dans les logs ; le Hub peut démarrer. Ajouter ensuite le token dans l'environnement du service **API**, puis redémarrer pour activer les fonctions demandées. Un token fourni uniquement au conteneur bot n'est pas accessible à l'API. Les valeurs invalides et les fichiers de secrets illisibles restent des erreurs explicites.
+
+Sur les versions antérieures à ce correctif, le log `DISCORD_DMS_ENABLED requires a boolean and a bot token when enabled` arrête l'API. Pour rétablir provisoirement le Hub, remettre `DISCORD_DMS_ENABLED: 'false'` et `DISCORD_NOTIFICATION_CHANNEL_ID: ''` dans le service API, puis redéployer. Cela désactive les rappels Discord sans modifier la base. Renseigner le token avant de réactiver les deux réglages.
+
 Configurer aussi `PLEX_URL`, `PLEX_SERVER_ID`, `MAINTAINERR_URL`, `SEERR_URL` et `SEERR_API_KEY` (lecture des demandes et des paramètres utilisateurs). Pour les retraits de saisons et d'épisodes, `TAUTULLI_URL` et `TAUTULLI_API_KEY` permettent de retrouver la série et le numéro de saison depuis les métadonnées Plex. Sans Tautulli, seuls les retraits de films et séries entières sont couverts.
 
 L'identité Discord vient des paramètres de notification du demandeur dans Seerr (`discordIds`, ou l'ancien `discordId`). Si ces paramètres sont vides, Le Concierge utilise une association Plex–Discord déjà vérifiée dans le Hub. Un simple pseudo Seerr ne permet pas de déduire un compte Discord : sans association, aucun utilisateur n'est mentionné pour cette demande. Les noms et titres provenant des services ne peuvent pas injecter `@everyone`, un rôle ou une autre mention.

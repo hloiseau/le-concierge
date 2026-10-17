@@ -21,12 +21,12 @@ func TestDiscordDMRequiresExplicitServerEnable(t *testing.T) {
 		t.Fatal("explicit enable failed", err)
 	}
 	t.Setenv("DISCORD_BOT_TOKEN", "")
-	if _, err := Load(); err == nil {
-		t.Fatal("DMs enabled without token")
+	if c, err := Load(); err != nil || c.DiscordDMsEnabled {
+		t.Fatal("missing optional bot token must disable DMs without blocking startup", err)
 	}
 	t.Setenv("DISCORD_DMS_ENABLED", "maybe")
-	if _, err := Load(); err == nil {
-		t.Fatal("invalid boolean accepted")
+	if _, err := Load(); err == nil || err.Error() != "DISCORD_DMS_ENABLED requires a boolean" {
+		t.Fatal("invalid boolean must still fail with a precise error", err)
 	}
 }
 

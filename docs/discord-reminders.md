@@ -7,7 +7,7 @@ Les rappels avant un départ estimé et les disponibilités des suivis peuvent �
 ## Activation
 
 1. Le démarrage applique automatiquement la migration SQLite v6.
-2. Fournir `DISCORD_BOT_TOKEN` (ou son fichier secret `DISCORD_BOT_TOKEN_FILE`) au service API et activer `DISCORD_DMS_ENABLED=true`. La valeur par défaut est `false` et le démarrage refuse une activation sans jeton.
+2. Fournir `DISCORD_BOT_TOKEN` (ou son fichier secret `DISCORD_BOT_TOKEN_FILE`) au service API et activer `DISCORD_DMS_ENABLED=true`. La valeur par défaut est `false`. Sans jeton, les DM restent désactivés avec un avertissement ; l'API continue de démarrer. Un jeton fourni uniquement au conteneur bot ne suffit pas. Après ajout du jeton à l'API, redémarrer le service.
 3. Dans le Hub, l'utilisateur lie son compte Discord vérifié, active ses rappels, puis coche séparément « Recevoir aussi mes rappels en message privé Discord » et enregistre.
 
 L'ancien choix global de notifications ne vaut jamais consentement aux DM. La migration conserve les préférences et l'historique existants ; le consentement DM est initialisé à faux lors de son introduction en v4, puis préservé lors des migrations suivantes. L'activation ne transforme pas d'anciens récapitulatifs du Hub en messages à envoyer. Le processus ne crée une livraison Discord qu'au moment d'un nouveau récapitulatif, lorsque le serveur et le choix individuel l'autorisent.
