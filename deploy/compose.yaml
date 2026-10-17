@@ -1,14 +1,18 @@
 # Place the two repositories side by side, then run from le-concierge:
 # docker compose --env-file .env -f deploy/compose.yaml up -d --build
+# Initial CPU/RAM budgets; tune after representative load (docs/deployment.md).
 services:
   api:
     build: ..
     image: le-concierge:local
+    cpus: 1.0
+    mem_limit: 256m
     env_file: ../.env
     # Optional TOPARR_URL is read from .env; the API needs no GPU device access.
     environment:
       LISTEN_ADDR: ':8080'
       DATABASE_PATH: /app/data/concierge.db
+      GOMEMLIMIT: 192MiB
     volumes:
       - concierge-data:/app/data
     read_only: true
@@ -23,7 +27,10 @@ services:
   hub:
     build: ../../le-hub
     image: le-hub:local
+    cpus: 1.0
+    mem_limit: 512m
     environment:
+      NODE_OPTIONS: '--max-old-space-size=384'
       NUXT_API_BASE: http://api:8080
       NUXT_PUBLIC_DEMO: 'false'
       NUXT_PUBLIC_DISCORD_URL: ${DISCORD_INVITE_URL:-}
@@ -44,12 +51,15 @@ services:
   bot:
     profiles: [discord]
     image: le-concierge:local
+    cpus: 0.5
+    mem_limit: 128m
     build: ..
     entrypoint: [/app/bot]
     env_file: ../.env
     environment:
       BOT_API_URL: http://api:8080
       BOT_LISTEN_ADDR: ':8081'
+      GOMEMLIMIT: 96MiB
     ports:
       - '${BIND_IP:-127.0.0.1}:8081:8081'
     read_only: true

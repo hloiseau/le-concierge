@@ -3,6 +3,7 @@
 # Dataset dedie /mnt/Main/tank/concierge : ecriture autorisee a UID/GID 65532.
 # Ne pas installer les deux variantes simultanement : remplacer le YAML de la meme app.
 # Images edge publiees apres validation de main. Re-pull avant de redeployer.
+# Budgets CPU/RAM initiaux : ajuster apres une charge representative (docs/deployment.md).
 x-runtime: &runtime
   restart: unless-stopped
   read_only: true
@@ -29,10 +30,13 @@ services:
     <<: *runtime
     image: ghcr.io/hloiseau/le-concierge:edge
     container_name: le-concierge-api
+    cpus: 1.0
+    mem_limit: 256m
     environment:
       <<: *discord
       DATABASE_PATH: /app/data/concierge.db
       LISTEN_ADDR: ':8080'
+      GOMEMLIMIT: 192MiB
       # Secret OAuth2, different du token de bot. Vide = liaison Discord desactivee (Plex reste disponible).
       DISCORD_CLIENT_SECRET: ''
       ADMIN_DISCORD_IDS: ''
@@ -90,7 +94,10 @@ services:
     <<: *runtime
     image: ghcr.io/hloiseau/le-hub:edge
     container_name: le-hub
+    cpus: 1.0
+    mem_limit: 512m
     environment:
+      NODE_OPTIONS: '--max-old-space-size=384'
       HOST: 0.0.0.0
       PORT: '3000'
       NUXT_API_BASE: http://api:8080
@@ -111,11 +118,14 @@ services:
     <<: *runtime
     image: ghcr.io/hloiseau/le-concierge:edge
     container_name: le-concierge-bot
+    cpus: 0.5
+    mem_limit: 128m
     entrypoint: [/app/bot]
     environment:
       <<: *discord
       BOT_API_URL: http://api:8080
       BOT_LISTEN_ADDR: ':8081'
+      GOMEMLIMIT: 96MiB
       # Meme token que l'API : les commandes sont synchronisees au demarrage.
       # Preferer _FILE avec le meme secret monte en lecture seule.
       DISCORD_BOT_TOKEN: ''
