@@ -92,6 +92,37 @@ Créer le dataset de données avec droit d'écriture pour l'UID/GID **65532** ; 
 
 Pour installer aussi le bot, utiliser le fichier complet `deploy/truenas-discord.yaml` dans la même application TrueNAS. Il contient les trois services et les contrôles de santé. Le token configuré dans le service bot permet la mise à jour automatique des commandes au démarrage. Le script `deploy/truenas-admin.sh register` conserve l’alternative ponctuelle sans stocker le token du bot dans le YAML. Voir le [mini tutoriel Discord](discord-quickstart.md).
 
+### Budgets CPU et mémoire
+
+Les trois exemples Compose fixent des plafonds par service avec [`cpus`](https://docs.docker.com/reference/compose-file/services/#cpus) et [`mem_limit`](https://docs.docker.com/reference/compose-file/services/#mem_limit). Ils s’appliquent aux conteneurs en exécution, pas à la construction des images. Ils ne réservent pas cette quantité de mémoire.
+
+| Service | Plafond CPU | Plafond mémoire | Réglage du runtime |
+| --- | --- | --- | --- |
+| API | 1 CPU | 256 Mio | `GOMEMLIMIT=192MiB` |
+| Bot Discord | 0,5 CPU | 128 Mio | `GOMEMLIMIT=96MiB` |
+| Hub | 1 CPU | 512 Mio | `NODE_OPTIONS=--max-old-space-size=384` |
+
+Le total avec le bot est de 896 Mio et 2,5 CPU. Ce sont des **budgets initiaux à ajuster après une charge représentative** : le relevé du 18 octobre 2026 observait des pics mémoire de 20,6 Mio pour l’API, 13,4 Mio pour le bot et 79,5 Mio pour le Hub, pendant environ 21 minutes de faible activité. Il ne constitue pas un test de capacité.
+
+Les réglages des runtimes visent une marge d’un quart du plafond pour le reste du processus : [`GOMEMLIMIT`](https://pkg.go.dev/runtime#hdr-Environment_Variables) est une limite souple de la mémoire gérée par Go, et [`--max-old-space-size`](https://nodejs.org/download/release/v24.19.0/docs/api/cli.html#--max-old-space-sizesize-in-mib) limite seulement une partie du tas V8. La limite Docker reste le plafond du conteneur. Modifier ensemble ces valeurs si le budget change. Le Hub sert une application cliente (`ssr: false`) et relaie l’API ; les transferts de fichiers sont diffusés progressivement au rythme du client, sans charger le fichier entier en mémoire. L’API et le bot ne réalisent pas les conversions de médias.
+
+Valider le YAML avant déploiement, sans afficher les secrets résolus :
+
+```bash
+docker compose --env-file .env -f deploy/compose.yaml --profile discord config --quiet
+docker compose -f deploy/truenas.yaml config --quiet
+docker compose -f deploy/truenas-discord.yaml config --quiet
+```
+
+Après redéploiement, vérifier les sondes et les limites réellement appliquées, puis observer la mémoire, les redémarrages et la latence pendant une navigation et des transferts simultanés. Pour la variante sans Discord, retirer le bot de ces commandes :
+
+```bash
+docker stats --no-stream le-concierge-api le-concierge-bot le-hub
+docker inspect --format '{{.Name}} RAM={{.HostConfig.Memory}} CPU={{.HostConfig.NanoCpus}} OOM={{.State.OOMKilled}} redemarrages={{.RestartCount}}' le-concierge-api le-concierge-bot le-hub
+```
+
+Les valeurs inspectées sont exprimées en octets et en milliardièmes de CPU : `268435456` et `1000000000` correspondent aux plafonds de l’API. Un manque de mémoire peut arrêter un processus ; un quota CPU atteint ralentit son traitement. Si ces limites sont atteintes sous une charge normale, augmenter le budget du service concerné et vérifier de nouveau les sondes et les temps de réponse. [Comportement des limites Docker](https://docs.docker.com/engine/containers/resource_constraints/).
+
 ## Sauvegarde et retour arrière
 
 `manage backup --database /app/data/concierge.db --destination /app/data/backup-YYYYMMDD.db` utilise une sauvegarde SQLite cohérente (`VACUUM INTO`) même avec WAL. Un fichier existant n'est jamais écrasé. Conserver la sauvegarde dans un emplacement privé et tester sa lecture avant une mise à jour.
