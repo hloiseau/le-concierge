@@ -15,6 +15,7 @@ type PlexItem struct {
 	AddedAt                                                   int64
 	Playable                                                  bool
 	Index                                                     *int
+	Thumb                                                     string
 }
 
 func (c *Client) PlexIdentity(ctx context.Context, base, serverID string) error {
@@ -48,6 +49,7 @@ func (c *Client) PlexMetadata(ctx context.Context, base, id string, g Grant) (Pl
 		GrandparentTitle string     `json:"grandparentTitle"`
 		Kind             string     `json:"type"`
 		GUID             string     `json:"guid"`
+		Thumb            string     `json:"thumb"`
 		// Plex also sends Guid (external IDs); capture it to avoid Go's case-insensitive matching.
 		ExternalGUIDs []struct {
 			ID string `json:"id"`
@@ -108,5 +110,5 @@ func (c *Client) PlexMetadata(ctx context.Context, base, id string, g Grant) (Pl
 	if len(m.Media) > 0 && json.Unmarshal(m.Media, &playback.Media) != nil {
 		return PlexItem{}, ErrIncomplete
 	}
-	return PlexItem{ID: string(m.ID), ParentID: string(m.ParentID), GrandparentID: string(m.GrandparentID), LibraryID: string(m.LibraryID), Title: m.Title, ParentTitle: m.ParentTitle, GrandparentTitle: m.GrandparentTitle, Kind: m.Kind, GUID: m.GUID, Edition: m.Edition, ViewCount: m.ViewCount, ViewOffset: m.ViewOffset, TMDBID: tmdb, Index: m.Index, AddedAt: m.AddedAt, Playable: playableSubscriptionItem(playback)}, nil
+	return PlexItem{ID: string(m.ID), ParentID: string(m.ParentID), GrandparentID: string(m.GrandparentID), LibraryID: string(m.LibraryID), Title: m.Title, ParentTitle: m.ParentTitle, GrandparentTitle: m.GrandparentTitle, Kind: m.Kind, GUID: m.GUID, Edition: m.Edition, ViewCount: m.ViewCount, ViewOffset: m.ViewOffset, TMDBID: tmdb, Index: m.Index, AddedAt: m.AddedAt, Playable: playableSubscriptionItem(playback), Thumb: m.Thumb}, nil
 }

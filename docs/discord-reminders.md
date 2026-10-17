@@ -1,10 +1,12 @@
 # Rappels privés Discord
 
+Le parcours principal de rappel collectif est désormais le [salon notifications avec mentions des demandeurs Seerr](discord-channel-reminders.md). Les DM décrits ici restent une préférence personnelle facultative.
+
 Les rappels avant un départ estimé et les disponibilités des suivis peuvent être envoyés en message privé Discord, en complément du Hub. Chaque suivi choisit son canal ; les préférences globales autorisent ou désactivent les notifications et les DM.
 
 ## Activation
 
-1. Sauvegarder SQLite avant la migration v5 ; le démarrage applique la migration automatiquement. Un retour à un binaire antérieur nécessite la restauration de sa sauvegarde compatible.
+1. Le démarrage applique automatiquement la migration SQLite v6.
 2. Fournir `DISCORD_BOT_TOKEN` (ou son fichier secret `DISCORD_BOT_TOKEN_FILE`) au service API et activer `DISCORD_DMS_ENABLED=true`. La valeur par défaut est `false` et le démarrage refuse une activation sans jeton.
 3. Dans le Hub, l'utilisateur lie son compte Discord vérifié, active ses rappels, puis coche séparément « Recevoir aussi mes rappels en message privé Discord » et enregistre.
 

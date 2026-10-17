@@ -200,7 +200,7 @@ func (c *Client) fetchRecent(ctx context.Context, base, serverID string, g Grant
 		}
 		groups[id] = len(page.Items)
 		link := "https://app.plex.tv/desktop/#!/server/" + url.PathEscape(serverID) + "/details?key=" + url.QueryEscape("/library/metadata/"+id)
-		page.Items = append(page.Items, Media{ID: "plex:" + serverID + ":" + id, Title: title, Type: kind, Year: m.Year, AddedAt: addedAt, URL: link, Subtitle: subtitle})
+		page.Items = append(page.Items, Media{ID: "plex:" + serverID + ":" + id, Title: title, Type: kind, Year: m.Year, AddedAt: addedAt, URL: link, Subtitle: subtitle, PosterURL: "/api/v1/posters/plex/" + id})
 	}
 	// shortcut: grouping is page-local; consumers merge stable IDs when appending subsequent pages.
 	sort.SliceStable(page.Items, func(i, j int) bool {

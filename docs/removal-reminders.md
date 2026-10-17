@@ -1,5 +1,7 @@
 # Rappels avant retrait — priorité de phase 2
 
+Les rappels collectifs des demandes Seerr sont publiés dans le [salon Discord notifications](discord-channel-reminders.md), avec mention des demandeurs. Les rappels personnels et messages privés ci-dessous sont des choix supplémentaires.
+
 Suivi : [sources #25](https://github.com/hloiseau/le-concierge/issues/25), [politique et livraison #26](https://github.com/hloiseau/le-concierge/issues/26), [interface Hub #16](https://github.com/hloiseau/le-hub/issues/16).
 
 Le package `internal/reminders` contient le moteur de décision pur ; `internal/upstream` collecte les sources et `internal/departures` produit la liste personnelle des départs. Les rappels couvrent les films et épisodes commencés, les demandes Seerr du compte vérifié et les suivis communs. Le filtre personnel « non vu » de Plex doit confirmer les lectures non commencées ; l’absence d’historique ne suffit pas. Un transport de DM Discord est disponible sur activation explicite du serveur et consentement individuel distinct, décrit dans le [guide des DM](discord-reminders.md).

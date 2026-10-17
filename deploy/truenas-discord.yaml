@@ -38,6 +38,8 @@ services:
       ADMIN_DISCORD_IDS: ''
       # DM de rappel facultatifs : activation serveur ET consentement individuel.
       DISCORD_DMS_ENABLED: 'false'
+      # Salon de rappels : mentions des demandeurs Seerr, independant des DM.
+      DISCORD_NOTIFICATION_CHANNEL_ID: ''
       DISCORD_BOT_TOKEN: '' # Preferer _FILE avec un secret monte en lecture seule.
       # Renseigner les deux valeurs d'une paire, ou laisser les deux vides.
       # Exemple PLEX_URL : http://192.0.2.10:32400
@@ -57,7 +59,7 @@ services:
       DOWNLOADARR_URL: ''
       DOWNLOADARR_REVISION: ''
       # Mesures optionnelles ; fichiers sur un volume distinct monte en lecture seule.
-      MONITORING_ENABLED: 'false'
+      MONITORING_ENABLED: '' # Auto avec Tautulli ou METRICS_FILE ; false pour desactiver.
       METRICS_FILE: ''
       # Diagnostic administrateur : URL + cle de la meme instance Seerr HD/4K.
       RADARR_URL: ''
@@ -113,7 +115,9 @@ services:
       <<: *discord
       BOT_API_URL: http://api:8080
       BOT_LISTEN_ADDR: ':8081'
-      # Pas de token permanent : enregistrement ponctuel avec truenas-admin.sh.
+      # Meme token que l'API : les commandes sont synchronisees au demarrage.
+      # Preferer _FILE avec le meme secret monte en lecture seule.
+      DISCORD_BOT_TOKEN: ''
     ports:
       - '192.0.2.10:18081:8081'
     depends_on:

@@ -1,12 +1,18 @@
-# Suivre un contenu demandé
+# Mes suivis
 
-Les suivis sont communs au Hub et aux commandes privées `/suivre` et `/mes-suivis`. Ils utilisent le compte Plex connecté et son association Seerr vérifiée. Un suivi ne crée ni n’approuve une demande Seerr.
+La page **Mes suivis** et la commande privée `/mes-suivis` affichent automatiquement les films et séries demandés par le compte connecté dans Seerr. Aucun identifiant TMDB ni lien n’est à recopier. L’association repose sur l’identité Plex vérifiée, jamais sur le nom du demandeur ; chaque ligne de demande est contrôlée pour éviter les mélanges entre comptes.
+
+Les demandes, leurs saisons, leur état et leur pagination proviennent de `GET /api/v1/requests?offset=0`, par pages de dix, comme dans **Mes demandes**. Aucun suivi supplémentaire n’est enregistré en base. Les rappels personnels avant retrait utilisent déjà ces demandes comme source d’intérêt ; leurs préférences restent dans **Mon compte**. L’état « disponible » de cette liste est celui de Seerr et ne remplace pas une vérification de lecture dans Plex.
+
+## Suivis ajoutés auparavant
+
+Les suivis ajoutés séparément restent visibles dans une section secondaire lorsqu’ils existent. Leurs canaux et leur désabonnement sont conservés ; retirer l’un d’eux ne supprime pas une demande Seerr ni son suivi automatique. La commande historique `/suivre` et l’API de création restent compatibles avec les intégrations existantes. Un suivi ajouté ne crée ni n’approuve une demande Seerr.
 
 Un contenu est identifié par son **type** (`movie` ou `tv`), son **identifiant TMDB** et, pour une série, un **numéro de saison facultatif**. La saison zéro représente les épisodes spéciaux ; l’absence de saison représente la série. Chaque compte possède au plus un suivi par combinaison, avec une limite de 100 suivis. Répéter une création actualise le canal du suivi existant. Il n’y a pas de distinction entre éditions, langues et qualités vidéo.
 
 Pour une série ou une saison, « disponible » signifie qu’au moins un épisode est présent et accessible à ce compte Plex. Cela ne promet ni une saison complète ni un rappel pour chaque nouvel épisode. Le numéro de saison doit exister dans les métadonnées Seerr. Le suivi doit correspondre à une demande en attente ou approuvée, même si elle appartient à un autre membre. Aucun nom, identifiant ni détail du demandeur ne figure dans les réponses.
 
-## API commune
+## API des suivis ajoutés
 
 - `GET /api/v1/subscriptions?offset=0` : dix suivis personnels par page, avec titre et état vérifiés lors de la lecture. Un contenu devenu inaccessible conserve une ligne « Contenu inaccessible » sans titre ni lien, pour permettre le désabonnement.
 - `POST /api/v1/subscriptions` : corps `{"type":"movie","tmdbId":12,"channel":"hub"}`. Pour une saison : `{"type":"tv","tmdbId":34,"season":2,"channel":"hub"}`. Une création réussie renvoie `following` et le suivi. Un contenu déjà accessible renvoie immédiatement `already_available`, avec son lien Plex, et ne laisse aucun suivi en attente pour ce contenu.
@@ -20,7 +26,7 @@ Les mutations du Hub exigent son origine configurée. Aucun paramètre ne permet
 
 Utiliser la configuration Plex et Seerr existante : `PLEX_URL`, `PLEX_SERVER_ID`, `SEERR_URL`, `SEERR_API_KEY` (ou sa variante `_FILE`). Pour Discord, activer aussi `DISCORD_DMS_ENABLED=true` et fournir le jeton du bot prévu par la configuration. Le Hub n’exige pas de secret supplémentaire.
 
-Le canal **Hub** est choisi par défaut ; **Discord** ajoute un message privé au récapitulatif du Hub. Le choix Discord est propre à chaque suivi et exige aussi l’activation générale des notifications et des messages privés dans les préférences. Les commandes Discord consultent et créent le même suivi Hub ; le canal se règle dans le Hub. Les heures calmes de Paris et le plafond quotidien sont partagés avec les rappels avant retrait. Au plus un récapitulatif des départs et un récapitulatif des disponibilités sont produits chaque jour ; les deux partagent le même budget de contenus. Un canal changé après livraison ne rejoue pas une ancienne alerte.
+Le canal **Hub** est choisi par défaut ; **Discord** ajoute un message privé au récapitulatif du Hub. Le choix Discord est propre à chaque suivi ajouté et exige aussi l’activation générale des notifications et des messages privés dans les préférences. Le canal se règle dans la section **Mes suivis ajoutés** du Hub. Les heures calmes de Paris et le plafond quotidien sont partagés avec les rappels avant retrait. Au plus un récapitulatif des départs et un récapitulatif des disponibilités sont produits chaque jour ; les deux partagent le même budget de contenus. Un canal changé après livraison ne rejoue pas une ancienne alerte.
 
 Une tâche vérifie jusqu’à dix suivis par compte et par minute, tant qu’une autorisation Plex en mémoire est valide. Elle parcourt les comptes à tour de rôle avec une limite de 45 secondes par cycle ; un grand nombre de comptes ou une source lente peut donc retarder une vérification. L’ouverture du Hub vérifie également la disponibilité. Le téléchargement signalé terminé dans Seerr ne suffit pas : l’import Plex et la lecture accessible doivent être confirmés.
 

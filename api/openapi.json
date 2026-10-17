@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -2123,6 +2123,62 @@
           }
         }
       }
+    },
+    "/api/v1/posters/plex/{id}": {
+      "get": {
+        "operationId": "getPlexPoster",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private poster, at most 2 MiB. Never cached.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2332,6 +2388,9 @@
           },
           "downloads": {
             "type": "boolean"
+          },
+          "discordChannelReminders": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2344,7 +2403,8 @@
           "notifications",
           "books",
           "monitoring",
-          "departures"
+          "departures",
+          "discordChannelReminders"
         ],
         "additionalProperties": false
       },
@@ -2372,6 +2432,11 @@
           },
           "subtitle": {
             "type": "string"
+          },
+          "posterUrl": {
+            "type": "string",
+            "pattern": "^/api/v1/posters/plex/[1-9][0-9]*$",
+            "description": "Private same-origin Plex poster, checked with the current personal grant."
           }
         },
         "required": [
@@ -2470,6 +2535,14 @@
             "items": {
               "type": "integer"
             }
+          },
+          "posterUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://image\\.tmdb\\.org/t/p/w342/[A-Za-z0-9_-]+\\.(jpg|jpeg|png|webp)$"
+          },
+          "requesterName": {
+            "type": "string"
           }
         },
         "required": [
@@ -4281,6 +4354,15 @@
           },
           "activity": {
             "$ref": "#/components/schemas/ActivitySummary"
+          },
+          "hostStatus": {
+            "type": "string",
+            "enum": [
+              "not_configured",
+              "available",
+              "stale",
+              "error"
+            ]
           }
         },
         "required": [
@@ -4289,7 +4371,8 @@
           "hostUpdatedAt",
           "activityUpdatedAt",
           "metrics",
-          "activity"
+          "activity",
+          "hostStatus"
         ]
       },
       "MonitoringHistory": {

@@ -220,12 +220,12 @@ func (b *Bot) Register(ctx context.Context) error {
 		{"name": "demander-livre", "description": "Choisir et confirmer une édition dans Shelfmark", "type": 1, "options": []map[string]any{
 			{"name": "recherche", "description": "Titre, auteur ou ISBN à rechercher dans Shelfmark", "type": 3, "required": true, "min_length": 1, "max_length": 200},
 		}},
-		{"name": "suivre", "description": "Suivre la disponibilité d’un film ou d’une série", "type": 1, "options": []map[string]any{
+		{"name": "suivre", "description": "Ajouter un suivi distinct de vos demandes Seerr (ancien parcours)", "type": 1, "options": []map[string]any{
 			{"name": "type", "description": "Film ou série", "type": 3, "required": true, "choices": []map[string]any{{"name": "Film", "value": "movie"}, {"name": "Série", "value": "tv"}}},
 			{"name": "tmdb-id", "description": "Identifiant numérique du titre sur TMDB", "type": 4, "required": true, "min_value": 1, "max_value": 2147483647},
 			{"name": "season", "description": "Numéro de saison pour une série (0 = épisodes spéciaux)", "type": 4, "min_value": 0, "max_value": 10000},
 		}},
-		{"name": "mes-suivis", "description": "Consulter vos suivis personnels", "type": 1, "options": []map[string]any{
+		{"name": "mes-suivis", "description": "Retrouver automatiquement les films et séries demandés sur Seerr", "type": 1, "options": []map[string]any{
 			{"name": "page", "description": "Page à consulter", "type": 4, "min_value": 1, "max_value": 1001},
 		}},
 	}

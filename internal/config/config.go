@@ -35,6 +35,7 @@ type Config struct {
 	MonitoringEnabled                                                                       bool
 	AdminIDs                                                                                []string
 	DiscordDMsEnabled                                                                       bool
+	DiscordNotificationChannelID                                                            string
 	Services                                                                                []Service
 }
 
@@ -77,6 +78,7 @@ func Load() (Config, error) {
 	c.DownloadarrURL = strings.TrimRight(os.Getenv("DOWNLOADARR_URL"), "/")
 	c.DownloadarrRevision = os.Getenv("DOWNLOADARR_REVISION")
 	c.MetricsFile = os.Getenv("METRICS_FILE")
+	c.DiscordNotificationChannelID = os.Getenv("DISCORD_NOTIFICATION_CHANNEL_ID")
 	c.RadarrURL = strings.TrimRight(os.Getenv("RADARR_URL"), "/")
 	c.SonarrURL = strings.TrimRight(os.Getenv("SONARR_URL"), "/")
 	c.CommunityFeedFile = os.Getenv("COMMUNITY_FEED_FILE")
@@ -121,13 +123,16 @@ func Load() (Config, error) {
 	if c.CommunityFeedFile != "" && !filepath.IsAbs(c.CommunityFeedFile) {
 		return c, errors.New("COMMUNITY_FEED_FILE requires an absolute path")
 	}
-	c.MonitoringEnabled, err = strconv.ParseBool(fallback("MONITORING_ENABLED", "false"))
+	c.MonitoringEnabled, err = strconv.ParseBool(fallback("MONITORING_ENABLED", strconv.FormatBool(c.MetricsFile != "" || (c.TautulliURL != "" && c.TautulliAPIKey != "" && c.PlexServerID != ""))))
 	if err != nil || (c.MetricsFile != "" && !filepath.IsAbs(c.MetricsFile)) {
 		return c, errors.New("MONITORING_ENABLED requires a boolean; METRICS_FILE requires an absolute path")
 	}
 	c.DiscordDMsEnabled, err = strconv.ParseBool(fallback("DISCORD_DMS_ENABLED", "false"))
 	if err != nil || (c.DiscordDMsEnabled && c.DiscordBotToken == "") {
 		return c, errors.New("DISCORD_DMS_ENABLED requires a boolean and a bot token when enabled")
+	}
+	if c.DiscordNotificationChannelID != "" && (!Snowflake(c.DiscordNotificationChannelID) || !Snowflake(c.DiscordGuildID) || c.DiscordBotToken == "" || c.MaintainerrURL == "" || c.SeerrURL == "" || c.PlexServerID == "") {
+		return c, errors.New("DISCORD_NOTIFICATION_CHANNEL_ID requires a channel ID, guild, bot token, Maintainerr, Seerr and Plex server")
 	}
 	if !ValidURL(c.PublicOrigin, true) {
 		return c, errors.New("PUBLIC_ORIGIN must be an absolute origin")

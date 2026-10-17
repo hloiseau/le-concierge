@@ -39,7 +39,7 @@ func TestMonitoringFreshnessUnknownAndPrivacy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Metrics["cpu_percent"].Value == nil || *got.Metrics["cpu_percent"].Value != 0 || got.Metrics["gpu_video_percent"].Value != nil || got.Metrics["gpu_video_percent"].Status != "unavailable" {
+	if got.HostStatus != "available" || got.Metrics["cpu_percent"].Value == nil || *got.Metrics["cpu_percent"].Value != 0 || got.Metrics["gpu_video_percent"].Value != nil || got.Metrics["gpu_video_percent"].Status != "unavailable" {
 		t.Fatal("zero and unsupported conflated")
 	}
 	if got.ExpiresAt.After(now.Add(21 * time.Second)) {
@@ -52,7 +52,7 @@ func TestMonitoringFreshnessUnknownAndPrivacy(t *testing.T) {
 	writeHost(t, path, hostFixture(now.Add(-3*time.Minute)))
 	service = New(upstream.New(), nil)
 	got, err = service.Current(context.Background(), c)
-	if err != nil || got.Metrics["cpu_percent"].Status != "stale" || got.Metrics["cpu_percent"].Value != nil || len(got.HostDetails) != 0 {
+	if err != nil || got.HostStatus != "stale" || got.Metrics["cpu_percent"].Status != "stale" || got.Metrics["cpu_percent"].Value != nil || len(got.HostDetails) != 0 {
 		t.Fatal("stale data retained")
 	}
 	if err = os.WriteFile(path, []byte("{invalid"), 0600); err != nil {
@@ -60,12 +60,12 @@ func TestMonitoringFreshnessUnknownAndPrivacy(t *testing.T) {
 	}
 	service = New(upstream.New(), nil)
 	got, err = service.Current(context.Background(), c)
-	if err != nil || got.Metrics["cpu_percent"].Status != "error" {
+	if err != nil || got.HostStatus != "error" || got.Metrics["cpu_percent"].Status != "error" {
 		t.Fatal("malformed source not error")
 	}
 	c.MetricsFile = ""
 	got, err = service.Current(context.Background(), c)
-	if err != nil || got.Metrics["cpu_percent"].Status != "unavailable" {
+	if err != nil || got.HostStatus != "not_configured" || got.Metrics["cpu_percent"].Status != "unavailable" {
 		t.Fatal("configuration change reused cache")
 	}
 	c.MonitoringEnabled = false
