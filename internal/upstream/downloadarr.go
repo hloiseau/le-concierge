@@ -86,6 +86,8 @@ var downloadarrRevision = regexp.MustCompile(`^[a-f0-9]{40}$`)
 var downloadarrID = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)
 var downloadarrNumber = regexp.MustCompile(`^[1-9][0-9]{0,18}$`)
 var downloadarrSelection = regexp.MustCompile(`^(plex|none|stream:[1-9][0-9]{0,15}|match:[A-Za-z0-9_-]+)$`)
+var downloadarrPlexClient = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,200}$`)
+var downloadarrPlexCode = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 
 func validDownloadSelection(value string) bool {
 	return len(value) <= 1506 && downloadarrSelection.MatchString(value)
@@ -232,21 +234,69 @@ func (c *Client) DownloadarrStart(ctx context.Context, base string) (Downloadarr
 	if _, err = c.downloadarrJSON(ctx, "POST", target, "", struct{}{}, &raw, 200); err != nil {
 		return DownloadarrPin{}, err
 	}
-	u, err := url.Parse(raw.URL)
-	if err != nil || len(raw.URL) > 4096 || u.Scheme != "https" || u.Host != "app.plex.tv" || u.Path != "/auth" ||
-		u.User != nil || u.RawQuery != "" || !strings.HasPrefix(u.Fragment, "?") || !downloadarrHex.MatchString(raw.FlowID) {
-		return DownloadarrPin{}, downloadarrInvalid()
-	}
-	query, err := url.ParseQuery(strings.TrimPrefix(u.Fragment, "?"))
-	if err != nil || len(query) != 3 || len(query["clientID"]) != 1 || len(query["code"]) != 1 ||
-		query.Get("clientID") == "" || query.Get("code") == "" || len(query["context[device][product]"]) != 1 ||
-		query.Get("context[device][product]") != "LibraryDownloadarr" {
+	if _, _, err := downloadarrPlexPin(raw.URL); err != nil || !downloadarrHex.MatchString(raw.FlowID) {
 		return DownloadarrPin{}, downloadarrInvalid()
 	}
 	// The fork stores a five-minute deadline but does not return it; start locally
 	// before the request so this conservative deadline never extends that flow.
 	return DownloadarrPin{URL: raw.URL, FlowID: raw.FlowID, ExpiresAt: started.Add(5 * time.Minute)}, nil
 }
+
+func downloadarrPlexPin(raw string) (clientID, code string, err error) {
+	u, err := url.Parse(raw)
+	if err != nil || len(raw) > 4096 || u.Scheme != "https" || u.Host != "app.plex.tv" || u.Path != "/auth" ||
+		u.RawPath != "" || u.Opaque != "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || !strings.HasPrefix(u.Fragment, "?") {
+		return "", "", downloadarrInvalid()
+	}
+	query, err := url.ParseQuery(strings.TrimPrefix(u.Fragment, "?"))
+	if err != nil || len(query) != 3 || len(query["clientID"]) != 1 || len(query["code"]) != 1 ||
+		!downloadarrPlexClient.MatchString(query.Get("clientID")) || !downloadarrPlexCode.MatchString(query.Get("code")) || len(query["context[device][product]"]) != 1 ||
+		query.Get("context[device][product]") != "LibraryDownloadarr" {
+		return "", "", downloadarrInvalid()
+	}
+	return query.Get("clientID"), query.Get("code"), nil
+}
+
+// Claim Downloadarr's fresh PIN with the current account, exactly as Plex's auth
+// app does. The account credential goes only to Plex, never to Downloadarr.
+func (c *Client) DownloadarrAuthorize(ctx context.Context, pin DownloadarrPin, plex Grant) error {
+	clientID, code, err := downloadarrPlexPin(pin.URL)
+	if err != nil || !downloadarrHex.MatchString(pin.FlowID) {
+		return downloadarrInvalid()
+	}
+	if !time.Now().Before(pin.ExpiresAt) || !time.Now().Before(plex.ExpiresAt) || plex.AccountToken == "" || len(plex.AccountToken) > 8192 ||
+		strings.IndexFunc(plex.AccountToken, func(r rune) bool { return r < 33 || r > 126 }) >= 0 {
+		return &DownloadarrError{Status: 401, Code: "unauthenticated"}
+	}
+	expires := pin.ExpiresAt
+	if plex.ExpiresAt.Before(expires) {
+		expires = plex.ExpiresAt
+	}
+	ctx, cancel := context.WithDeadline(ctx, expires)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, "https://plex.tv/api/v2/pins/link", strings.NewReader(url.Values{"code": {code}}.Encode()))
+	if err != nil {
+		return downloadarrInputError()
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Plex-Product", "LibraryDownloadarr")
+	req.Header.Set("X-Plex-Client-Identifier", clientID)
+	req.Header.Set("X-Plex-Token", plex.AccountToken)
+	resp, err := c.downloadarrClient(false).Do(req)
+	if err != nil {
+		return &DownloadarrError{Status: 503, Code: "unavailable"}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return downloadarrFailure(resp)
+	}
+	if n, err := io.Copy(io.Discard, io.LimitReader(resp.Body, 2*1024*1024+1)); err != nil || n > 2*1024*1024 {
+		return downloadarrInvalid()
+	}
+	return nil
+}
+
 func (c *Client) DownloadarrAuthenticate(ctx context.Context, base, flowID string) (string, bool, error) {
 	if !downloadarrHex.MatchString(flowID) {
 		return "", false, downloadarrInputError()

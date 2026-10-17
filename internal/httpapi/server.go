@@ -285,6 +285,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/downloads", s.downloadarrJobs)
 	m.HandleFunc("POST /api/v1/downloads", s.downloadarrCreate)
 	m.HandleFunc("GET /api/v1/downloads/options", s.downloadarrOptions)
+	m.HandleFunc("GET /api/v1/downloads/library", s.downloadsLibrary)
 	m.HandleFunc("DELETE /api/v1/downloads/{id}", s.downloadarrCancel)
 	m.HandleFunc("POST /api/v1/downloads/{id}/file", s.downloadarrFile)
 	m.HandleFunc("GET /api/v1/monitoring", s.getMonitoring)
@@ -326,7 +327,7 @@ func (s *Server) Handler() http.Handler {
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, map[string]any{
-		"version": "0.7.0", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
+		"version": "0.8.0", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
 		"requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(),
 		"subscriptions": s.subscriptionsEnabled(), "subscriptionNotifications": s.subscriptionsEnabled(),
 		"notifications":     s.departuresEnabled() || s.subscriptionsEnabled(),

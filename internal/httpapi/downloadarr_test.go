@@ -45,6 +45,12 @@ func downloadarrAPIFixture(t *testing.T) (*Server, string) {
 		if r.Header.Get("Cookie") != "" || strings.Contains(r.URL.RawQuery, "account-") || r.Header.Get("X-Api-Key") != "" {
 			t.Error("foreign credential reached Downloadarr")
 		}
+		if r.URL.Host == "plex.tv" && r.URL.Path == "/api/v2/pins/link" {
+			if r.Method != "PUT" || r.Header.Get("X-Plex-Token") != "account-11111" || r.Header.Get("X-Plex-Client-Identifier") != "downloadarr-fixture" || r.Header.Get("X-Plex-Product") != "LibraryDownloadarr" || r.ParseForm() != nil || r.PostForm.Get("code") != "fixture-strong-pin" || len(r.PostForm) != 1 {
+				t.Error("PIN must use the current personal account only at Plex")
+			}
+			return response(204, ""), nil
+		}
 		if r.URL.Host == "plex.test" {
 			if r.URL.Path == "/identity" {
 				return response(200, `{"MediaContainer":{"machineIdentifier":"server-a"}}`), nil
@@ -70,7 +76,7 @@ func downloadarrAPIFixture(t *testing.T) (*Server, string) {
 			if r.Method != "POST" {
 				t.Error("wrong PIN method")
 			}
-			return downloadarrFixtureJSON(200, map[string]string{"flowId": strings.Repeat("a", 64), "url": "https://app.plex.tv/auth#?clientID=downloadarr-fixture&code=PIN&context%5Bdevice%5D%5Bproduct%5D=LibraryDownloadarr"}), nil
+			return downloadarrFixtureJSON(200, map[string]string{"flowId": strings.Repeat("a", 64), "url": "https://app.plex.tv/auth#?clientID=downloadarr-fixture&code=fixture-strong-pin&context%5Bdevice%5D%5Bproduct%5D=LibraryDownloadarr"}), nil
 		case "/api/auth/plex/authenticate":
 			var body map[string]string
 			if json.NewDecoder(r.Body).Decode(&body) != nil || len(body) != 1 || body["flowId"] != strings.Repeat("a", 64) {
@@ -127,7 +133,7 @@ func linkDownloadarrFixture(t *testing.T, s *Server, cookie string) {
 		if path == "/api/v1/downloads/link/poll" && !strings.Contains(w.Body.String(), `"linked":true`) {
 			t.Fatal("link incomplete")
 		}
-		for _, secret := range []string{strings.Repeat("a", 64), strings.Repeat("b", 64), "account-11111", "resource-11111"} {
+		for _, secret := range []string{strings.Repeat("a", 64), strings.Repeat("b", 64), "account-11111", "resource-11111", "fixture-strong-pin", "https://app.plex.tv"} {
 			if strings.Contains(w.Body.String(), secret) {
 				t.Fatal("link disclosed credentials")
 			}
@@ -158,6 +164,33 @@ func TestDownloadarrHTTPPersonalLifecycle(t *testing.T) {
 	}
 	if w := call(s, "GET", "/api/v1/downloads", cookie, "", ""); w.Code != 403 {
 		t.Fatal("read after unlink")
+	}
+}
+
+func TestDownloadarrHTTPAuthorizationFailureDiscardsPendingAccess(t *testing.T) {
+	for _, status := range []int{401, 403, 429, 500} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			s, cookie := downloadarrAPIFixture(t)
+			original := s.Upstream.HTTP.Transport
+			authorizations, authentications := 0, 0
+			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host == "plex.tv" && r.URL.Path == "/api/v2/pins/link" {
+					authorizations++
+					return response(status, "private-account-token"), nil
+				}
+				if r.URL.Path == "/api/auth/plex/authenticate" {
+					authentications++
+				}
+				return original.RoundTrip(r)
+			})
+			w := call(s, "POST", "/api/v1/downloads/link", cookie, s.Config.PublicOrigin, "")
+			if w.Code < 400 || strings.Contains(w.Body.String(), "private-account-token") || authorizations != 1 || authentications != 0 {
+				t.Fatalf("failed authorization accepted, retried or disclosed: %d %s", w.Code, w.Body)
+			}
+			if _, ok := s.currentDownloadarrGrant(digest(cookie), "11111"); ok {
+				t.Fatal("failed authorization retained a pending grant")
+			}
+		})
 	}
 }
 
@@ -300,11 +333,11 @@ func TestDownloadarrHTTPContractIdentityVersionAndExpiry(t *testing.T) {
 }
 
 func TestDownloadarrHTTPLateResponsesCannotRestoreOrExposeRevokedGrant(t *testing.T) {
-	for _, phase := range []string{"pin", "poll", "list", "create", "options", "file"} {
+	for _, phase := range []string{"pin", "authorize", "poll", "list", "create", "options", "file"} {
 		for _, action := range []string{"unlink", "logout"} {
 			t.Run(phase+"/"+action, func(t *testing.T) {
 				s, cookie := downloadarrAPIFixture(t)
-				if phase != "pin" {
+				if phase != "pin" && phase != "authorize" {
 					if phase == "poll" {
 						call(s, "POST", "/api/v1/downloads/link", cookie, s.Config.PublicOrigin, "")
 					} else {
@@ -313,7 +346,7 @@ func TestDownloadarrHTTPLateResponsesCannotRestoreOrExposeRevokedGrant(t *testin
 				}
 				original := s.Upstream.HTTP.Transport
 				changed := false
-				path := map[string]string{"pin": "/api/auth/plex/pin", "poll": "/api/auth/plex/authenticate", "list": "/api/downloads", "create": "/api/downloads", "options": "/library/metadata/12", "file": "/api/downloads/" + downloadarrJobID + "/file"}[phase]
+				path := map[string]string{"pin": "/api/auth/plex/pin", "authorize": "/api/v2/pins/link", "poll": "/api/auth/plex/authenticate", "list": "/api/downloads", "create": "/api/downloads", "options": "/library/metadata/12", "file": "/api/downloads/" + downloadarrJobID + "/file"}[phase]
 				s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 					out, err := original.RoundTrip(r)
 					if !changed && r.URL.Path == path {
@@ -330,7 +363,7 @@ func TestDownloadarrHTTPLateResponsesCannotRestoreOrExposeRevokedGrant(t *testin
 				})
 				method, route, body := "GET", "/api/v1/downloads", ""
 				switch phase {
-				case "pin":
+				case "pin", "authorize":
 					method, route = "POST", "/api/v1/downloads/link"
 				case "poll":
 					method, route = "POST", "/api/v1/downloads/link/poll"

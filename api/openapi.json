@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -1731,7 +1731,7 @@
         }
       },
       "post": {
-        "operationId": "startDownloadarrLogin",
+        "operationId": "connectDownloadarr",
         "security": [
           {
             "sessionCookie": []
@@ -1753,13 +1753,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DownloadarrLogin"
+                  "$ref": "#/components/schemas/DownloadarrLinkStatus"
                 }
               }
             }
           }
         },
-        "description": "Current owner and Hub session only; matching Origin required. Bearers and source tickets remain server-side."
+        "description": "Connect the current Hub member to Downloadarr using the existing personal Plex authorization. No second browser login or credential is returned. A pending connection may be completed with the poll endpoint."
       },
       "delete": {
         "operationId": "unlinkDownloadarr",
@@ -2058,6 +2058,70 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/downloads/library": {
+      "get": {
+        "operationId": "getDownloadLibrary",
+        "description": "Search the configured Plex server by title with the current Hub member token, or browse children of a show or season. Supply exactly one of q and parent. A Downloadarr connection is not required. Responses expire within 30 seconds and follow the current Hub session lifetime. No playback or conversion is started.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Title search; mutually exclusive with parent. Trimmed, with no control characters.",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "parent",
+            "in": "query",
+            "description": "Personal Plex show or season rating key; mutually exclusive with q.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One personal page of films/shows, seasons, or episodes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadLibraryPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Private error; no stale library results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -4826,24 +4890,6 @@
           "linked"
         ]
       },
-      "DownloadarrLogin": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "url",
-          "expiresAt"
-        ]
-      },
       "DownloadStreamOption": {
         "type": "object",
         "additionalProperties": false,
@@ -5087,6 +5133,83 @@
           "checkedAt",
           "expiresAt"
         ]
+      },
+      "DownloadLibraryItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ratingKey",
+          "title",
+          "type"
+        ],
+        "properties": {
+          "ratingKey": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "movie",
+              "show",
+              "season",
+              "episode"
+            ]
+          },
+          "year": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9999
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "parentTitle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        }
+      },
+      "DownloadLibraryPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "nextOffset",
+          "checkedAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/DownloadLibraryItem"
+            }
+          },
+          "nextOffset": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     }
   }

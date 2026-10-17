@@ -6,13 +6,27 @@ Les dépendances sont des liens vers les issues des deux dépôts. Les référen
 
 ## Avancement au 17 octobre 2026
 
-Les changements sont proposés dans [Concierge #40](https://github.com/hloiseau/le-concierge/pull/40) et [Hub #29](https://github.com/hloiseau/le-hub/pull/29). Les tests utilisent des fournisseurs simulés ; les audits épinglent le code amont sans prétendre identifier toutes les images installées. Les cases de recette sur les vrais services restent ouvertes.
+Les changements de [Concierge #40](https://github.com/hloiseau/le-concierge/pull/40), [Hub #29](https://github.com/hloiseau/le-hub/pull/29) et [Downloadarr #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1) sont fusionnés. Les images `edge` du Concierge/Hub et `quality-preview` de Downloadarr ont été publiées ; l’administrateur confirme leur installation et le fonctionnement du parcours Downloadarr. Les tests automatisés utilisent des fournisseurs simulés : cette confirmation ne valide pas les autres intégrations ni l’isolation avec deux comptes réels.
+
+### Ce qui est utilisable et ce qui reste incomplet
+
+| Parcours livré | Configuration nécessaire | Limite actuelle |
+| --- | --- | --- |
+| Nouveautés Plex et demandes personnelles | Plex et Seerr | La création de demandes reste dans Seerr. |
+| Suivis et alertes de disponibilité | Plex, Seerr ; Discord facultatif | Le formulaire demande encore un identifiant TMDB. |
+| Rappels avant retrait et demandes de délai | Maintainerr, Tautulli, Plex ; consentement aux rappels | Une réponse à une demande de délai ne modifie pas Maintainerr. |
+| Catalogue, couvertures et collections de livres | Connexion OPDS Grimmory personnelle | Pas de détection fiable des tomes manquants ni de synchronisation Kobo intégrée. |
+| Suivi des demandes de livres | Connexion personnelle Shelfmark en mode builtin | Création dans Shelfmark ; import Grimmory non vérifié. |
+| Performances et historiques | Collecteur système et/ou Tautulli | Capteurs du NAS encore à vérifier sur le matériel réel. |
+| Communauté et roadmap | Sélection et exporteur à configurer | Discussions et votes restent dans Discord. |
+
+Ces fonctions sont présentes dans le code publié ; leur présence ne prouve pas que les services correspondants sont configurés sur l’installation. Le détail et les critères encore ouverts suivent.
 
 | Tickets | Implémentation | Vérification externe restante |
 | --- | --- | --- |
 | C02–C04, H01/H04/H06 | OpenAPI 0.7 synchronisé, types générés, sessions Plex privées et Discord facultatif, migration SQLite v5, effacement des associations en mémoire à la déconnexion/révocation. | Recette à deux comptes et sauvegarde/restauration sur le NAS. |
 | C05–C09, H02/H03/H05 | Demandes Seerr personnelles, pagination Hub/bot, nouveautés Plex paginées et dates vérifiées. Les derniers livres de l’accueil utilisent le flux OPDS récent personnel. | Commandes réenregistrées et accès réels aux bibliothèques distinctes. |
-| C10, H07 | CI Go/typecheck/Playwright/contrat/images et exemples TrueNAS/Caddy ; CLI de sauvegarde, collecteur Python testé en CI, sondes privées. | Publication des nouvelles images après fusion et recette NAS ; rien déployé par ce lot. |
+| C10, H07 | CI Go/typecheck/Playwright/contrat/images et exemples TrueNAS/Caddy ; CLI de sauvegarde, collecteur Python testé en CI, sondes privées. | Images publiées et installation confirmée par l’administrateur ; recette des autres services encore ouverte. |
 | C25/C26, H16 | Sources Maintainerr/Tautulli vérifiées, demandes/suivis et saisons ciblées, état Plex positif « non vu », lectures commencées, option tous non vus, boîte Hub et DM sur consentement. File durable, revalidation finale, plafond commun, demandes de délai. Relance tardive des demandes sur option distincte, sans fausse échéance de retrait. | DM réel consenti, report/retrait et révocation avec les versions installées. Voir [les rappels](removal-reminders.md). |
 | C19/C20, H06 | Suivis films/séries/saisons, choix de canal, polling borné, disponibilité jouable vérifiée par Plex, déduplication des demandes personnelles Seerr, boîte et DM. | Réception réelle ; reprise seulement après reconnexion Plex puisque les jetons restent en mémoire. |
 | C11–C13, H08/H09 | Contrats Grimmory v3.5.0 et Shelfmark v1.4.0 audités, catalogue/couvertures OPDS privés, recherche Shelfmark préremplie, `/livres` et `/demander-livre`. | Versions installées, droits et réponses anonymisées de deux vrais comptes. Voir [les contrats](books-contracts.md). |
@@ -21,7 +35,7 @@ Les changements sont proposés dans [Concierge #40](https://github.com/hloiseau/
 | C16–C18, H11/H12 | Collecteur isolé CPU/RAM/Intel/disque/réseau/stockage, valeurs absentes distinctes de zéro, historique agrégé sept jours, dashboard accessible et détails Plex/hôte réservés aux admins. | Accès matériel et versions TrueNAS/Intel Arc réelles à vérifier ; pas de privilège ni collecte activés sur le NAS. Voir [le monitoring](monitoring.md). |
 | C21/C22 | `/surprise`, `/recap`, diagnostics admin Seerr→Radarr/Sonarr en lecture seule, distinction HD/4K et indices nettoyés. | Recette avec les versions/instances Arr installées ; aucune action de réparation automatique. Voir [les diagnostics](diagnostics.md). |
 | C23, H13/H14 | Publication sélectionnée des fils Discord et d’issues, identifiants stables, statuts explicites, TTL, retrait des éléments non autorisés ; votes uniquement dans Discord. Exporteur périodique en lecture seule. | Configurer le manifeste et les droits publics réels ; jamais exporter les corps d’issues privées. Voir [la publication](community-publication.md). |
-| C24, H15 | Contrat personnel publié dans la [PR amont #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1), client Go, connexion personnelle Hub, choix et confirmation, jobs et transfert MP4/ZIP diffusé sans ticket navigateur. | Désactivé par défaut : installer une image compatible puis configurer sa révision exacte. Recette à deux comptes et transfert réel sur NAS encore nécessaires. Voir [le parcours](downloadarr.md). |
+| C24, H15 | Contrat personnel fusionné dans la [PR amont #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1), client Go, connexion personnelle Hub, choix et confirmation, jobs et transfert MP4/ZIP diffusé sans ticket navigateur. Fonctionnement confirmé par l’administrateur. La version 0.8 ajoute recherche Plex et connexion automatique avec le compte courant. | Recette à deux comptes et transfert long encore à vérifier ; nouveau sélecteur et connexion automatique à valider après mise à jour. Voir [le parcours](downloadarr.md). |
 
 Sauvegarder la base avant migration v5. Les nouveaux consentements restent désactivés ; les anciens réglages et livraisons sont conservés. Un retour à un ancien binaire exige aussi la restauration de sa base compatible. Les sessions et autorisations restent en mémoire, au plus douze heures ; après redémarrage les traitements personnels reprennent à la prochaine connexion. Les historiques techniques sont conservés sept jours, les rappels quatre-vingt-dix jours après expiration. Voir [le déploiement](deployment.md).
 

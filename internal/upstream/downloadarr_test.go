@@ -42,7 +42,7 @@ func TestDownloadarrPersonalWorkflow(t *testing.T) {
 	var called []string
 	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = append(called, r.Method+" "+r.URL.Path)
-		if r.Header.Get("Cookie") != "" || strings.Contains(r.URL.RawQuery, downloadarrTestToken) {
+		if r.Header.Get("Cookie") != "" || r.Header.Get("X-Plex-Token") != "" || strings.Contains(r.URL.RawQuery, downloadarrTestToken) {
 			t.Error("credential in cookie/query")
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -51,7 +51,7 @@ func TestDownloadarrPersonalWorkflow(t *testing.T) {
 			if r.Method != "POST" || r.Header.Get("Authorization") != "" {
 				t.Error("pin authentication")
 			}
-			json.NewEncoder(w).Encode(map[string]any{"flowId": downloadarrTestToken, "id": 1, "code": "fixture", "url": "https://app.plex.tv/auth#?clientID=fixture&code=fixture&context%5Bdevice%5D%5Bproduct%5D=LibraryDownloadarr"})
+			json.NewEncoder(w).Encode(map[string]any{"flowId": downloadarrTestToken, "id": 1, "code": "fixture-strong-pin", "url": "https://app.plex.tv/auth#?clientID=fixture&code=fixture-strong-pin&context%5Bdevice%5D%5Bproduct%5D=LibraryDownloadarr"})
 		case "/prefix/api/auth/plex/authenticate":
 			var body map[string]string
 			json.NewDecoder(r.Body).Decode(&body)
@@ -115,6 +115,18 @@ func TestDownloadarrPersonalWorkflow(t *testing.T) {
 	c.HTTP.Jar, _ = cookiejar.New(nil)
 	u, _ := url.Parse(source.URL)
 	c.HTTP.Jar.SetCookies(u, []*http.Cookie{{Name: "admin", Value: "not-forwarded"}})
+	plexCalls := 0
+	c.HTTP.Transport = downloadarrRoundTrip(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Host != "plex.tv" {
+			return http.DefaultTransport.RoundTrip(r)
+		}
+		plexCalls++
+		if r.URL.String() != "https://plex.tv/api/v2/pins/link" || r.Header.Get("X-Plex-Token") != "personal-account" ||
+			r.Method != "PUT" || r.Header.Get("X-Plex-Client-Identifier") != "fixture" || r.Header.Get("X-Plex-Product") != "LibraryDownloadarr" {
+			t.Fatal("PIN claim used the wrong account, application or target")
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	})
 	base := source.URL + "/prefix/"
 	before := time.Now()
 	pin, err := c.DownloadarrStart(ctx, base)
@@ -124,6 +136,9 @@ func TestDownloadarrPersonalWorkflow(t *testing.T) {
 	serialized, _ := json.Marshal(pin)
 	if strings.Contains(string(serialized), downloadarrTestToken) {
 		t.Fatal("flow serialized")
+	}
+	if err := c.DownloadarrAuthorize(ctx, pin, Grant{AccountToken: "personal-account", ExpiresAt: time.Now().Add(time.Hour)}); err != nil || plexCalls != 1 {
+		t.Fatalf("authorize: %v, requests %d", err, plexCalls)
 	}
 	if token, pending, err := c.DownloadarrAuthenticate(ctx, base, pin.FlowID); err != nil || !pending || token != "" {
 		t.Fatalf("pending: %v %v", pending, err)
