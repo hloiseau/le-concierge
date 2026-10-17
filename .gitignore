@@ -10,6 +10,8 @@ node_modules/
 .nuxt/
 .output/
 coverage/
+.cache/
 dist/
 bin/
+__pycache__/
 .DS_Store

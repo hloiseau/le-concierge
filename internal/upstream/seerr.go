@@ -32,6 +32,8 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 	if user <= 0 {
 		return out, ErrDenied
 	}
+	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
 	var data struct {
 		PageInfo struct {
 			Results int `json:"results"`
@@ -40,13 +42,15 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 			ID          int64  `json:"id"`
 			Type        string `json:"type"`
 			Status      int    `json:"status"`
+			Is4k        bool   `json:"is4k"`
 			CreatedAt   string `json:"createdAt"`
 			RequestedBy struct {
 				ID int64 `json:"id"`
 			} `json:"requestedBy"`
 			Media struct {
-				TmdbID int64 `json:"tmdbId"`
-				Status int   `json:"status"`
+				TmdbID   int64 `json:"tmdbId"`
+				Status   int   `json:"status"`
+				Status4k int   `json:"status4k"`
 			} `json:"media"`
 			Seasons []struct {
 				Number int `json:"seasonNumber"`
@@ -57,6 +61,9 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 	endpoint := fmt.Sprintf("%s/api/v1/user/%d/requests?take=10&skip=%d", base, user, offset)
 	if e := c.JSON(ctx, "GET", endpoint, headers, "", &data); e != nil {
 		return out, e
+	}
+	if len(data.Results) > out.Limit || data.PageInfo.Results < 0 {
+		return RequestPage{}, ErrUnavailable
 	}
 	out.Total = data.PageInfo.Results
 	for _, r := range data.Results {
@@ -91,9 +98,15 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 			status = "approved"
 		case 3:
 			status = "declined"
+		case 4:
+			status = "error"
 		}
-		if r.Status != 3 {
-			switch r.Media.Status {
+		if r.Status != 3 && r.Status != 4 {
+			mediaStatus := r.Media.Status
+			if r.Is4k {
+				mediaStatus = r.Media.Status4k
+			}
+			switch mediaStatus {
 			case 3:
 				status = "processing"
 			case 4:
@@ -106,7 +119,11 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 		for _, s := range r.Seasons {
 			seasons = append(seasons, s.Number)
 		}
-		out.Items = append(out.Items, Request{ID: r.ID, Title: title, Type: kind, Status: status, CreatedAt: r.CreatedAt, MediaID: r.Media.TmdbID, Seasons: seasons})
+		createdAt := ""
+		if date, err := time.Parse(time.RFC3339Nano, r.CreatedAt); err == nil {
+			createdAt = date.UTC().Format(time.RFC3339Nano)
+		}
+		out.Items = append(out.Items, Request{ID: r.ID, Title: title, Type: kind, Status: status, CreatedAt: createdAt, MediaID: r.Media.TmdbID, Seasons: seasons})
 	}
 	return out, nil
 }

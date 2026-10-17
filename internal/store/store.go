@@ -61,7 +61,7 @@ func Open(path string) (*Store, error) {
 		tx.Rollback()
 		return fail(e)
 	}
-	if version > 2 {
+	if version > 5 {
 		tx.Rollback()
 		return fail(errors.New("database schema is newer than this binary; restore a compatible backup"))
 	}
@@ -77,6 +77,24 @@ INSERT INTO users_v2(id,discord_id,name,plex_id,seerr_id,notifications,created_a
 DROP TABLE users;
 ALTER TABLE users_v2 RENAME TO users;
 INSERT INTO schema_migrations(version) VALUES(2);`); e != nil {
+			tx.Rollback()
+			return fail(e)
+		}
+	}
+	if version < 3 {
+		if _, e = tx.Exec(remindersSchema); e != nil {
+			tx.Rollback()
+			return fail(e)
+		}
+	}
+	if version < 4 {
+		if _, e = tx.Exec(subscriptionsSchema + notificationDeliverySchema + extensionRequestsSchema + `INSERT INTO schema_migrations(version) VALUES(4);`); e != nil {
+			tx.Rollback()
+			return fail(e)
+		}
+	}
+	if version < 5 {
+		if _, e = tx.Exec(availabilityDeliverySchema + metricsSchema + availableRequestRemindersSchema + `INSERT INTO schema_migrations(version) VALUES(5);`); e != nil {
 			tx.Rollback()
 			return fail(e)
 		}
@@ -156,6 +174,23 @@ func (s *Store) LinkDiscord(ctx context.Context, id, plex, discord string) (stri
 	if oldID != "" && oldID != id {
 		if oldPlex != "" {
 			return "", errors.New("Discord identity belongs to another Plex account")
+		}
+		// Keep the legacy account's reminder settings and history when linking it.
+		if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO reminder_preferences(user_id,days_before,quiet_start,quiet_end,daily_cap,all_unwatched)
+SELECT ?,days_before,quiet_start,quiet_end,daily_cap,all_unwatched FROM reminder_preferences WHERE user_id=?`, id, oldID); err != nil {
+			return "", err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE OR IGNORE reminder_outbox SET user_id=? WHERE user_id=?`, id, oldID); err != nil {
+			return "", err
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO reminder_deliveries(user_id,local_day,delivered_at) SELECT ?,local_day,delivered_at FROM reminder_deliveries WHERE user_id=?`, id, oldID); err != nil {
+			return "", err
+		}
+		if err = mergeSubscriptions(ctx, tx, id, oldID); err != nil {
+			return "", err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE OR IGNORE extension_requests SET user_id=? WHERE user_id=?`, id, oldID); err != nil {
+			return "", err
 		}
 		if _, err = tx.ExecContext(ctx, `DELETE FROM users WHERE id=?`, oldID); err != nil {
 			return "", err

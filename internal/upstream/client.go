@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,7 +15,11 @@ var ErrDenied = errors.New("upstream access denied")
 var ErrUnavailable = errors.New("upstream unavailable")
 var ErrNotFound = errors.New("upstream item not found")
 
-type Client struct{ HTTP *http.Client }
+type Client struct {
+	HTTP        *http.Client
+	recentMu    sync.Mutex
+	recentCache map[[32]byte]recentCacheEntry
+}
 
 func New() *Client {
 	return &Client{HTTP: &http.Client{Timeout: 8 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}

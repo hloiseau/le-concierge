@@ -8,9 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/departures"
 	"github.com/hloiseau/le-concierge/internal/discord"
+	"github.com/hloiseau/le-concierge/internal/monitoring"
+	"github.com/hloiseau/le-concierge/internal/notifications"
 	"github.com/hloiseau/le-concierge/internal/store"
 	"github.com/hloiseau/le-concierge/internal/upstream"
 	"io"
@@ -45,22 +48,33 @@ type bucket struct {
 	Count int
 }
 type Server struct {
-	Config     config.Config
-	Store      *store.Store
-	Upstream   *upstream.Client
-	Departures *departures.Service
-	mu         sync.Mutex
-	sessions   map[string]session
-	oauth      map[string]oauthAttempt
-	pins       map[string]pendingPin
-	grants     map[string]upstream.Grant
-	limits     map[string]bucket
-	seen       map[string]time.Time
+	Config            config.Config
+	Store             *store.Store
+	Upstream          *upstream.Client
+	Departures        *departures.Service
+	Discord           *notifications.Discord
+	Monitoring        *monitoring.Service
+	mu                sync.Mutex
+	sessions          map[string]session
+	oauth             map[string]oauthAttempt
+	pins              map[string]pendingPin
+	grants            map[string]upstream.Grant
+	bookGrants        map[string]bookGrant
+	shelfmarkGrants   map[string]shelfmarkGrant
+	downloadarrGrants map[string]downloadarrGrant
+	limits            map[string]bucket
+	seen              map[string]time.Time
+	reminderGate      chan struct{}
 }
 
 func New(c config.Config, db *store.Store) *Server {
 	client := upstream.New()
-	return &Server{Config: c, Store: db, Upstream: client, Departures: departures.New(client), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}}
+	s := &Server{Config: c, Store: db, Upstream: client, Departures: departures.New(client), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}, reminderGate: make(chan struct{}, 1)}
+	if c.DiscordDMsEnabled {
+		s.Discord = notifications.NewDiscord(c.DiscordBotToken)
+	}
+	s.Monitoring = monitoring.New(client, db)
+	return s
 }
 func token() string {
 	b := make([]byte, 32)
@@ -135,6 +149,22 @@ func (s *Server) origin(w http.ResponseWriter, r *http.Request) bool {
 	}
 	return true
 }
+
+// Remote reads can outlive a logout, an account deletion or an identity change.
+func (s *Server) revalidateUser(w http.ResponseWriter, r *http.Request, key string, user store.User) bool {
+	currentKey, current, ok := s.session(r)
+	if !ok || currentKey != key || current.UserID != user.ID {
+		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Plex.")
+		return false
+	}
+	u, err := s.Store.User(r.Context(), user.ID)
+	if err != nil || u.PlexID != user.PlexID {
+		problem(w, 403, "plex_required", "Reconnectez-vous avec Plex.")
+		return false
+	}
+	_, ok = s.requireGrant(w, r, u)
+	return ok
+}
 func (s *Server) limited(w http.ResponseWriter, r *http.Request, scope string, max int) bool {
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if s.rate(scope+":"+host, max) {
@@ -184,6 +214,15 @@ func (s *Server) cleanup() {
 	for k, v := range s.grants {
 		if now.After(v.ExpiresAt) {
 			delete(s.grants, k)
+			s.clearBookGrantLocked(k)
+			s.clearShelfmarkGrantLocked(k)
+			s.clearDownloadarrGrantLocked(k)
+		}
+	}
+	for userID, g := range s.downloadarrGrants {
+		sess, exists := s.sessions[g.SessionKey]
+		if !now.Before(g.ExpiresAt) || g.Context.Err() != nil || !exists || sess.UserID != userID || !now.Before(sess.Expires) {
+			s.clearDownloadarrGrantLocked(userID)
 		}
 	}
 	for k, v := range s.seen {
@@ -219,6 +258,45 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/requests", s.requests)
 	m.HandleFunc("GET /api/v1/recent", s.recent)
 	m.HandleFunc("GET /api/v1/departures", s.departures)
+	m.HandleFunc("GET /api/v1/reminders", s.reminderInbox)
+	m.HandleFunc("GET /api/v1/reminders/preferences", s.getReminderPreferences)
+	m.HandleFunc("PUT /api/v1/reminders/preferences", s.putReminderPreferences)
+	m.HandleFunc("GET /api/v1/subscriptions", s.getSubscriptions)
+	m.HandleFunc("POST /api/v1/subscriptions", s.postSubscription)
+	m.HandleFunc("DELETE /api/v1/subscriptions/{id}", s.deleteSubscription)
+	m.HandleFunc("PATCH /api/v1/subscriptions/{id}", s.patchSubscriptionChannel)
+	m.HandleFunc("GET /api/v1/subscriptions/notifications", s.availabilityInbox)
+	m.HandleFunc("GET /api/v1/books/link", s.booksLink)
+	m.HandleFunc("POST /api/v1/books/link", s.booksLink)
+	m.HandleFunc("DELETE /api/v1/books/link", s.booksLink)
+	m.HandleFunc("GET /api/v1/books", s.booksCatalog)
+	m.HandleFunc("GET /api/v1/books/recent", s.recentBooks)
+	m.HandleFunc("GET /api/v1/book-collections", s.bookCollections)
+	m.HandleFunc("GET /api/v1/books/{id}/cover", s.booksCover)
+	m.HandleFunc("GET /api/v1/book-requests/link", s.bookRequestLink)
+	m.HandleFunc("GET /api/v1/book-requests/link-session", s.shelfmarkLink)
+	m.HandleFunc("POST /api/v1/book-requests/link-session", s.shelfmarkLink)
+	m.HandleFunc("DELETE /api/v1/book-requests/link-session", s.shelfmarkLink)
+	m.HandleFunc("GET /api/v1/book-requests", s.shelfmarkRequests)
+	m.HandleFunc("GET /api/v1/downloads/link", s.downloadarrLink)
+	m.HandleFunc("POST /api/v1/downloads/link", s.downloadarrLink)
+	m.HandleFunc("DELETE /api/v1/downloads/link", s.downloadarrLink)
+	m.HandleFunc("POST /api/v1/downloads/link/poll", s.downloadarrPoll)
+	m.HandleFunc("GET /api/v1/downloads", s.downloadarrJobs)
+	m.HandleFunc("POST /api/v1/downloads", s.downloadarrCreate)
+	m.HandleFunc("GET /api/v1/downloads/options", s.downloadarrOptions)
+	m.HandleFunc("DELETE /api/v1/downloads/{id}", s.downloadarrCancel)
+	m.HandleFunc("POST /api/v1/downloads/{id}/file", s.downloadarrFile)
+	m.HandleFunc("GET /api/v1/monitoring", s.getMonitoring)
+	m.HandleFunc("GET /api/v1/monitoring/history", s.getMonitoringHistory)
+	m.HandleFunc("GET /api/v1/admin/plex-activity", s.adminPlexActivity)
+	m.HandleFunc("GET /api/v1/admin/diagnostics", s.adminDiagnostic)
+	m.HandleFunc("GET /api/v1/community", s.getCommunity)
+	m.HandleFunc("GET /api/v1/roadmap", s.getRoadmap)
+	m.HandleFunc("GET /api/v1/extension-requests", s.getExtensionRequests)
+	m.HandleFunc("POST /api/v1/extension-requests", s.postExtensionRequest)
+	m.HandleFunc("GET /api/v1/admin/extension-requests", s.adminExtensionRequests)
+	m.HandleFunc("PUT /api/v1/admin/extension-requests", s.reviewExtensionRequest)
 	m.HandleFunc("GET /api/v1/preferences", s.getPreferences)
 	m.HandleFunc("PUT /api/v1/preferences", s.putPreferences)
 	m.HandleFunc("POST /internal/discord", s.interaction)
@@ -234,9 +312,12 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
-		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-		defer cancel()
-		r = r.WithContext(ctx)
+		_, pattern := m.Handler(r)
+		if pattern != "POST /api/v1/downloads/{id}/file" {
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			defer cancel()
+			r = r.WithContext(ctx)
+		}
 		start := time.Now()
 		s.cleanup()
 		m.ServeHTTP(w, r)
@@ -244,7 +325,17 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
-	jsonOut(w, 200, map[string]any{"version": "0.3.0", "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "", "requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(), "subscriptions": false, "notifications": false, "books": false, "monitoring": false})
+	jsonOut(w, 200, map[string]any{
+		"version": "0.7.0", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
+		"requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(),
+		"subscriptions": s.subscriptionsEnabled(), "subscriptionNotifications": s.subscriptionsEnabled(),
+		"notifications":     s.departuresEnabled() || s.subscriptionsEnabled(),
+		"discordDMs":        s.Config.DiscordDMsEnabled && (s.departuresEnabled() || s.subscriptionsEnabled()),
+		"extensionRequests": s.extensionsEnabled(), "books": s.Config.GrimmoryURL != "", "booksCatalog": s.Config.GrimmoryURL != "", "recentBooks": s.Config.GrimmoryURL != "",
+		"bookRequests": s.bookServiceURL("shelfmark") != "", "bookRequestTracking": s.Config.ShelfmarkURL != "", "bookCollections": s.Config.GrimmoryURL != "", "monitoring": s.Config.MonitoringEnabled,
+		"community": s.Config.CommunityFeedFile != "" && len(s.Config.CommunityForumIDs) > 0,
+		"roadmap":   s.Config.CommunityFeedFile != "" && len(s.Config.RoadmapIssueIDs) > 0,
+	})
 }
 func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 	_, v, ok := s.session(r)
@@ -354,6 +445,9 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		delete(s.grants, merged)
+		s.clearBookGrantLocked(merged)
+		s.clearShelfmarkGrantLocked(merged)
+		s.clearDownloadarrGrantLocked(merged)
 	}
 	value := token()
 	delete(s.sessions, attempt.SessionKey)
@@ -375,6 +469,9 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	if ok {
 		delete(s.grants, v.UserID)
+		s.clearBookGrantLocked(v.UserID)
+		s.clearShelfmarkGrantLocked(v.UserID)
+		s.clearDownloadarrGrantLocked(v.UserID)
 	}
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
@@ -401,6 +498,9 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	delete(s.grants, u.ID)
+	s.clearBookGrantLocked(u.ID)
+	s.clearShelfmarkGrantLocked(u.ID)
+	s.clearDownloadarrGrantLocked(u.ID)
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), "", -1, false)
 	jsonOut(w, 200, map[string]bool{"ok": true})
@@ -538,6 +638,9 @@ func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 	}
 	s.sessions[digest(value)] = session{u.ID, expires}
 	g.ExpiresAt = expires
+	s.clearBookGrantLocked(u.ID)
+	s.clearShelfmarkGrantLocked(u.ID)
+	s.clearDownloadarrGrantLocked(u.ID)
 	s.grants[u.ID] = g
 	s.mu.Unlock()
 	s.cookie(w, s.cookieName(), value, 12*3600, false)
@@ -559,6 +662,9 @@ func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error
 		if errors.Is(e, upstream.ErrDenied) {
 			s.mu.Lock()
 			delete(s.grants, u.ID)
+			s.clearBookGrantLocked(u.ID)
+			s.clearShelfmarkGrantLocked(u.ID)
+			s.clearDownloadarrGrantLocked(u.ID)
 			s.mu.Unlock()
 		}
 		return upstream.Grant{}, e
@@ -620,7 +726,7 @@ func (s *Server) resolveSeerr(ctx context.Context, u store.User) (int64, error) 
 }
 
 func (s *Server) requests(w http.ResponseWriter, r *http.Request) {
-	_, u, ok := s.user(w, r)
+	key, u, ok := s.user(w, r)
 	if !ok {
 		return
 	}
@@ -653,10 +759,12 @@ func (s *Server) requests(w http.ResponseWriter, r *http.Request) {
 		problem(w, 502, "seerr_unavailable", "Les demandes ne sont pas disponibles actuellement.")
 		return
 	}
-	jsonOut(w, 200, data)
+	if s.revalidateUser(w, r, key, u) {
+		jsonOut(w, 200, data)
+	}
 }
 func (s *Server) recent(w http.ResponseWriter, r *http.Request) {
-	_, u, ok := s.user(w, r)
+	key, u, ok := s.user(w, r)
 	if !ok {
 		return
 	}
@@ -672,17 +780,20 @@ func (s *Server) recent(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_offset", "Pagination invalide.")
 		return
 	}
-	items, e := s.Upstream.Recent(r.Context(), s.Config.PlexURL, s.Config.PlexServerID, g, off)
+	page, e := s.Upstream.RecentPage(r.Context(), s.Config.PlexURL, s.Config.PlexServerID, g, off, 12)
 	if e != nil {
 		problem(w, 502, "plex_unavailable", "Les nouveautés ne sont pas disponibles actuellement.")
 		return
 	}
-	jsonOut(w, 200, map[string]any{"items": items, "offset": off, "limit": 12, "updatedAt": time.Now().UTC().Format(time.RFC3339)})
+	if !s.revalidateUser(w, r, key, u) {
+		return
+	}
+	jsonOut(w, 200, map[string]any{"items": page.Items, "offset": off, "limit": 12, "nextOffset": page.NextOffset, "updatedAt": page.UpdatedAt})
 }
 func (s *Server) getPreferences(w http.ResponseWriter, r *http.Request) {
 	_, u, ok := s.user(w, r)
 	if ok {
-		jsonOut(w, 200, map[string]any{"notifications": u.Notifications, "notificationsAvailable": false, "timezone": "Europe/Paris"})
+		jsonOut(w, 200, map[string]any{"notifications": u.Notifications, "notificationsAvailable": s.departuresEnabled() || s.subscriptionsEnabled(), "timezone": "Europe/Paris"})
 	}
 }
 func (s *Server) putPreferences(w http.ResponseWriter, r *http.Request) {
@@ -706,7 +817,7 @@ func (s *Server) putPreferences(w http.ResponseWriter, r *http.Request) {
 		problem(w, 500, "storage_error", "Enregistrement impossible.")
 		return
 	}
-	jsonOut(w, 200, map[string]any{"notifications": *p.Notifications, "notificationsAvailable": false, "timezone": "Europe/Paris"})
+	jsonOut(w, 200, map[string]any{"notifications": *p.Notifications, "notificationsAvailable": s.departuresEnabled() || s.subscriptionsEnabled(), "timezone": "Europe/Paris"})
 }
 func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	expected := "Bearer " + s.Config.BotAPISecret
@@ -720,7 +831,8 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	i, e := discord.Verify(s.Config.DiscordPublicKey, r.Header.Get("X-Signature-Timestamp"), r.Header.Get("X-Signature-Ed25519"), body, time.Now())
-	if e != nil || i.Type != 2 || i.ApplicationID != s.Config.DiscordClientID || i.GuildID != s.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) {
+	command, off, commandErr := discord.Command(i)
+	if e != nil || commandErr != nil || i.ApplicationID != s.Config.DiscordClientID || i.GuildID != s.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) {
 		problem(w, 403, "invalid_interaction", "Interaction refusée.")
 		return
 	}
@@ -735,9 +847,11 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	text := "Commande inconnue. Utilisez /aide."
-	if i.Data.Name == "aide" {
-		text = discord.Help(s.Config.PublicOrigin)
-	} else if i.Data.Name == "mes-demandes" || i.Data.Name == "nouveautes" {
+	var pagination *discord.RequestPagination
+	var recentPagination *discord.RecentPagination
+	if command == "aide" {
+		text = discord.Help(s.Config.PublicOrigin, s.Config.Services)
+	} else if command == "mes-demandes" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "mes-suivis" || command == "livres" || command == "demander-livre" || command == "diagnostic" {
 		u, e := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
 		if e == nil {
@@ -745,14 +859,31 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		}
 		if e != nil {
 			text = "Connectez-vous au Hub avec Plex, puis liez Discord dans Mon compte : " + s.Config.PublicOrigin + "/compte"
-		} else if i.Data.Name == "mes-demandes" {
+		} else if s.rate("discord-personal:"+u.ID, 30) {
+			text = "Patientez avant de relancer une commande personnelle."
+		} else if command == "diagnostic" {
+			options, _ := discord.CommandOptions(i)
+			text = s.diagnosticMessage(r.Context(), u, int64(options.RequestID))
+		} else if command == "livres" {
+			options, _ := discord.CommandOptions(i)
+			text = s.booksMessage(r.Context(), u, options.Query, options.Page)
+		} else if command == "demander-livre" {
+			options, _ := discord.CommandOptions(i)
+			text = s.bookRequestMessage(options.Query)
+		} else if command == "surprise" || command == "recap" {
+			options, _ := discord.CommandOptions(i)
+			text = s.discoveryMessage(r.Context(), g, command, options.Kind, time.Now())
+		} else if command == "suivre" || command == "mes-suivis" {
+			options, _ := discord.CommandOptions(i)
+			text = s.subscriptionMessage(r.Context(), u, command, options)
+		} else if command == "mes-demandes" {
 			if s.Config.SeerrURL == "" {
 				text = "Seerr n’est pas encore configuré."
 			} else {
 				seerrID, e := s.resolveSeerr(r.Context(), u)
 				var p upstream.RequestPage
 				if e == nil {
-					p, e = s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, 0)
+					p, e = s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, off)
 				}
 				if errors.Is(e, upstream.ErrSeerrUserNotFound) {
 					text = seerrMissing
@@ -760,8 +891,16 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 					text = "Seerr est momentanément indisponible."
 				} else {
 					text = "**Vos demandes**\n"
+					pagination = &discord.RequestPagination{Offset: off, Total: p.Total}
+					if p.Total > 0 {
+						text += fmt.Sprintf("Page %d · %d demande(s)\n", off/10+1, p.Total)
+					}
 					if len(p.Items) == 0 {
-						text += "Aucune demande pour le moment."
+						if off == 0 {
+							text += "Aucune demande pour le moment."
+						} else {
+							text += "Aucune demande sur cette page. Revenez à la page précédente."
+						}
 					}
 					for _, v := range p.Items {
 						text += "• " + safeText(v.Title) + " — " + statusLabel(v.Status) + "\n"
@@ -770,25 +909,66 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else {
-			p, e := s.Upstream.Recent(r.Context(), s.Config.PlexURL, s.Config.PlexServerID, g, 0)
+			p, e := s.Upstream.RecentPage(r.Context(), s.Config.PlexURL, s.Config.PlexServerID, g, off, 6)
+			if e == nil {
+				_, e = s.grant(r.Context(), u)
+			}
 			if e != nil {
 				text = "Plex est momentanément indisponible."
 			} else {
-				text = "**Derniers ajouts Plex**\n"
-				if len(p) == 0 {
-					text += "Aucun ajout récent."
-				}
-				for n, v := range p {
-					if n >= 8 {
-						break
-					}
-					text += "• " + safeText(v.Title) + "\n"
-				}
-				text += "\nOuvrir le Hub : " + s.Config.PublicOrigin
+				text = recentMessage(p.Items, s.Config.PublicOrigin)
+				recentPagination = &discord.RecentPagination{Offset: off, NextOffset: p.NextOffset}
 			}
 		}
+		current, err := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
+		if err == nil && current.ID == u.ID && current.PlexID == u.PlexID {
+			_, err = s.grant(r.Context(), current)
+		} else {
+			err = upstream.ErrDenied
+		}
+		if err != nil {
+			text = "Votre accès a expiré. Reconnectez-vous au Hub avec Plex : " + s.Config.PublicOrigin
+			pagination, recentPagination = nil, nil
+		}
 	}
-	jsonOut(w, 200, discord.Message(text))
+	reply := discord.Message(text)
+	if pagination != nil {
+		reply["pagination"] = pagination
+	}
+	if recentPagination != nil {
+		reply["recentPagination"] = recentPagination
+	}
+	jsonOut(w, 200, reply)
+}
+func recentMessage(items []upstream.Media, origin string) string {
+	text := "**Derniers ajouts Plex**\n"
+	if len(items) == 0 {
+		text += "Aucun ajout sur cette page.\n"
+	}
+	for _, item := range items {
+		kind := "Film"
+		if item.Type != "movie" {
+			kind = "Série"
+		}
+		date := "date inconnue"
+		if added, err := time.Parse(time.RFC3339, item.AddedAt); err == nil {
+			date = added.UTC().Format("02/01/2006")
+		}
+		title := []rune(safeText(item.Title))
+		if len(title) > 60 {
+			title = append(title[:60], '…')
+		}
+		line := fmt.Sprintf("• [%s](%s) · %s · %s\n", string(title), item.URL, kind, date)
+		if item.URL == "" || len(line) > 300 || len(text)+len(line) > 1800 {
+			line = fmt.Sprintf("• %s · %s · %s\n", string(title), kind, date)
+		}
+		text += line
+	}
+	footer := "\nOuvrir le Hub : " + origin
+	if len(text)+len(footer) <= 2000 {
+		text += footer
+	}
+	return text
 }
 func safeText(v string) string {
 	v = strings.NewReplacer("@", "＠", "*", "", "_", "", "`", "", "[", "", "]", "", "\n", " ", "\r", " ").Replace(v)
@@ -799,7 +979,7 @@ func safeText(v string) string {
 	return v
 }
 func statusLabel(v string) string {
-	m := map[string]string{"pending": "En attente", "approved": "Approuvée", "declined": "Refusée", "processing": "En cours", "partial": "Partiellement disponible", "available": "Disponible", "unknown": "État inconnu"}
+	m := map[string]string{"pending": "En attente", "approved": "Approuvée", "declined": "Refusée", "error": "En erreur", "processing": "En cours", "partial": "Partiellement disponible", "available": "Disponible", "unknown": "État inconnu"}
 	if x := m[v]; x != "" {
 		return x
 	}

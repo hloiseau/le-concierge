@@ -16,6 +16,7 @@ func TestPersonalDepartures(t *testing.T) {
 	for _, mode := range []string{"success", "other user", "no history", "missing media", "excluded", "parent excluded", "child exclusion", "inactive rule", "missing rule", "changed library", "changed guid", "edition", "completed", "seasons unknown", "source error", "malformed rules", "wrong server", "denied media", "malformed exclusions", "logout", "unlinked", "history failure after success"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fixture(t)
+			s.Config.SeerrURL, s.Config.SeerrAPIKey = "", ""
 			s.Config.MaintainerrURL = "http://maintainerr.test"
 			s.Config.TautulliURL = "http://tautulli.test"
 			s.Config.TautulliAPIKey = "private-key"

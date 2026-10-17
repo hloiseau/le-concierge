@@ -52,7 +52,8 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]int{"type": 1})
 		return
 	}
-	if i.Type != 2 || i.GuildID != b.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) || len(i.Token) < 8 || len(i.Token) > 4096 {
+	command, offset, commandErr := Command(i)
+	if commandErr != nil || i.GuildID != b.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) || len(i.Token) < 8 || len(i.Token) > 4096 {
 		http.Error(w, "unsupported interaction", 403)
 		return
 	}
@@ -75,8 +76,8 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Static help must work even when the API is unavailable.
-	if i.Data.Name == "aide" {
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message(Help(b.Config.PublicOrigin))})
+	if command == "aide" {
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message(Help(b.Config.PublicOrigin, b.Config.Services))})
 		return
 	}
 	select {
@@ -111,10 +112,18 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		if e == nil {
 			if resp.StatusCode == 200 {
 				var m struct {
-					Content string `json:"content"`
+					Content          string             `json:"content"`
+					Pagination       *RequestPagination `json:"pagination"`
+					RecentPagination *RecentPagination  `json:"recentPagination"`
 				}
 				if json.NewDecoder(io.LimitReader(resp.Body, 16*1024)).Decode(&m) == nil && len(m.Content) > 0 && len([]rune(m.Content)) <= 2000 {
 					reply = Message(m.Content)
+					if command == "mes-demandes" && m.Pagination != nil && m.Pagination.Offset == offset {
+						reply["components"] = m.Pagination.Components(i.Member.User.ID)
+					}
+					if command == "nouveautes" && m.RecentPagination != nil && m.RecentPagination.Offset == offset {
+						reply["components"] = m.RecentPagination.Components(i.Member.User.ID)
+					}
 				}
 			}
 			resp.Body.Close()
@@ -163,7 +172,11 @@ func (b *Bot) acknowledge(ctx context.Context, i Interaction) bool {
 	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
 	defer cancel()
 	target := "https://discord.com/api/v10/interactions/" + i.ID + "/" + url.PathEscape(i.Token) + "/callback"
-	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(`{"type":5,"data":{"flags":64}}`))
+	callback := `{"type":5,"data":{"flags":64}}`
+	if i.Type == 3 {
+		callback = `{"type":6}`
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(callback))
 	if err != nil {
 		return false
 	}
@@ -189,7 +202,33 @@ func (b *Bot) Register(ctx context.Context) error {
 	if b.Config.DiscordBotToken == "" {
 		return errors.New("DISCORD_BOT_TOKEN is required to register commands")
 	}
-	commands := []map[string]any{{"name": "aide", "description": "Guides, services et liaison des comptes", "type": 1}, {"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1}, {"name": "nouveautes", "description": "Voir les derniers ajouts Plex autorisés", "type": 1}}
+	commands := []map[string]any{
+		{"name": "aide", "description": "Guides, services et liaison des comptes", "type": 1},
+		{"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1},
+		{"name": "nouveautes", "description": "Voir les derniers ajouts Plex autorisés", "type": 1},
+		{"name": "surprise", "description": "Tirer un titre dans votre catalogue Plex", "type": 1, "options": []map[string]any{
+			{"name": "type", "description": "Films ou séries (les deux par défaut)", "type": 3, "choices": []map[string]any{{"name": "Film", "value": "movie"}, {"name": "Série", "value": "show"}}},
+		}},
+		{"name": "recap", "description": "Voir les ajouts des sept jours terminés, en heure de Paris", "type": 1},
+		{"name": "diagnostic", "description": "Diagnostiquer une demande Seerr (administrateur)", "type": 1, "default_member_permissions": "8", "options": []map[string]any{
+			{"name": "demande", "description": "Identifiant de la demande Seerr", "type": 4, "required": true, "min_value": 1, "max_value": 2147483647},
+		}},
+		{"name": "livres", "description": "Chercher dans votre catalogue Grimmory", "type": 1, "options": []map[string]any{
+			{"name": "recherche", "description": "Titre, auteur, série ou ISBN", "type": 3, "required": false, "min_length": 1, "max_length": 200},
+			{"name": "page", "description": "Page du catalogue", "type": 4, "required": false, "min_value": 1, "max_value": 1001},
+		}},
+		{"name": "demander-livre", "description": "Choisir et confirmer une édition dans Shelfmark", "type": 1, "options": []map[string]any{
+			{"name": "recherche", "description": "Titre, auteur ou ISBN à rechercher dans Shelfmark", "type": 3, "required": true, "min_length": 1, "max_length": 200},
+		}},
+		{"name": "suivre", "description": "Suivre la disponibilité d’un film ou d’une série", "type": 1, "options": []map[string]any{
+			{"name": "type", "description": "Film ou série", "type": 3, "required": true, "choices": []map[string]any{{"name": "Film", "value": "movie"}, {"name": "Série", "value": "tv"}}},
+			{"name": "tmdb-id", "description": "Identifiant numérique du titre sur TMDB", "type": 4, "required": true, "min_value": 1, "max_value": 2147483647},
+			{"name": "season", "description": "Numéro de saison pour une série (0 = épisodes spéciaux)", "type": 4, "min_value": 0, "max_value": 10000},
+		}},
+		{"name": "mes-suivis", "description": "Consulter vos suivis personnels", "type": 1, "options": []map[string]any{
+			{"name": "page", "description": "Page à consulter", "type": 4, "min_value": 1, "max_value": 1001},
+		}},
+	}
 	raw, _ := json.Marshal(commands)
 	req, e := http.NewRequestWithContext(ctx, "PUT", "https://discord.com/api/v10/applications/"+b.Config.DiscordClientID+"/guilds/"+b.Config.DiscordGuildID+"/commands", strings.NewReader(string(raw)))
 	if e != nil {

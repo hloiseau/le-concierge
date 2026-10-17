@@ -18,6 +18,8 @@ jobs:
       - run: test -z "$(gofmt -l cmd internal)"
       - run: go vet ./...
       - run: go test -race -cover ./...
+      - name: Test isolated metrics collector
+        run: python3 -m unittest discover -s tools -p 'test_*.py'
       - run: make build
       - name: Validate TrueNAS deployment files
         run: |
@@ -91,7 +93,7 @@ jobs:
         run: |
           bash deploy/truenas-admin.sh check
           curl --fail http://127.0.0.1:18080/healthz
-          for route in services requests recent preferences departures; do
+          for route in services requests recent preferences departures reminders subscriptions books book-collections monitoring community roadmap admin/diagnostics; do
             test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/$route)" = 401
           done
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18081/interactions -d '{}')" = 401

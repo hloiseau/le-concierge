@@ -27,12 +27,15 @@ func botResponse(status int, body string) *http.Response {
 }
 func signedCommand(t *testing.T, name string) (*Bot, *http.Request) {
 	t.Helper()
+	return signedInteraction(t, fmt.Sprintf(`{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"token":"private-interaction-token","member":{"user":{"id":"11111"}},"data":{"name":%q}}`, name))
+}
+func signedInteraction(t *testing.T, body string) (*Bot, *http.Request) {
+	t.Helper()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bot := NewBot(config.Config{DiscordClientID: "12345", DiscordGuildID: "23456", DiscordPublicKey: hex.EncodeToString(public), PublicOrigin: "https://hub.example", BotAPIURL: "http://api.test", BotAPISecret: strings.Repeat("s", 32)})
-	body := fmt.Sprintf(`{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"token":"private-interaction-token","member":{"user":{"id":"11111"}},"data":{"name":%q}}`, name)
 	stamp := strconv.FormatInt(time.Now().Unix(), 10)
 	r := httptest.NewRequest("POST", "/interactions", strings.NewReader(body))
 	r.Header.Set("X-Signature-Timestamp", stamp)
@@ -41,6 +44,7 @@ func signedCommand(t *testing.T, name string) (*Bot, *http.Request) {
 }
 func TestHelpRepliesInlineWithoutUpstream(t *testing.T) {
 	b, r := signedCommand(t, "aide")
+	b.Config.Services = []config.Service{{ID: "plex", URL: "https://plex.example"}, {ID: "grimmory"}}
 	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
 		t.Error("help must not need the API or a webhook")
 		return botResponse(503, `{}`), nil
@@ -55,8 +59,30 @@ func TestHelpRepliesInlineWithoutUpstream(t *testing.T) {
 			Content string `json:"content"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(w.Body.Bytes(), &reply) != nil || w.Code != 200 || reply.Type != 4 || reply.Data.Flags != 64 || !strings.Contains(reply.Data.Content, "https://hub.example") {
+	if json.Unmarshal(w.Body.Bytes(), &reply) != nil || w.Code != 200 || reply.Type != 4 || reply.Data.Flags != 64 || !strings.Contains(reply.Data.Content, "https://plex.example") || !strings.Contains(reply.Data.Content, "https://hub.example/aide") || !strings.Contains(reply.Data.Content, "https://hub.example/compte") {
 		t.Fatalf("invalid help: %d %s", w.Code, w.Body)
+	}
+}
+
+func TestHelpUsesOnlyConfiguredPublicServiceLinksWithinDiscordLimit(t *testing.T) {
+	text := Help("https://hub.example", []config.Service{
+		{ID: "plex", URL: "https://plex.example/path(with)"},
+		{ID: "seerr", URL: "https://user:secret@seerr.example"},
+		{ID: "downloadarr", URL: "javascript:alert(1)"},
+		{ID: "shelfmark", URL: "https://shelfmark.example/" + strings.Repeat("x", 2000)},
+		{ID: "unknown", Name: "@everyone", URL: "https://unknown.example"},
+		{ID: "plex", URL: "https://duplicate.example"},
+	})
+	if len(text) > 2000 || !strings.Contains(text, "https://plex.example/path%28with%29") || !strings.Contains(text, "https://hub.example/aide") {
+		t.Fatalf("invalid help links or bounds: %s", text)
+	}
+	for _, excluded := range []string{"secret", "javascript", "shelfmark.example", "unknown.example", "@everyone", "duplicate.example"} {
+		if strings.Contains(text, excluded) {
+			t.Fatalf("unsafe help contained %q", excluded)
+		}
+	}
+	if len(Help("https://"+strings.Repeat("x", 3000)+".example", nil)) > 2000 {
+		t.Fatal("long configured origin exceeded Discord limit")
 	}
 }
 func TestDeferredReplyWaitsForAcknowledgement(t *testing.T) {

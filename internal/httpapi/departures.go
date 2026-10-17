@@ -25,23 +25,18 @@ func (s *Server) departures(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	page, err := s.Departures.List(r.Context(), s.Config, g)
+	p, err := s.Store.GetReminderPreferences(r.Context(), u.ID)
+	if err != nil {
+		problem(w, 500, "storage_error", "Lecture des préférences impossible.")
+		return
+	}
+	page, err := s.personalDepartures(r.Context(), u, g, p, false)
 	if err != nil {
 		problem(w, 503, "departures_unavailable", "Les départs ne peuvent pas être vérifiés actuellement. Aucune ancienne liste n’est utilisée.")
 		return
 	}
 	// Logout, unlink and account deletion invalidate an in-flight personal result.
-	currentKey, current, ok := s.session(r)
-	if !ok || currentKey != key || current.UserID != u.ID {
-		problem(w, 401, "unauthenticated", "Reconnectez-vous avec Plex.")
-		return
-	}
-	user, err := s.Store.User(r.Context(), u.ID)
-	if err != nil || user.PlexID != u.PlexID {
-		problem(w, 403, "plex_required", "Reconnectez-vous avec Plex.")
-		return
-	}
-	if _, ok = s.requireGrant(w, r, user); !ok {
+	if !s.revalidateUser(w, r, key, u) {
 		return
 	}
 	jsonOut(w, 200, page)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -62,7 +63,7 @@ func TestIdentityConstraintsAndBackup(t *testing.T) {
 		t.Fatal("existing backup overwritten")
 	}
 	info, _ := os.Stat(backup)
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatal("backup not private")
 	}
 	if e = s.Unlink(ctx, "12345"); e != nil {
