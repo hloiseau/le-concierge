@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hloiseau/le-concierge/internal/community"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -128,10 +129,23 @@ func Load() (Config, error) {
 		return c, errors.New("MONITORING_ENABLED requires a boolean; METRICS_FILE requires an absolute path")
 	}
 	c.DiscordDMsEnabled, err = strconv.ParseBool(fallback("DISCORD_DMS_ENABLED", "false"))
-	if err != nil || (c.DiscordDMsEnabled && c.DiscordBotToken == "") {
-		return c, errors.New("DISCORD_DMS_ENABLED requires a boolean and a bot token when enabled")
+	if err != nil {
+		return c, errors.New("DISCORD_DMS_ENABLED requires a boolean")
 	}
-	if c.DiscordNotificationChannelID != "" && (!Snowflake(c.DiscordNotificationChannelID) || !Snowflake(c.DiscordGuildID) || c.DiscordBotToken == "" || c.MaintainerrURL == "" || c.SeerrURL == "" || c.PlexServerID == "") {
+	if c.DiscordNotificationChannelID != "" && !Snowflake(c.DiscordNotificationChannelID) {
+		return c, errors.New("DISCORD_NOTIFICATION_CHANNEL_ID requires a channel ID")
+	}
+	if c.DiscordBotToken == "" {
+		if c.DiscordDMsEnabled {
+			slog.Warn("Discord DMs disabled: DISCORD_BOT_TOKEN is not configured")
+			c.DiscordDMsEnabled = false
+		}
+		if c.DiscordNotificationChannelID != "" {
+			slog.Warn("Discord channel reminders disabled: DISCORD_BOT_TOKEN is not configured")
+			c.DiscordNotificationChannelID = ""
+		}
+	}
+	if c.DiscordNotificationChannelID != "" && (!Snowflake(c.DiscordGuildID) || c.DiscordBotToken == "" || c.MaintainerrURL == "" || c.SeerrURL == "" || c.PlexServerID == "") {
 		return c, errors.New("DISCORD_NOTIFICATION_CHANNEL_ID requires a channel ID, guild, bot token, Maintainerr, Seerr and Plex server")
 	}
 	if !ValidURL(c.PublicOrigin, true) {

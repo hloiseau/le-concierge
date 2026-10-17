@@ -9,8 +9,8 @@ func TestChannelRemindersNeedIndependentExplicitDestination(t *testing.T) {
 	t.Setenv("DISCORD_NOTIFICATION_CHANNEL_ID", "12345")
 	t.Setenv("DISCORD_BOT_TOKEN", "")
 	t.Setenv("DISCORD_BOT_TOKEN_FILE", "")
-	if _, err := Load(); err == nil {
-		t.Fatal("channel enabled without bot token")
+	if c, err := Load(); err != nil || c.DiscordNotificationChannelID != "" {
+		t.Fatal("missing optional bot token must disable channel reminders without blocking startup", err)
 	}
 	t.Setenv("DISCORD_BOT_TOKEN", "fixture")
 	t.Setenv("DISCORD_GUILD_ID", "67890")
@@ -23,8 +23,20 @@ func TestChannelRemindersNeedIndependentExplicitDestination(t *testing.T) {
 	if err != nil || c.DiscordNotificationChannelID != "12345" || c.DiscordDMsEnabled {
 		t.Fatal("channel and DM configuration coupled", err)
 	}
+	for _, missing := range []string{"DISCORD_GUILD_ID", "PLEX_URL", "PLEX_SERVER_ID", "MAINTAINERR_URL", "SEERR_URL", "SEERR_API_KEY"} {
+		t.Run("token present, missing "+missing, func(t *testing.T) {
+			t.Setenv(missing, "")
+			if _, err := Load(); err == nil {
+				t.Fatal("configured bot accepted incomplete channel prerequisites")
+			}
+		})
+	}
 	t.Setenv("DISCORD_NOTIFICATION_CHANNEL_ID", "@everyone")
 	if _, err := Load(); err == nil {
 		t.Fatal("non-ID channel accepted")
+	}
+	t.Setenv("DISCORD_BOT_TOKEN", "")
+	if _, err := Load(); err == nil || err.Error() != "DISCORD_NOTIFICATION_CHANNEL_ID requires a channel ID" {
+		t.Fatal("missing token must not mask an invalid channel ID", err)
 	}
 }

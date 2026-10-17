@@ -79,6 +79,9 @@ jobs:
           }.items():
               text = text.replace(old, new)
           text = re.sub(r'ghcr.io/hloiseau/le-concierge:[^\s]+', 'concierge-ci:test', text)
+          # An optional Discord feature without its token must not stop the Hub.
+          text = text.replace("DISCORD_DMS_ENABLED: 'false'", "DISCORD_DMS_ENABLED: 'true'")
+          text = text.replace("DISCORD_NOTIFICATION_CHANNEL_ID: ''", "DISCORD_NOTIFICATION_CHANNEL_ID: '34567'")
           Path('/tmp/concierge-ci.yaml').write_text(text)
           PY
       - name: Build the API and bot under test
@@ -93,6 +96,14 @@ jobs:
         run: |
           bash deploy/truenas-admin.sh check
           curl --fail http://127.0.0.1:18080/healthz
+          python3 - <<'PY'
+          import json
+          import urllib.request
+          with urllib.request.urlopen('http://127.0.0.1:18080/api/v1/capabilities') as response:
+              capabilities = json.load(response)
+          assert capabilities['discordDMs'] is False
+          assert capabilities['discordChannelReminders'] is False
+          PY
           for route in services requests recent preferences departures reminders subscriptions books book-collections monitoring community roadmap admin/diagnostics; do
             test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v1/$route)" = 401
           done
