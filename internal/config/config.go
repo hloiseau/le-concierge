@@ -32,7 +32,7 @@ type Config struct {
 	BotAPIURL, BotAPISecret                                                                 string
 	PlexURL, PlexServerID, SeerrURL, SeerrAPIKey                                            string
 	MaintainerrURL, TautulliURL, TautulliAPIKey                                             string
-	GrimmoryURL, ShelfmarkURL, MetricsFile                                                  string
+	GrimmoryURL, ShelfmarkURL, MetricsFile, ToparrURL                                       string
 	MonitoringEnabled                                                                       bool
 	AdminIDs                                                                                []string
 	DiscordDMsEnabled                                                                       bool
@@ -79,6 +79,7 @@ func Load() (Config, error) {
 	c.DownloadarrURL = strings.TrimRight(os.Getenv("DOWNLOADARR_URL"), "/")
 	c.DownloadarrRevision = os.Getenv("DOWNLOADARR_REVISION")
 	c.MetricsFile = os.Getenv("METRICS_FILE")
+	c.ToparrURL = strings.TrimRight(os.Getenv("TOPARR_URL"), "/")
 	c.DiscordNotificationChannelID = os.Getenv("DISCORD_NOTIFICATION_CHANNEL_ID")
 	c.RadarrURL = strings.TrimRight(os.Getenv("RADARR_URL"), "/")
 	c.SonarrURL = strings.TrimRight(os.Getenv("SONARR_URL"), "/")
@@ -124,7 +125,7 @@ func Load() (Config, error) {
 	if c.CommunityFeedFile != "" && !filepath.IsAbs(c.CommunityFeedFile) {
 		return c, errors.New("COMMUNITY_FEED_FILE requires an absolute path")
 	}
-	c.MonitoringEnabled, err = strconv.ParseBool(fallback("MONITORING_ENABLED", strconv.FormatBool(c.MetricsFile != "" || (c.TautulliURL != "" && c.TautulliAPIKey != "" && c.PlexServerID != ""))))
+	c.MonitoringEnabled, err = strconv.ParseBool(fallback("MONITORING_ENABLED", strconv.FormatBool(c.MetricsFile != "" || c.ToparrURL != "" || (c.TautulliURL != "" && c.TautulliAPIKey != "" && c.PlexServerID != ""))))
 	if err != nil || (c.MetricsFile != "" && !filepath.IsAbs(c.MetricsFile)) {
 		return c, errors.New("MONITORING_ENABLED requires a boolean; METRICS_FILE requires an absolute path")
 	}
@@ -155,7 +156,7 @@ func Load() (Config, error) {
 	if origin.Scheme != "https" && (c.Env != "development" || (origin.Hostname() != "localhost" && origin.Hostname() != "127.0.0.1")) {
 		return c, errors.New("PUBLIC_ORIGIN requires HTTPS outside local development")
 	}
-	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL, c.MaintainerrURL, c.TautulliURL, c.GrimmoryURL, c.ShelfmarkURL, c.RadarrURL, c.SonarrURL, c.DownloadarrURL} {
+	for _, v := range []string{c.PlexURL, c.SeerrURL, c.BotAPIURL, c.MaintainerrURL, c.TautulliURL, c.ToparrURL, c.GrimmoryURL, c.ShelfmarkURL, c.RadarrURL, c.SonarrURL, c.DownloadarrURL} {
 		if v != "" && !ValidURL(v, false) {
 			return c, errors.New("invalid service URL")
 		}

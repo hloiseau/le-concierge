@@ -102,6 +102,62 @@ func TestMonitoringAuthorizationAndPrivacy(t *testing.T) {
 	}
 }
 
+func TestToparrMonitoringContractAndPrivacy(t *testing.T) {
+	s := fixture(t)
+	s.Config.MonitoringEnabled = true
+	s.Config.ToparrURL = "http://toparr.test"
+	calls := 0
+	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if r.Method != http.MethodGet {
+			t.Fatal("Toparr mutation attempted")
+		}
+		if r.URL.Path == "/api/gpus" {
+			return response(200, `{"gpus":[{"device":"card0","name":"PRIVATE GPU"}],"current_device":null}`), nil
+		}
+		if r.URL.Path != "/api/status" {
+			t.Fatalf("unexpected route %s", r.URL.Path)
+		}
+		data, _ := json.Marshal(map[string]any{"current": map[string]any{
+			"timestamp": float64(time.Now().UnixMilli()) / 1000,
+			"power":     map[string]any{"GPU": 14.7},
+			"engines":   map[string]any{},
+			"clients":   map[string]any{"PRIVATE-ID": map[string]string{"cmdline": "PRIVATE PATH TOKEN"}},
+		}, "history": []string{"PRIVATE HISTORY"}})
+		return response(200, string(data)), nil
+	})
+	if w := call(s, "GET", "/api/v1/monitoring", "", "", ""); w.Code != 401 || calls != 0 {
+		t.Fatal("anonymous Toparr fetch")
+	}
+	cookie := seed(t, s, "11111", true)
+	w := call(s, "GET", "/api/v1/monitoring", cookie, "", "")
+	if w.Code != 200 || strings.Contains(w.Body.String(), "PRIVATE") || calls != 2 {
+		t.Fatalf("unsafe Toparr snapshot %d", w.Code)
+	}
+	if err := validateContractResponse(loadContract(t), "GET", "/api/v1/monitoring", w); err != nil {
+		t.Fatal(err)
+	}
+	var current struct {
+		HostStatus      string     `json:"hostStatus"`
+		ToparrStatus    string     `json:"toparrStatus"`
+		ToparrUpdatedAt *time.Time `json:"toparrUpdatedAt"`
+		Metrics         map[string]struct {
+			Value  *float64 `json:"value"`
+			Status string   `json:"status"`
+		} `json:"metrics"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &current); err != nil || current.HostStatus != "not_configured" || current.ToparrStatus != "available" || current.ToparrUpdatedAt == nil || current.Metrics["gpu_power_watts"].Value == nil || *current.Metrics["gpu_power_watts"].Value != 14.7 || current.Metrics["gpu_video_percent"].Status != "unavailable" {
+		t.Fatal("GPU source lost without host collector", err)
+	}
+	if err := s.Monitoring.Sample(context.Background(), s.Config); err != nil {
+		t.Fatal(err)
+	}
+	w = call(s, "GET", "/api/v1/monitoring/history?range=1h", cookie, "", "")
+	if w.Code != 200 || strings.Contains(w.Body.String(), "PRIVATE") || !strings.Contains(w.Body.String(), "14.7") || calls != 2 {
+		t.Fatal("GPU history missing or unsafe")
+	}
+}
+
 func TestMonitoringRevalidatesAfterFetch(t *testing.T) {
 	for _, mode := range []string{"logout", "admin_removed"} {
 		t.Run(mode, func(t *testing.T) {

@@ -4,7 +4,7 @@ Ce lot avance [C14](https://github.com/hloiseau/le-concierge/issues/14) avec la 
 
 ## Contrat confirmé
 
-Référence : **Shelfmark v1.4.0**, sources consultées le 16 octobre 2026. La version installée reste non vérifiée avec une session authentifiée. Le mode public observé sur l’installation était `builtin`, sans utilisateur connecté.
+Référence : **Shelfmark v1.4.0**, sources consultées le 16 octobre 2026. La version et la révision de l’image en cours d’exécution sur le NAS ont été confirmées au 18 octobre. La route publique indique `auth_required=true`, `auth_mode=builtin`, `authenticated=false` ; les routes de contexte personnel et de demandes refusent la lecture anonyme avec HTTP 401. Aucune session personnelle n’a été ouverte : connexion, propriétaire des demandes et isolation entre comptes restent à vérifier sur l’installation.
 
 Le [contrôleur d’authentification v1.4.0](https://github.com/calibrain/shelfmark/blob/v1.4.0/shelfmark/main.py) expose `GET /api/auth/check` et `POST /api/auth/login` avec `{username,password,remember_me:false}`. Le Concierge prend en charge uniquement le mode `builtin` avec connexion locale activée. Il refuse les modes sans authentification, proxy, CWA et OIDC ; ces parcours restent dans Shelfmark. Le login crée une session distincte de celle du navigateur Shelfmark.
 
@@ -45,4 +45,4 @@ Pour achever C14, il reste à obtenir une corrélation stable issue de l’impor
 
 Tests Go : `go test ./internal/upstream ./internal/httpapi ./internal/config -run TestShelfmark`. Couverture : mode de connexion, cookie personnel, refus de redirect, identité changeante, autre propriétaire, états inconnus, dates, pagination, nettoyage des champs privés, origine, retrait/révocation et réponses tardives.
 
-Tests Hub : `tests/book-requests.spec.ts` dans les projets desktop et mobile ; connexion, états distincts, texte HTML échappé, pagination, panne, révocation, mot de passe effacé, déconnexion pendant une réponse et désactivation de la capacité. Aucun appel réel de demande, téléchargement ou import n’est effectué. La validation sur les versions installées et deux comptes aux demandes différentes reste nécessaire avant activation en production.
+Tests Hub : `tests/book-requests.spec.ts` dans les projets desktop et mobile ; connexion, états distincts, texte HTML échappé, pagination, panne, révocation, mot de passe effacé, déconnexion pendant une réponse et désactivation de la capacité. Aucun appel réel de demande, téléchargement ou import n’est effectué. La version installée est confirmée ; la validation personnelle avec deux comptes aux demandes différentes reste nécessaire.
