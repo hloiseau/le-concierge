@@ -849,12 +849,17 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		problem(w, 409, "duplicate", "Interaction déjà traitée.")
 		return
 	}
+	options, _ := discord.CommandOptions(i)
+	if command == "mes-suivis" {
+		command, off = "mes-demandes", (options.Page-1)*10
+	}
 	text := "Commande inconnue. Utilisez /aide."
+	publicText := ""
 	var pagination *discord.RequestPagination
 	var recentPagination *discord.RecentPagination
 	if command == "aide" {
 		text = discord.Help(s.Config.PublicOrigin, s.Config.Services)
-	} else if command == "mes-demandes" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "mes-suivis" || command == "livres" || command == "demander-livre" || command == "diagnostic" {
+	} else if command == "mes-demandes" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "livres" || command == "demander-livre" || command == "diagnostic" {
 		u, e := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
 		if e == nil {
@@ -865,20 +870,15 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		} else if s.rate("discord-personal:"+u.ID, 30) {
 			text = "Patientez avant de relancer une commande personnelle."
 		} else if command == "diagnostic" {
-			options, _ := discord.CommandOptions(i)
 			text = s.diagnosticMessage(r.Context(), u, int64(options.RequestID))
 		} else if command == "livres" {
-			options, _ := discord.CommandOptions(i)
 			text = s.booksMessage(r.Context(), u, options.Query, options.Page)
 		} else if command == "demander-livre" {
-			options, _ := discord.CommandOptions(i)
 			text = s.bookRequestMessage(options.Query)
 		} else if command == "surprise" || command == "recap" {
-			options, _ := discord.CommandOptions(i)
-			text = s.discoveryMessage(r.Context(), g, command, options.Kind, time.Now())
-		} else if command == "suivre" || command == "mes-suivis" {
-			options, _ := discord.CommandOptions(i)
-			text = s.subscriptionMessage(r.Context(), u, command, options)
+			text, publicText = s.discoveryMessage(r.Context(), g, command, options.Kind, time.Now())
+		} else if command == "suivre" {
+			text = s.subscriptionMessage(r.Context(), u, options)
 		} else if command == "mes-demandes" {
 			if s.Config.SeerrURL == "" {
 				text = "Seerr n’est pas encore configuré."
@@ -906,9 +906,17 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 					for _, v := range p.Items {
-						text += "• " + safeText(v.Title) + " — " + statusLabel(v.Status) + "\n"
+						line := "• " + safeText(v.Title) + " — " + statusLabel(v.Status)
+						if len(v.Seasons) > 0 {
+							line += fmt.Sprintf(" · saisons %v", v.Seasons)
+						}
+						if len(text)+len(line) > 1500 {
+							text += "Suite dans le Hub.\n"
+							break
+						}
+						text += line + "\n"
 					}
-					text += "\nVoir toutes vos demandes : " + s.Config.PublicOrigin + "/demandes"
+					text += "\nVos demandes et notifications : " + s.Config.PublicOrigin + "/demandes"
 				}
 			}
 		} else {
@@ -919,7 +927,8 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 			if e != nil {
 				text = "Plex est momentanément indisponible."
 			} else {
-				text = recentMessage(p.Items, s.Config.PublicOrigin)
+				text = recentMessage(p.Items, s.Config.PublicOrigin, true)
+				publicText = recentMessage(p.Items, s.Config.PublicOrigin, false)
 				recentPagination = &discord.RecentPagination{Offset: off, NextOffset: p.NextOffset}
 			}
 		}
@@ -932,9 +941,13 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			text = "Votre accès a expiré. Reconnectez-vous au Hub avec Plex : " + s.Config.PublicOrigin
 			pagination, recentPagination = nil, nil
+			publicText = ""
 		}
 	}
 	reply := discord.Message(text)
+	if options.Public && discord.PublicCommand(command) && publicText != "" {
+		reply["publicContent"] = publicText
+	}
 	if pagination != nil {
 		reply["pagination"] = pagination
 	}
@@ -943,7 +956,7 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonOut(w, 200, reply)
 }
-func recentMessage(items []upstream.Media, origin string) string {
+func recentMessage(items []upstream.Media, origin string, links bool) string {
 	text := "**Derniers ajouts Plex**\n"
 	if len(items) == 0 {
 		text += "Aucun ajout sur cette page.\n"
@@ -962,7 +975,7 @@ func recentMessage(items []upstream.Media, origin string) string {
 			title = append(title[:60], '…')
 		}
 		line := fmt.Sprintf("• [%s](%s) · %s · %s\n", string(title), item.URL, kind, date)
-		if item.URL == "" || len(line) > 300 || len(text)+len(line) > 1800 {
+		if !links || item.URL == "" || len(line) > 300 || len(text)+len(line) > 1800 {
 			line = fmt.Sprintf("• %s · %s · %s\n", string(title), kind, date)
 		}
 		text += line

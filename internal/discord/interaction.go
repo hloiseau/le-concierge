@@ -44,12 +44,17 @@ type InteractionOption struct {
 }
 
 type Options struct {
+	Public    bool
 	Query     string
 	RequestID int
 	Kind      string
 	TMDBID    int
 	Season    *int
 	Page      int
+}
+
+func PublicCommand(command string) bool {
+	return command == "nouveautes" || command == "surprise" || command == "recap"
 }
 
 // Validate values again after signature verification; Discord registration is not an authorization boundary.
@@ -66,6 +71,10 @@ func CommandOptions(i Interaction) (Options, error) {
 		}
 		seen[option.Name] = true
 		switch option.Name {
+		case "public":
+			if !PublicCommand(i.Data.Name) || option.Type != 5 || string(option.Value) == "null" || json.Unmarshal(option.Value, &options.Public) != nil {
+				return Options{}, invalid
+			}
 		case "recherche":
 			if (i.Data.Name != "livres" && i.Data.Name != "demander-livre") || option.Type != 3 || string(option.Value) == "null" || json.Unmarshal(option.Value, &options.Query) != nil || strings.TrimSpace(options.Query) == "" || utf8.RuneCountInString(options.Query) > 200 || strings.ContainsFunc(options.Query, unicode.IsControl) {
 				return Options{}, invalid
@@ -222,7 +231,7 @@ func Message(content string) map[string]any {
 }
 
 func Help(origin string, services []config.Service) string {
-	text := "**Le Concierge**\n/mes-suivis — Vos demandes Seerr suivies automatiquement\n/mes-demandes — Vos demandes Seerr\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n/suivre — Ajouter un suivi séparé (ancien parcours)\n\n"
+	text := "**Le Concierge**\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
 	// Encode Markdown delimiters without changing the configured public destination.
 	link := func(label, target string) string {
 		return "[" + label + "](" + strings.NewReplacer("(", "%28", ")", "%29", "[", "%5B", "]", "%5D", "<", "%3C", ">", "%3E").Replace(target) + ")"

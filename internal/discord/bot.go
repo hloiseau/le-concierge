@@ -108,16 +108,22 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		req.Header.Set("X-Signature-Timestamp", timestamp)
 		req.Header.Set("X-Signature-Ed25519", signature)
 		reply := Message("Le service est momentanément indisponible. Réessayez plus tard.")
+		publicContent := ""
 		resp, e := b.Client.Do(req)
 		if e == nil {
 			if resp.StatusCode == 200 {
 				var m struct {
 					Content          string             `json:"content"`
+					PublicContent    string             `json:"publicContent"`
 					Pagination       *RequestPagination `json:"pagination"`
 					RecentPagination *RecentPagination  `json:"recentPagination"`
 				}
 				if json.NewDecoder(io.LimitReader(resp.Body, 16*1024)).Decode(&m) == nil && len(m.Content) > 0 && len([]rune(m.Content)) <= 2000 {
 					reply = Message(m.Content)
+					options, _ := CommandOptions(i)
+					if options.Public && PublicCommand(command) && len([]rune(m.PublicContent)) <= 2000 {
+						publicContent = m.PublicContent
+					}
 					if command == "mes-demandes" && m.Pagination != nil && m.Pagination.Offset == offset {
 						reply["components"] = m.Pagination.Components(i.Member.User.ID)
 					}
@@ -128,43 +134,62 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 			}
 			resp.Body.Close()
 		}
-		encoded, _ := json.Marshal(reply)
-		// Webhook token is provided in a signed Discord interaction, never in a log.
-		for attempt := 0; attempt < 3; attempt++ {
-			target := "https://discord.com/api/v10/webhooks/" + i.ApplicationID + "/" + url.PathEscape(i.Token) + "/messages/@original"
-			req, e = http.NewRequestWithContext(ctx, "PATCH", target, bytes.NewReader(encoded))
-			if e != nil {
-				return
-			}
-			req.Header.Set("Content-Type", "application/json")
-			resp, e = b.Client.Do(req)
-			if e != nil {
-				slog.Warn("Discord reply failed")
-				return
-			}
-			status := resp.StatusCode
-			var retry struct {
-				After float64 `json:"retry_after"`
-				Code  int     `json:"code"`
-			}
-			if status >= 400 {
-				_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&retry)
-			}
-			resp.Body.Close()
-			if status >= 200 && status < 300 {
-				return
-			}
-			if status != 429 || retry.After <= 0 || retry.After > 5 {
-				slog.Warn("Discord reply rejected", "status", status, "discord_code", retry.Code)
-				return
-			}
-			select {
-			case <-time.After(time.Duration(retry.After * float64(time.Second))):
-			case <-ctx.Done():
-				return
-			}
+		if publicContent != "" {
+			reply = Message("Résultat prêt à partager dans ce salon.")
 		}
+		// Complete the private defer before creating a public followup: Discord
+		// otherwise edits the deferred reply and preserves its private visibility.
+		if !b.webhook(ctx, i, "PATCH", "/messages/@original", reply) || publicContent == "" {
+			return
+		}
+		publicReply := Message(publicContent)
+		publicReply["flags"] = 0
+		confirmation := "Publication non confirmée. Vérifiez le salon avant de réessayer."
+		if b.webhook(ctx, i, "POST", "", publicReply) {
+			confirmation = "Résultat partagé dans ce salon."
+		}
+		b.webhook(ctx, i, "PATCH", "/messages/@original", Message(confirmation))
 	}()
+}
+
+func (b *Bot) webhook(ctx context.Context, i Interaction, method, path string, message map[string]any) bool {
+	encoded, _ := json.Marshal(message)
+	// Webhook token is provided in a signed Discord interaction, never in a log.
+	target := "https://discord.com/api/v10/webhooks/" + i.ApplicationID + "/" + url.PathEscape(i.Token) + path
+	for attempt := 0; attempt < 3; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(encoded))
+		if err != nil {
+			return false
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := b.Client.Do(req)
+		if err != nil {
+			slog.Warn("Discord reply failed")
+			return false
+		}
+		status := resp.StatusCode
+		var retry struct {
+			After float64 `json:"retry_after"`
+			Code  int     `json:"code"`
+		}
+		if status >= 400 {
+			_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&retry)
+		}
+		resp.Body.Close()
+		if status >= 200 && status < 300 {
+			return true
+		}
+		if status != 429 || retry.After <= 0 || retry.After > 5 {
+			slog.Warn("Discord reply rejected", "status", status, "discord_code", retry.Code)
+			return false
+		}
+		select {
+		case <-time.After(time.Duration(retry.After * float64(time.Second))):
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return false
 }
 
 // acknowledge has its own short deadline to respect Discord's initial-response window.
@@ -220,14 +245,12 @@ func (b *Bot) Register(ctx context.Context) error {
 		{"name": "demander-livre", "description": "Choisir et confirmer une édition dans Shelfmark", "type": 1, "options": []map[string]any{
 			{"name": "recherche", "description": "Titre, auteur ou ISBN à rechercher dans Shelfmark", "type": 3, "required": true, "min_length": 1, "max_length": 200},
 		}},
-		{"name": "suivre", "description": "Ajouter un suivi distinct de vos demandes Seerr (ancien parcours)", "type": 1, "options": []map[string]any{
-			{"name": "type", "description": "Film ou série", "type": 3, "required": true, "choices": []map[string]any{{"name": "Film", "value": "movie"}, {"name": "Série", "value": "tv"}}},
-			{"name": "tmdb-id", "description": "Identifiant numérique du titre sur TMDB", "type": 4, "required": true, "min_value": 1, "max_value": 2147483647},
-			{"name": "season", "description": "Numéro de saison pour une série (0 = épisodes spéciaux)", "type": 4, "min_value": 0, "max_value": 10000},
-		}},
-		{"name": "mes-suivis", "description": "Retrouver automatiquement les films et séries demandés sur Seerr", "type": 1, "options": []map[string]any{
-			{"name": "page", "description": "Page à consulter", "type": 4, "min_value": 1, "max_value": 1001},
-		}},
+	}
+	for _, command := range commands {
+		if PublicCommand(command["name"].(string)) {
+			options, _ := command["options"].([]map[string]any)
+			command["options"] = append(options, map[string]any{"name": "public", "description": "Partager le résultat dans ce salon (privé par défaut)", "type": 5})
+		}
 	}
 	raw, _ := json.Marshal(commands)
 	req, e := http.NewRequestWithContext(ctx, "PUT", "https://discord.com/api/v10/applications/"+b.Config.DiscordClientID+"/guilds/"+b.Config.DiscordGuildID+"/commands", strings.NewReader(string(raw)))

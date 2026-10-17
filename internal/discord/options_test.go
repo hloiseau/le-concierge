@@ -111,7 +111,7 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&commands); err != nil {
 			t.Fatal(err)
 		}
-		want := map[string]int{"aide": 0, "mes-demandes": 0, "nouveautes": 0, "surprise": 1, "recap": 0, "suivre": 3, "mes-suivis": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
+		want := map[string]int{"aide": 0, "mes-demandes": 0, "nouveautes": 1, "surprise": 2, "recap": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
 		if len(commands) != len(want) {
 			t.Fatalf("wrong command count: %d", len(commands))
 		}
@@ -123,6 +123,10 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 			delete(want, command.Name)
 			for index, option := range command.Options {
 				switch option.Name {
+				case "public":
+					if !PublicCommand(command.Name) || option.Type != 5 || option.Required {
+						t.Fatalf("bad public option %+v", option)
+					}
 				case "demande":
 					if option.Type != 4 || !option.Required || option.MinValue != 1 || option.MaxValue != 2147483647 {
 						t.Fatalf("bad request option %+v", option)

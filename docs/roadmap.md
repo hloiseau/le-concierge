@@ -24,6 +24,8 @@ Ces fonctions sont présentes dans le code publié ; leur présence ne prouve pa
 
 La version 0.9 reprend les retours d'utilisation : affiches Plex privées et TMDB pour les demandes, suivis Seerr automatiques dans le Hub et `/mes-suivis`, activation des DM sans étape cachée et rappels collectifs dans un salon Discord mentionnant les demandeurs. L'activité Tautulli active les performances par défaut lorsque le réglage explicite est absent ; une panne d'historique ne masque plus les données actuelles. Le bot synchronise son catalogue de commandes au démarrage si son token est fourni. Le salon, les permissions du bot et les capteurs du NAS restent à configurer ou vérifier sur l'installation ; la lecture réelle de Seerr et Tautulli a été vérifiée sans envoi Discord.
 
+La simplification suivante regroupe les demandes Seerr et leurs notifications dans **Mes demandes**. L'ancien lien `/suivis` redirige vers cette page, les suivis manuels existants restent modifiables, et `/mes-demandes` devient l'unique commande proposée pour ce parcours. `/nouveautes`, `/surprise` et `/recap` proposent `public:true` pour partager leur résultat dans le salon ; les erreurs, les demandes et les informations personnelles restent privées. Les tests utilisent des interactions signées et des services simulés, sans publication dans un vrai salon.
+
 | Tickets | Implémentation | Vérification externe restante |
 | --- | --- | --- |
 | C02–C04, H01/H04/H06 | OpenAPI 0.9 synchronisé, types générés, sessions Plex privées et Discord facultatif, migration SQLite v6, effacement des associations en mémoire à la déconnexion/révocation. | Recette à deux comptes sur le NAS. |

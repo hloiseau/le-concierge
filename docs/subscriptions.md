@@ -1,12 +1,12 @@
-# Mes suivis
+# Demandes et notifications
 
-La page **Mes suivis** et la commande privée `/mes-suivis` affichent automatiquement les films et séries demandés par le compte connecté dans Seerr. Aucun identifiant TMDB ni lien n’est à recopier. L’association repose sur l’identité Plex vérifiée, jamais sur le nom du demandeur ; chaque ligne de demande est contrôlée pour éviter les mélanges entre comptes.
+La page **Mes demandes** et la commande privée `/mes-demandes` affichent les films et séries demandés par le compte connecté dans Seerr. Aucun identifiant TMDB ni lien n’est à recopier. L’association repose sur l’identité Plex vérifiée, jamais sur le nom du demandeur ; chaque ligne de demande est contrôlée pour éviter les mélanges entre comptes. L’ancien lien `/suivis` redirige vers `/demandes` ; la commande historique `/mes-suivis` utilise le même traitement que `/mes-demandes` sans être proposée lors des nouveaux enregistrements Discord.
 
-Les demandes, leurs saisons, leur état et leur pagination proviennent de `GET /api/v1/requests?offset=0`, par pages de dix, comme dans **Mes demandes**. Aucun suivi supplémentaire n’est enregistré en base. Les rappels personnels avant retrait utilisent déjà ces demandes comme source d’intérêt ; leurs préférences restent dans **Mon compte**. L’état « disponible » de cette liste est celui de Seerr et ne remplace pas une vérification de lecture dans Plex.
+Les demandes, leurs saisons, leur état et leur pagination proviennent de `GET /api/v1/requests?offset=0`, par pages de dix. Aucun suivi supplémentaire n’est enregistré en base. Les rappels personnels avant retrait utilisent ces demandes comme source d’intérêt ; leurs préférences sont regroupées dans **Mes demandes → Notifications** (`/demandes#rappels`). **Mon compte** renvoie vers ce même formulaire. Les rappels collectifs du salon Discord et le consentement aux messages privés sont présentés séparément. L’état « disponible » de la liste est celui de Seerr et ne remplace pas une vérification de lecture dans Plex.
 
 ## Suivis ajoutés auparavant
 
-Les suivis ajoutés séparément restent visibles dans une section secondaire lorsqu’ils existent. Leurs canaux et leur désabonnement sont conservés ; retirer l’un d’eux ne supprime pas une demande Seerr ni son suivi automatique. La commande historique `/suivre` et l’API de création restent compatibles avec les intégrations existantes. Un suivi ajouté ne crée ni n’approuve une demande Seerr.
+Les suivis ajoutés séparément restent visibles dans une section secondaire de **Mes demandes** lorsqu’ils existent. Leurs canaux et leur désabonnement sont conservés ; retirer l’un d’eux ne supprime pas une demande Seerr. La commande historique `/suivre` n’est plus proposée dans le catalogue Discord, mais son traitement et l’API de création restent compatibles avec les intégrations existantes. Un suivi ajouté ne crée ni n’approuve une demande Seerr.
 
 Un contenu est identifié par son **type** (`movie` ou `tv`), son **identifiant TMDB** et, pour une série, un **numéro de saison facultatif**. La saison zéro représente les épisodes spéciaux ; l’absence de saison représente la série. Chaque compte possède au plus un suivi par combinaison, avec une limite de 100 suivis. Répéter une création actualise le canal du suivi existant. Il n’y a pas de distinction entre éditions, langues et qualités vidéo.
 
