@@ -25,11 +25,11 @@ func TestDiscoveryMessagesAreBoundedAndDoNotMentionAnyone(t *testing.T) {
 	for index := range 5000 {
 		recap.Items = append(recap.Items, upstream.Media{ID: strconv.Itoa(index), Title: strings.Repeat("📽", 200) + "@everyone <@12345> [link](https://malicious.test)", Type: "movie", URL: "https://app.plex.tv/desktop/#!/server/server-a/details?key=%2Flibrary%2Fmetadata%2F1"})
 	}
-	text := recapMessage(recap)
+	text := recapMessage(recap, true)
 	if len(text) > 2000 || !strings.Contains(text, "09/10/2026 au 15/10/2026 inclus · Europe/Paris") || !strings.Contains(text, "autre(s) titre(s)") || strings.Contains(text, "@everyone") || strings.Contains(text, "<@") {
 		t.Fatalf("bad recap rendering (%d bytes): %s", len(text), text)
 	}
-	text = discoveryLine(upstream.Media{Title: "@everyone <@12345> **Title**", Type: "show", URL: "https://app.plex.tv/desktop/#!/server/server-a/details?key=%2Flibrary%2Fmetadata%2F1"})
+	text = discoveryLine(upstream.Media{Title: "@everyone <@12345> **Title**", Type: "show", URL: "https://app.plex.tv/desktop/#!/server/server-a/details?key=%2Flibrary%2Fmetadata%2F1"}, true)
 	if strings.Contains(text, "@everyone") || strings.Contains(text, "<@") || strings.Contains(text, "**Title**") || !strings.Contains(text, "Série") {
 		t.Fatalf("unsafe title %s", text)
 	}
@@ -62,7 +62,10 @@ func TestDiscoveryMessageHandlesEmptyIncompleteAndDenied(t *testing.T) {
 						return response(200, `{"MediaContainer":{"size":0,"totalSize":0}}`), nil
 					}
 				})
-				text := s.discoveryMessage(context.Background(), upstream.Grant{ServerToken: "private-token"}, command, "", time.Now())
+				text, publicText := s.discoveryMessage(context.Background(), upstream.Grant{ServerToken: "private-token"}, command, "", time.Now())
+				if state != "empty" && publicText != "" {
+					t.Fatal("source failure produced a public message")
+				}
 				want := map[string]string{"empty": "Aucun", "incomplete": "catalogue complet", "denied": "accès Plex", "outage": "indisponible"}[state]
 				if !strings.Contains(text, want) || strings.Contains(text, "private-token") || strings.Contains(text, "plex.test") {
 					t.Fatalf("bad failure/empty message: %s", text)

@@ -117,7 +117,7 @@ func TestRecentMessageBounded(t *testing.T) {
 	for i := range items {
 		items[i] = upstream.Media{Title: strings.Repeat("🌒", 200), Type: "movie", AddedAt: "2026-10-16T12:00:00Z", URL: "https://app.plex.tv/" + strings.Repeat("x", 1000)}
 	}
-	if message := recentMessage(items, "https://hub.example"); len(message) > 2000 || strings.Count(message, "•") != 6 {
+	if message := recentMessage(items, "https://hub.example", true); len(message) > 2000 || strings.Count(message, "•") != 6 {
 		t.Fatal("message limit lost an item or was exceeded")
 	}
 }

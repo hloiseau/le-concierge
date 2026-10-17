@@ -1,8 +1,16 @@
 # Découverte Plex dans Discord
 
-Les commandes `/surprise` et `/recap` nécessitent une connexion Plex au Hub et une liaison Discord dans **Mon compte**. Elles utilisent le jeton du membre et vérifient l’identité du serveur Plex configuré avant de transmettre ce jeton. Les réponses sont privées, même lorsque la commande est lancée dans un salon partagé. Les mentions sont désactivées et les titres neutralisés.
+Les commandes `/nouveautes`, `/surprise` et `/recap` nécessitent une connexion Plex au Hub et une liaison Discord dans **Mon compte**. Elles utilisent le jeton du membre et vérifient l’identité du serveur Plex configuré avant de transmettre ce jeton. Les réponses sont privées par défaut. Les mentions sont désactivées et les titres neutralisés.
 
-Après mise à jour du bot, réenregistrer les commandes avec la procédure habituelle de `cmd/bot`. Aucune variable supplémentaire n’est nécessaire : les paramètres Discord, Plex et de liaison API existants s’appliquent. Les deux commandes fonctionnent uniquement à la demande ; aucune publication programmée n’est implémentée ou activée.
+Après mise à jour du bot, les commandes sont réenregistrées au démarrage si son token est configuré ; la procédure ponctuelle de `cmd/bot` reste disponible. Aucune variable supplémentaire n’est nécessaire : les paramètres Discord, Plex et de liaison API existants s’appliquent. Ces commandes fonctionnent uniquement à la demande ; aucune publication programmée n’est activée.
+
+## Partager dans le salon
+
+Utiliser `/nouveautes public:true`, `/surprise public:true` ou `/recap public:true` pour afficher le résultat aux autres membres du salon. Le filtre `type` de `/surprise` reste utilisable. Sans cette option, ou avec `public:false`, la réponse reste privée.
+
+Le partage contient uniquement les titres et informations du catalogue, sans lien Plex personnel ni boutons de navigation. `/nouveautes public:true` partage la première sélection ; la navigation reste disponible en mode privé. Les demandes personnelles, comptes, livres et diagnostics ne proposent pas cette option. Les problèmes de liaison, d’accès ou de source restent privés et ne produisent aucune publication.
+
+L’API autorise séparément le contenu public après les vérifications d’identité et d’accès. Le bot acquitte toujours en privé, termine ce message privé, puis publie un message de suivi dans le salon ; il confirme le résultat de l’envoi en privé. Cet ordre respecte [le comportement des réponses différées Discord](https://docs.discord.com/developers/interactions/receiving-and-responding#followup-messages), dont la visibilité ne peut pas être changée après création. Une erreur réseau après publication peut laisser l’état de l’envoi incertain : le message privé invite alors à vérifier le salon avant de réessayer.
 
 ## `/surprise`
 
@@ -20,6 +28,6 @@ Les films et épisodes ajoutés pendant cette période sont sélectionnés avant
 
 Les lectures utilisent [`GET /library/all`, les requêtes de médias et la pagination documentées par Plex](https://developer.plex.tv/pms/). Le catalogue est parcouru sans cache partagé : au maximum **25 pages de 200 entrées**, avec **6 secondes** de budget global pour la commande. `/surprise` autorise en plus **20 lectures de métadonnées ou de pages d’épisodes** pour vérifier les candidats tirés ; chaque page contient au plus 20 épisodes. Une limite atteinte donne une erreur explicite. Le total annoncé doit être présent et stable. Un total supérieur à 5 000, une pagination incomplète ou incohérente provoque une réponse explicite ; aucun tirage partiel n’est présenté comme un tirage du catalogue complet. Une indisponibilité ou révocation interrompt le résultat.
 
-Le message tient dans les limites Discord. Si le récapitulatif contient trop de titres, il indique combien restent à consulter dans Plex. Les liens ciblent l’application publique Plex et ne contiennent ni jeton ni adresse privée du serveur.
+Le message tient dans les limites Discord. Si le récapitulatif contient trop de titres, il indique combien restent à consulter dans Plex. Les réponses privées peuvent contenir des liens vers l’application Plex, sans jeton ni adresse privée du serveur ; ces liens sont retirés du résultat partagé.
 
-Les tests locaux avec serveurs simulés couvrent le tirage parmi les positions du catalogue, la pagination et ses plafonds, les filtres, les doublons entre pages, les bornes de période, les changements d’heure, l’isolation des jetons, la révocation, les signatures Discord, les replays, la suppression de compte pendant une lecture et les limites de message. Un essai sur le serveur Plex réel et dans Discord reste nécessaire avant déploiement.
+Les tests locaux avec serveurs simulés couvrent le tirage parmi les positions du catalogue, la pagination et ses plafonds, les filtres, les doublons entre pages, les bornes de période, les changements d’heure, l’isolation des jetons, la révocation, les signatures Discord, les replays, la suppression de compte pendant une lecture et les limites de message. Le partage vérifie aussi l’option explicite, les commandes autorisées, l’absence de publication sur erreur, le contenu public, l’ordre des appels et les échecs d’envoi. Aucun message Discord réel n’est envoyé par ces tests.

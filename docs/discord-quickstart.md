@@ -60,9 +60,9 @@ sudo bash truenas-admin.sh register
 
 Coller le token dans la saisie masquée. Le script l'injecte seulement dans le processus d'enregistrement, sans l'écrire dans le YAML ni l'ajouter à la ligne de commande. Ne pas le coller dans un salon Discord.
 
-L’enregistrement automatique ou explicite remplace les commandes de **cette application dans ce serveur** par `/aide`, `/mes-demandes`, `/nouveautes`, `/surprise`, `/recap`, `/suivre`, `/mes-suivis`, `/livres`, `/demander-livre` et `/diagnostic` : utiliser l'application dédiée créée à l'étape 1. Le répéter ne crée pas de doublons. Avec le mode ponctuel sans token dans le service, relancer le script après une mise à jour des commandes.
+L’enregistrement automatique ou explicite remplace les commandes de **cette application dans ce serveur** par `/aide`, `/mes-demandes`, `/nouveautes`, `/surprise`, `/recap`, `/livres`, `/demander-livre` et `/diagnostic` : utiliser l'application dédiée créée à l'étape 1. Le répéter ne crée pas de doublons. Avec le mode ponctuel sans token dans le service, relancer le script après une mise à jour des commandes.
 
-`/mes-suivis` reprend automatiquement les demandes Seerr de la personne connectée, avec leurs états et saisons. Il n’y a rien à recopier. `/suivre` reste disponible pour les anciens suivis ajoutés séparément ; ce n’est pas nécessaire pour suivre ses demandes.
+`/mes-demandes` reprend les demandes Seerr de la personne connectée et renvoie vers leurs notifications dans le Hub. Il n’y a rien à recopier. Les anciens noms `/mes-suivis` et `/suivre` ne sont plus publiés dans le catalogue de commandes ; les interactions déjà enregistrées restent reconnues pendant la mise à jour.
 
 `/diagnostic` est réservé aux administrateurs Discord ; son accès exige aussi une présence dans `ADMIN_DISCORD_IDS` côté API. Le bot lui-même n’a pas besoin de la permission Administrateur. Les clés Radarr/Sonarr facultatives et les limites de cette commande sont détaillées dans le [guide de diagnostic](diagnostics.md).
 
@@ -71,6 +71,8 @@ L’enregistrement automatique ou explicite remplace les commandes de **cette ap
 Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement par toi. Ensuite ouvrir le Hub, se connecter avec Plex puis ouvrir **Mon compte → Lier Discord** : le compte Seerr est associé automatiquement avec cette identité. Si nécessaire, se connecter une première fois à Seerr avec le même Plex puis actualiser l’association dans le Hub. Tester `/mes-demandes` et `/nouveautes`.
 
 Le bot peut apparaître **hors ligne** dans la liste des membres : il n'ouvre pas de connexion Gateway pour afficher une présence. Ce sont les commandes qui vérifient son fonctionnement. Les réponses personnelles sont éphémères dans le salon. Les messages privés des [suivis](subscriptions.md) et des [rappels](removal-reminders.md) exigent une configuration et un consentement explicites.
+
+Pour partager un résultat, tester `/nouveautes public:true`, `/surprise public:true` ou `/recap public:true`. Le résultat paraît dans le salon sans lien Plex personnel, mention ni bouton ; la confirmation reste privée. Sans `public:true`, rien n’est partagé. Les erreurs restent privées, tout comme les commandes personnelles et administrateur. Voir [le partage des résultats](discord-discovery.md#partager-dans-le-salon).
 
 Avec plus de dix demandes Seerr, `/mes-demandes` propose **Suivant**, puis **Précédent** pour revenir en arrière. Les pages remplacent le même message, toujours visible uniquement par toi. Tester aussi la dernière page et une nouvelle commande après déconnexion du Hub : elle doit inviter à se reconnecter. Si une page devient vide après suppression de demandes dans Seerr, le bouton précédent permet de revenir. En cas de panne, les boutons sont retirés ; relancer `/mes-demandes` après rétablissement.
 
