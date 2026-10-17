@@ -308,6 +308,11 @@ func TestOpenAPIResponses(t *testing.T) {
 			check(t, tc.method, tc.path, call(s, tc.method, tc.path, cookie, s.Config.PublicOrigin, tc.body), 200)
 		}
 	})
+	t.Run("personal Plex poster", func(t *testing.T) {
+		s, cookie := posterAPIFixture(t)
+		path := "/api/v1/posters/plex/12"
+		check(t, "GET", path, call(s, "GET", path, cookie, "", ""), 200)
+	})
 	t.Run("personal download library", func(t *testing.T) {
 		s, cookie := downloadLibraryAPIFixture(t)
 		for _, path := range []string{"/api/v1/downloads/library?q=film", "/api/v1/downloads/library?parent=20", "/api/v1/downloads/library?parent=21"} {

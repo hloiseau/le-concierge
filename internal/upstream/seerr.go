@@ -5,20 +5,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
 var ErrSeerrUserNotFound = errors.New("no Seerr user for verified Plex identity")
 
 type Request struct {
-	ID        int64  `json:"id"`
-	Title     string `json:"title"`
-	Type      string `json:"type"`
-	Status    string `json:"status"`
-	CreatedAt string `json:"createdAt"`
-	MediaID   int64  `json:"mediaId"`
-	Seasons   []int  `json:"seasons"`
+	ID            int64  `json:"id"`
+	Title         string `json:"title"`
+	Type          string `json:"type"`
+	Status        string `json:"status"`
+	CreatedAt     string `json:"createdAt"`
+	MediaID       int64  `json:"mediaId"`
+	Seasons       []int  `json:"seasons"`
+	PosterURL     string `json:"posterUrl,omitempty"`
+	RequesterName string `json:"requesterName,omitempty"`
 }
 type RequestPage struct {
 	Items  []Request `json:"items"`
@@ -45,7 +49,10 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 			Is4k        bool   `json:"is4k"`
 			CreatedAt   string `json:"createdAt"`
 			RequestedBy struct {
-				ID int64 `json:"id"`
+				ID           int64  `json:"id"`
+				DisplayName  string `json:"displayName"`
+				Username     string `json:"username"`
+				PlexUsername string `json:"plexUsername"`
 			} `json:"requestedBy"`
 			Media struct {
 				TmdbID   int64 `json:"tmdbId"`
@@ -80,8 +87,9 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 			title = "Série #" + strconv.FormatInt(r.Media.TmdbID, 10)
 		}
 		var detail struct {
-			Title string `json:"title"`
-			Name  string `json:"name"`
+			Title      string `json:"title"`
+			Name       string `json:"name"`
+			PosterPath string `json:"posterPath"`
 		}
 		if e := c.JSON(ctx, "GET", fmt.Sprintf("%s/api/v1/%s/%d", base, kind, r.Media.TmdbID), headers, "", &detail); e == nil {
 			if detail.Title != "" {
@@ -123,9 +131,25 @@ func (c *Client) Requests(ctx context.Context, base, key string, user int64, off
 		if date, err := time.Parse(time.RFC3339Nano, r.CreatedAt); err == nil {
 			createdAt = date.UTC().Format(time.RFC3339Nano)
 		}
-		out.Items = append(out.Items, Request{ID: r.ID, Title: title, Type: kind, Status: status, CreatedAt: createdAt, MediaID: r.Media.TmdbID, Seasons: seasons})
+		requester := strings.TrimSpace(r.RequestedBy.DisplayName)
+		if requester == "" {
+			requester = strings.TrimSpace(r.RequestedBy.Username)
+		}
+		if requester == "" {
+			requester = strings.TrimSpace(r.RequestedBy.PlexUsername)
+		}
+		out.Items = append(out.Items, Request{ID: r.ID, Title: title, Type: kind, Status: status, CreatedAt: createdAt, MediaID: r.Media.TmdbID, Seasons: seasons, PosterURL: seerrPosterURL(detail.PosterPath), RequesterName: requester})
 	}
 	return out, nil
+}
+
+var seerrPosterPath = regexp.MustCompile(`^/[A-Za-z0-9_-]+\.(jpg|jpeg|png|webp)$`)
+
+func seerrPosterURL(path string) string {
+	if len(path) > 200 || !seerrPosterPath.MatchString(path) {
+		return ""
+	}
+	return "https://image.tmdb.org/t/p/w342" + path
 }
 
 // SeerrUser resolves only the stable identity already verified by Plex. The

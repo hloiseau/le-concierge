@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"time"
 
@@ -241,7 +242,7 @@ func matchInterest(m upstream.PlexItem, targets []upstream.InterestTarget, get f
 	if len(targets) == 0 {
 		return false, false, nil
 	}
-	kind, tmdb := m.Kind, m.TMDBID
+	kind, tmdb, plexKey := m.Kind, m.TMDBID, m.ID
 	var season *int
 	if m.Kind == "season" || m.Kind == "episode" {
 		seasonItem := m
@@ -263,6 +264,7 @@ func matchInterest(m upstream.PlexItem, targets []upstream.InterestTarget, get f
 			return false, false, upstream.ErrIncomplete
 		}
 		kind, tmdb, season = "tv", parent.TMDBID, seasonItem.Index
+		plexKey = parent.ID
 	} else if kind == "show" {
 		kind = "tv"
 	}
@@ -271,7 +273,7 @@ func matchInterest(m upstream.PlexItem, targets []upstream.InterestTarget, get f
 		if t.Type != kind || t.TMDBID != tmdb || tmdb <= 0 || (t.Season != nil && (season == nil || *season != *t.Season)) {
 			continue
 		}
-		requested = requested || t.Requested
+		requested = requested || (t.Requested && slices.Contains(t.PlexKeys, plexKey))
 		following = following || t.Following
 	}
 	return requested, following, nil

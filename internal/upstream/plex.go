@@ -25,13 +25,14 @@ type Grant struct {
 	ExpiresAt    time.Time
 }
 type Media struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Type     string `json:"type"`
-	Year     int    `json:"year,omitempty"`
-	AddedAt  string `json:"addedAt"`
-	URL      string `json:"url,omitempty"`
-	Subtitle string `json:"subtitle,omitempty"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Type      string `json:"type"`
+	Year      int    `json:"year,omitempty"`
+	AddedAt   string `json:"addedAt"`
+	URL       string `json:"url,omitempty"`
+	Subtitle  string `json:"subtitle,omitempty"`
+	PosterURL string `json:"posterUrl,omitempty"`
 }
 
 // Keep the PIN creator, Plex's browser auth app and subsequent API calls on

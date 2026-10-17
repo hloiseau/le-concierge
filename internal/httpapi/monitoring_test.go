@@ -56,6 +56,16 @@ func TestMonitoringAuthorizationAndPrivacy(t *testing.T) {
 	if w.Code != 200 || strings.Contains(w.Body.String(), "PRIVATE") || strings.Contains(w.Body.String(), "hevc") {
 		t.Fatalf("unsafe public snapshot %d %s", w.Code, w.Body)
 	}
+	var current struct {
+		HostStatus string `json:"hostStatus"`
+		Activity   struct {
+			Status   string `json:"status"`
+			Sessions *int   `json:"sessions"`
+		} `json:"activity"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &current); err != nil || current.HostStatus != "not_configured" || current.Activity.Status != "available" || current.Activity.Sessions == nil || *current.Activity.Sessions != 1 {
+		t.Fatal("Plex activity hidden without a host collector", err)
+	}
 	if calls.Load() != 3 {
 		t.Fatal("expected one verified activity fetch")
 	}

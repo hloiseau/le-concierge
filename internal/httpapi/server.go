@@ -70,7 +70,7 @@ type Server struct {
 func New(c config.Config, db *store.Store) *Server {
 	client := upstream.New()
 	s := &Server{Config: c, Store: db, Upstream: client, Departures: departures.New(client), sessions: map[string]session{}, oauth: map[string]oauthAttempt{}, pins: map[string]pendingPin{}, grants: map[string]upstream.Grant{}, limits: map[string]bucket{}, seen: map[string]time.Time{}, reminderGate: make(chan struct{}, 1)}
-	if c.DiscordDMsEnabled {
+	if c.DiscordDMsEnabled || c.DiscordNotificationChannelID != "" {
 		s.Discord = notifications.NewDiscord(c.DiscordBotToken)
 	}
 	s.Monitoring = monitoring.New(client, db)
@@ -257,6 +257,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("DELETE /api/v1/account", s.deleteAccount)
 	m.HandleFunc("GET /api/v1/requests", s.requests)
 	m.HandleFunc("GET /api/v1/recent", s.recent)
+	m.HandleFunc("GET /api/v1/posters/plex/{id}", s.plexPoster)
 	m.HandleFunc("GET /api/v1/departures", s.departures)
 	m.HandleFunc("GET /api/v1/reminders", s.reminderInbox)
 	m.HandleFunc("GET /api/v1/reminders/preferences", s.getReminderPreferences)
@@ -327,12 +328,13 @@ func (s *Server) Handler() http.Handler {
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, map[string]any{
-		"version": "0.8.0", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
+		"version": "0.9.0", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
 		"requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(),
 		"subscriptions": s.subscriptionsEnabled(), "subscriptionNotifications": s.subscriptionsEnabled(),
-		"notifications":     s.departuresEnabled() || s.subscriptionsEnabled(),
-		"discordDMs":        s.Config.DiscordDMsEnabled && (s.departuresEnabled() || s.subscriptionsEnabled()),
-		"extensionRequests": s.extensionsEnabled(), "books": s.Config.GrimmoryURL != "", "booksCatalog": s.Config.GrimmoryURL != "", "recentBooks": s.Config.GrimmoryURL != "",
+		"notifications":           s.departuresEnabled() || s.subscriptionsEnabled(),
+		"discordDMs":              s.Config.DiscordDMsEnabled && (s.departuresEnabled() || s.subscriptionsEnabled()),
+		"discordChannelReminders": s.Config.DiscordNotificationChannelID != "" && s.Discord != nil,
+		"extensionRequests":       s.extensionsEnabled(), "books": s.Config.GrimmoryURL != "", "booksCatalog": s.Config.GrimmoryURL != "", "recentBooks": s.Config.GrimmoryURL != "",
 		"bookRequests": s.bookServiceURL("shelfmark") != "", "bookRequestTracking": s.Config.ShelfmarkURL != "", "bookCollections": s.Config.GrimmoryURL != "", "monitoring": s.Config.MonitoringEnabled,
 		"community": s.Config.CommunityFeedFile != "" && len(s.Config.CommunityForumIDs) > 0,
 		"roadmap":   s.Config.CommunityFeedFile != "" && len(s.Config.RoadmapIssueIDs) > 0,

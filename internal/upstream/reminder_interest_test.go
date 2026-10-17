@@ -62,7 +62,39 @@ func TestRequestInterestsKeepsRequestDateSeparateFromPlexCandidateKeys(t *testin
 	}))
 	defer srv.Close()
 	rows, err := New().RequestInterests(context.Background(), srv.URL, "fixture-key", 9)
-	if err != nil || len(rows) != 1 || rows[0].RequestID != 7 || !rows[0].RequestedAt.Equal(created) || len(rows[0].PlexKeys) != 2 || rows[0].PlexKeys[0] != "84" || rows[0].PlexKeys[1] != "85" {
+	if err != nil || len(rows) != 1 || rows[0].RequestID != 7 || !rows[0].RequestedAt.Equal(created) || len(rows[0].PlexKeys) != 1 || rows[0].PlexKeys[0] != "84" {
 		t.Fatalf("source facts lost: %+v %v", rows, err)
+	}
+}
+
+func TestRequestInterestsOnlyTargetsRequestedQuality(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		is4k          bool
+		hd, uhd, want string
+	}{
+		{"HD request", false, "84", "85", "84"},
+		{"4K request", true, "84", "85", "85"},
+		{"4K not in Plex yet", true, "84", "", ""},
+		{"HD not in Plex yet", false, "", "85", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(map[string]any{"pageInfo": map[string]int{"results": 1}, "results": []any{map[string]any{"id": 7, "type": "movie", "status": 2, "is4k": tc.is4k, "requestedBy": map[string]int{"id": 9}, "media": map[string]any{"tmdbId": 22, "ratingKey": tc.hd, "ratingKey4k": tc.uhd}}}})
+			}))
+			defer srv.Close()
+			rows, err := New().RequestInterests(t.Context(), srv.URL, "fixture-key", 9)
+			if err != nil || len(rows) != 1 {
+				t.Fatal("request lost", err)
+			}
+			keys := rows[0].PlexKeys
+			if tc.want == "" {
+				if len(keys) != 0 {
+					t.Fatal("unrequested quality substituted", keys)
+				}
+			} else if len(keys) != 1 || keys[0] != tc.want {
+				t.Fatal("wrong requested quality", keys)
+			}
+		})
 	}
 }

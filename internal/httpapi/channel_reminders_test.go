@@ -1,0 +1,148 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/hloiseau/le-concierge/internal/notifications"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
+	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours"} {
+		t.Run(mode, func(t *testing.T) {
+			s := fixture(t)
+			s.Config.DiscordNotificationChannelID = "456"
+			s.Config.DiscordGuildID = "123"
+			s.Config.MaintainerrURL = "https://maintainerr.example"
+			s.Config.SeerrURL = "https://seerr.example"
+			s.Config.SeerrAPIKey = "fixture-key"
+			s.Config.PlexServerID = "server-a"
+			now := time.Now().UTC()
+			loc, _ := time.LoadLocation("Europe/Paris")
+			local := now.In(loc)
+			now = time.Date(local.Year(), local.Month(), local.Day(), 12, 0, 0, 0, loc).UTC()
+			if mode == "quiet hours" {
+				now = now.Add(-8 * time.Hour)
+			}
+			added := now.Add(-6 * 24 * time.Hour)
+			posts := 0
+			reads := 0
+			if mode == "linked identity" {
+				u, err := s.Store.LoginPlex(context.Background(), "777", "Fixture")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = s.Store.LinkDiscord(context.Background(), u.ID, "777", "789"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != "GET" {
+					t.Fatal("mutated upstream")
+				}
+				body := ""
+				switch r.URL.Path {
+				case "/api/v1/settings/plex":
+					body = `{"machineId":"server-a"}`
+					if mode == "wrong Seerr server" {
+						body = `{"machineId":"server-b"}`
+					}
+				case "/api/app/status":
+					body = `{"status":1,"version":"3.30.1"}`
+				case "/api/media-server/type":
+					body = `{"type":"plex"}`
+				case "/api/media-server":
+					body = `{"machineId":"server-a"}`
+				case "/api/collections/overlay-data":
+					reads++
+					if mode == "changed source" {
+						return response(503, "private error"), nil
+					}
+					body = fmt.Sprintf(`[{"id":1,"mediaServerType":"plex","libraryId":"2","type":"movie","isActive":true,"arrAction":0,"deleteAfterDays":7,"mediaCount":1,"media":[{"id":1,"collectionId":1,"mediaServerId":"42","addDate":%q,"isManual":false,"ruleEvaluationFailed":false}]}]`, added.Format(time.RFC3339))
+				case "/api/rules":
+					body = fmt.Sprintf(`[{"id":5,"collectionId":1,"isActive":%v}]`, mode != "inactive")
+				case "/api/rules/exclusion":
+					body = `[]`
+					if mode == "excluded" {
+						body = `[{"id":1,"mediaServerId":"42","ruleGroupId":5,"type":"movie"}]`
+					}
+				case "/api/v1/request":
+					if mode == "deleted first requester" || mode == "temporary requester error" {
+						body = `{"pageInfo":{"results":2},"results":[{"id":2,"type":"movie","status":2,"requestedBy":{"id":8},"media":{"tmdbId":99,"ratingKey":"42"}},{"id":1,"type":"movie","status":2,"requestedBy":{"id":7},"media":{"tmdbId":99,"ratingKey":"42"}}]}`
+						break
+					}
+					status := 2
+					key := "42"
+					if mode == "declined" {
+						status = 3
+					}
+					if mode == "wrong key" {
+						key = "999"
+					}
+					body = fmt.Sprintf(`{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":%d,"is4k":%v,"requestedBy":{"id":7},"media":{"tmdbId":99,"ratingKey":%q,"ratingKey4k":"43"}}]}`, status, mode == "wrong quality", key)
+				case "/api/v1/user/8":
+					if mode == "temporary requester error" {
+						return response(503, "unavailable"), nil
+					}
+					return response(404, "not found"), nil
+				case "/api/v1/user/7":
+					body = `{"id":7,"plexId":777,"displayName":"@everyone"}`
+				case "/api/v1/user/7/settings/notifications":
+					body = `{"discordIds":["789"]}`
+					if mode == "no Discord identity" || mode == "linked identity" {
+						body = `{"discordIds":[]}`
+					}
+				case "/api/v1/movie/99":
+					body = `{"title":"Film demandé @everyone"}`
+				default:
+					t.Errorf("unexpected path %s", r.URL.Path)
+					return response(404, ""), nil
+				}
+				return response(200, body), nil
+			})
+			s.Discord = notifications.NewDiscord("fixture-token")
+			s.Discord.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method == "GET" {
+					return response(200, `{"id":"456","type":0,"guild_id":"123"}`), nil
+				}
+				posts++
+				var body struct {
+					Content  string `json:"content"`
+					Mentions struct {
+						Users []string `json:"users"`
+						Parse []string `json:"parse"`
+					} `json:"allowed_mentions"`
+				}
+				json.NewDecoder(r.Body).Decode(&body)
+				if len(body.Mentions.Users) != 1 || body.Mentions.Users[0] != "789" || len(body.Mentions.Parse) != 0 || strings.Contains(body.Content, "@everyone") || !strings.Contains(body.Content, "Film demandé") {
+					t.Fatalf("incorrect channel reminder: %+v", body)
+				}
+				return response(200, `{"id":"111","channel_id":"456"}`), nil
+			})
+			for i := 0; i < 2; i++ {
+				err := s.deliverChannelReminders(context.Background(), now)
+				if mode == "changed source" || mode == "wrong Seerr server" || mode == "temporary requester error" || (mode == "deleted first requester" && i == 0) {
+					if err == nil {
+						t.Fatal("source failure ignored")
+					}
+				} else if err != nil {
+					t.Fatal(err)
+				}
+			}
+			want := 0
+			if mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" {
+				want = 1
+			}
+			if posts != want {
+				t.Fatalf("posts=%d want=%d (grants=%d)", posts, want, len(s.grants))
+			}
+			if mode == "quiet hours" && reads != 0 {
+				t.Fatal("sources queried during quiet hours")
+			}
+		})
+	}
+}

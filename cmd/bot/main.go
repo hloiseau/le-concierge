@@ -52,6 +52,7 @@ func run() error {
 	srv := &http.Server{Addr: c.BotListen, Handler: bot.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go registerOnStart(ctx, bot)
 	done := make(chan error, 1)
 	go func() {
 		slog.Info("Discord interactions listening", "address", c.BotListen)
@@ -71,4 +72,19 @@ func run() error {
 		bot.Wait()
 	}
 	return nil
+}
+
+func registerOnStart(ctx context.Context, bot *discord.Bot) {
+	if bot.Config.DiscordBotToken == "" {
+		slog.Info("Discord command registration skipped: configure DISCORD_BOT_TOKEN or use --register")
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := bot.Register(ctx); err != nil {
+		// Provider responses and transport errors may contain credentials.
+		slog.Warn("Discord command registration failed; existing interactions remain available; retry with --register or restart")
+		return
+	}
+	slog.Info("Discord guild commands updated")
 }

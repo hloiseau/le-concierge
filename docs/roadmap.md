@@ -13,7 +13,7 @@ Les changements de [Concierge #40](https://github.com/hloiseau/le-concierge/pull
 | Parcours livré | Configuration nécessaire | Limite actuelle |
 | --- | --- | --- |
 | Nouveautés Plex et demandes personnelles | Plex et Seerr | La création de demandes reste dans Seerr. |
-| Suivis et alertes de disponibilité | Plex, Seerr ; Discord facultatif | Le formulaire demande encore un identifiant TMDB. |
+| Suivis et alertes de disponibilité | Plex, Seerr ; Discord facultatif | Les demandes Seerr sont suivies automatiquement ; les anciens suivis distincts restent modifiables. |
 | Rappels avant retrait et demandes de délai | Maintainerr, Tautulli, Plex ; consentement aux rappels | Une réponse à une demande de délai ne modifie pas Maintainerr. |
 | Catalogue, couvertures et collections de livres | Connexion OPDS Grimmory personnelle | Pas de détection fiable des tomes manquants ni de synchronisation Kobo intégrée. |
 | Suivi des demandes de livres | Connexion personnelle Shelfmark en mode builtin | Création dans Shelfmark ; import Grimmory non vérifié. |
@@ -22,9 +22,11 @@ Les changements de [Concierge #40](https://github.com/hloiseau/le-concierge/pull
 
 Ces fonctions sont présentes dans le code publié ; leur présence ne prouve pas que les services correspondants sont configurés sur l’installation. Le détail et les critères encore ouverts suivent.
 
+La version 0.9 reprend les retours d'utilisation : affiches Plex privées et TMDB pour les demandes, suivis Seerr automatiques dans le Hub et `/mes-suivis`, activation des DM sans étape cachée et rappels collectifs dans un salon Discord mentionnant les demandeurs. L'activité Tautulli active les performances par défaut lorsque le réglage explicite est absent ; une panne d'historique ne masque plus les données actuelles. Le bot synchronise son catalogue de commandes au démarrage si son token est fourni. Le salon, les permissions du bot et les capteurs du NAS restent à configurer ou vérifier sur l'installation ; la lecture réelle de Seerr et Tautulli a été vérifiée sans envoi Discord.
+
 | Tickets | Implémentation | Vérification externe restante |
 | --- | --- | --- |
-| C02–C04, H01/H04/H06 | OpenAPI 0.7 synchronisé, types générés, sessions Plex privées et Discord facultatif, migration SQLite v5, effacement des associations en mémoire à la déconnexion/révocation. | Recette à deux comptes et sauvegarde/restauration sur le NAS. |
+| C02–C04, H01/H04/H06 | OpenAPI 0.9 synchronisé, types générés, sessions Plex privées et Discord facultatif, migration SQLite v6, effacement des associations en mémoire à la déconnexion/révocation. | Recette à deux comptes sur le NAS. |
 | C05–C09, H02/H03/H05 | Demandes Seerr personnelles, pagination Hub/bot, nouveautés Plex paginées et dates vérifiées. Les derniers livres de l’accueil utilisent le flux OPDS récent personnel. | Commandes réenregistrées et accès réels aux bibliothèques distinctes. |
 | C10, H07 | CI Go/typecheck/Playwright/contrat/images et exemples TrueNAS/Caddy ; CLI de sauvegarde, collecteur Python testé en CI, sondes privées. | Images publiées et installation confirmée par l’administrateur ; recette des autres services encore ouverte. |
 | C25/C26, H16 | Sources Maintainerr/Tautulli vérifiées, demandes/suivis et saisons ciblées, état Plex positif « non vu », lectures commencées, option tous non vus, boîte Hub et DM sur consentement. File durable, revalidation finale, plafond commun, demandes de délai. Relance tardive des demandes sur option distincte, sans fausse échéance de retrait. | DM réel consenti, report/retrait et révocation avec les versions installées. Voir [les rappels](removal-reminders.md). |
@@ -37,7 +39,7 @@ Ces fonctions sont présentes dans le code publié ; leur présence ne prouve pa
 | C23, H13/H14 | Publication sélectionnée des fils Discord et d’issues, identifiants stables, statuts explicites, TTL, retrait des éléments non autorisés ; votes uniquement dans Discord. Exporteur périodique en lecture seule. | Configurer le manifeste et les droits publics réels ; jamais exporter les corps d’issues privées. Voir [la publication](community-publication.md). |
 | C24, H15 | Contrat personnel fusionné dans la [PR amont #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1), client Go, connexion personnelle Hub, choix et confirmation, jobs et transfert MP4/ZIP diffusé sans ticket navigateur. Fonctionnement confirmé par l’administrateur. La version 0.8 ajoute recherche Plex et connexion automatique avec le compte courant. | Recette à deux comptes et transfert long encore à vérifier ; nouveau sélecteur et connexion automatique à valider après mise à jour. Voir [le parcours](downloadarr.md). |
 
-Sauvegarder la base avant migration v5. Les nouveaux consentements restent désactivés ; les anciens réglages et livraisons sont conservés. Un retour à un ancien binaire exige aussi la restauration de sa base compatible. Les sessions et autorisations restent en mémoire, au plus douze heures ; après redémarrage les traitements personnels reprennent à la prochaine connexion. Les historiques techniques sont conservés sept jours, les rappels quatre-vingt-dix jours après expiration. Voir [le déploiement](deployment.md).
+La migration v6 conserve les anciens réglages et livraisons et ajoute la déduplication du salon. Les messages privés restent sur consentement. Les sessions et autorisations restent en mémoire, au plus douze heures ; après redémarrage les traitements personnels reprennent à la prochaine connexion. Les rappels collectifs du salon fonctionnent sans session personnelle. Les historiques techniques sont conservés sept jours, les rappels quatre-vingt-dix jours après expiration. Voir [le déploiement](deployment.md) et [les rappels en salon](discord-channel-reminders.md).
 
 ## Phase 1 — Fondations et bot V1
 

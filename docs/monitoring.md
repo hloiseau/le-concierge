@@ -1,6 +1,6 @@
 # Mesures du serveur et activité Plex
 
-Les tickets Concierge #16, #17, #18 et Hub #11, #12 disposent d'un chemin complet : collecteur local facultatif → fichier atomique → API privée → historique SQLite → page `/performances`. La collecte est désactivée par défaut. L'activité Plex peut fonctionner seule avec Tautulli, sans collecteur hôte.
+Les tickets Concierge #16, #17, #18 et Hub #11, #12 disposent d'un chemin complet : collecteur local facultatif → fichier atomique → API privée → historique SQLite → page `/performances`. Les mesures s'activent dès qu'une source est configurée : Tautulli avec son identité Plex, ou un fichier de mesures hôte. L'activité Plex fonctionne seule avec Tautulli, sans collecteur hôte.
 
 ## État de la validation
 
@@ -15,7 +15,13 @@ Sources primaires et correspondances :
 - [Manuel intel_gpu_top livré par intel-gpu-tools](https://manpages.debian.org/bookworm/intel-gpu-tools/intel_gpu_top.1.en.html) décrit JSON, sélection DRM explicite, intervalle et limites de permissions/perf. [Source du producteur JSON](https://github.com/mkahola/igt/blob/master/tools/intel_gpu_top.c) consultée pour les champs et unités ; le format exact installé doit encore être confronté à une capture réelle. Le premier échantillon de durée quasi nulle est rejeté.
 - [OpenZFS zpool-list](https://openzfs.github.io/openzfs-docs/man/master/8/zpool-list.8.html) définit la commande de lecture `list`, les colonnes exactes, les options sans en-tête et sans arrondi. Le stockage présenté correspond aux pools explicitement choisis, pas à une estimation de taille des médias.
 
-## Activation facultative
+## Activation et diagnostic
+
+La configuration Tautulli/Plex existante suffit pour afficher l'activité Plex : laisser `MONITORING_ENABLED` absent ou vide. `MONITORING_ENABLED=false` reste une désactivation explicite, y compris lorsqu'une source est configurée. Une installation issue de l'ancien exemple peut encore avoir cette valeur `false` : la retirer ou utiliser `true` lors de la mise à jour. Le Hub choisit l'historique des sessions Plex par défaut lorsqu'aucun collecteur hôte n'est relié.
+
+L'activité Plex ne fournit pas CPU, RAM, GPU ou réseau du NAS. Ces mesures nécessitent le collecteur ci-dessous, son dossier partagé en lecture seule et `METRICS_FILE`. Le champ `hostStatus` de `/api/v1/monitoring` distingue `not_configured` (aucun fichier prévu), `error` (lecture ou validation impossible), `stale` (plus de deux minutes) et `available`. Un champ de mesure absent conserve son état indisponible ; le Hub explique l'absence du collecteur et conserve l'activité Plex. Un échec de chargement de l'historique ou des détails administrateur ne masque plus les observations actuelles.
+
+Le 17 octobre 2026, trois lectures du Tautulli configuré dans l'environnement de développement ont réussi : version 2.18.2, identité Plex concordante et activité valide. Cet environnement avait Tautulli/Plex configurés, sans `MONITORING_ENABLED` ni `METRICS_FILE`, ce qui permet de reproduire le masquage par l'ancien défaut `false`. Ce contrôle ne prouve pas la configuration des conteneurs déployés sur le NAS et ne valide aucun capteur matériel.
 
 Configuration API :
 

@@ -2,12 +2,48 @@ package upstream
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+func TestRequestArtworkAndRequesterUseValidatedUpstreamFields(t *testing.T) {
+	for _, tc := range []struct{ name, path, want string }{
+		{"TMDB image", "/abc_def-12.jpg", "https://image.tmdb.org/t/p/w342/abc_def-12.jpg"},
+		{"missing", "", ""},
+		{"absolute URL", "https://foreign.example/poster.jpg", ""},
+		{"query credential", "/poster.jpg?token=private", ""},
+		{"parent path", "/../poster.jpg", ""},
+		{"SVG", "/poster.svg", ""},
+		{"oversized path", "/" + strings.Repeat("a", 201) + ".jpg", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Header.Get("X-Api-Key") != "fixture-key" || r.URL.Query().Has("apikey") {
+					t.Error("unsafe request credentials")
+				}
+				switch r.URL.Path {
+				case "/api/v1/user/42/requests":
+					fmt.Fprint(w, `{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":2,"requestedBy":{"id":42,"displayName":" Alice ","username":"secondary","plexUsername":"tertiary"},"media":{"tmdbId":100,"status":5}}]}`)
+				case "/api/v1/movie/100":
+					_ = json.NewEncoder(w).Encode(map[string]string{"title": "Fixture film", "posterPath": tc.path})
+				default:
+					t.Error("unexpected request path")
+					w.WriteHeader(404)
+				}
+			}))
+			defer source.Close()
+			page, err := New().Requests(t.Context(), source.URL, "fixture-key", 42, 0)
+			if err != nil || len(page.Items) != 1 || page.Items[0].PosterURL != tc.want || page.Items[0].RequesterName != "Alice" {
+				t.Fatalf("request artwork/name: %+v %v", page, err)
+			}
+		})
+	}
+}
 
 func TestSeerrPlexIdentityLookup(t *testing.T) {
 	for _, tc := range []struct {

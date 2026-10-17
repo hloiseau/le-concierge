@@ -33,6 +33,7 @@ type Snapshot struct {
 	UpdatedAt         time.Time                    `json:"updatedAt"`
 	ExpiresAt         time.Time                    `json:"expiresAt"`
 	HostUpdatedAt     *time.Time                   `json:"hostUpdatedAt"`
+	HostStatus        string                       `json:"hostStatus"`
 	ActivityUpdatedAt *time.Time                   `json:"activityUpdatedAt"`
 	Metrics           map[string]store.MetricValue `json:"metrics"`
 	Activity          upstream.ActivitySummary     `json:"activity"`
@@ -72,10 +73,11 @@ func (s *Service) Current(ctx context.Context, c config.Config) (Snapshot, error
 		return cached, nil
 	}
 	now := time.Now().UTC()
-	out := Snapshot{UpdatedAt: now, ExpiresAt: now.Add(30 * time.Second), Metrics: store.MissingMetrics("unavailable"), Activity: upstream.ActivitySummary{Status: "unavailable"}, Sessions: []upstream.ActivitySession{}, HostDetails: []HostDetail{}}
+	out := Snapshot{UpdatedAt: now, ExpiresAt: now.Add(30 * time.Second), HostStatus: "not_configured", Metrics: store.MissingMetrics("unavailable"), Activity: upstream.ActivitySummary{Status: "unavailable"}, Sessions: []upstream.ActivitySession{}, HostDetails: []HostDetail{}}
 	if c.MetricsFile != "" {
 		host, err := readHost(c.MetricsFile, now)
 		if err != nil {
+			out.HostStatus = "error"
 			for key, m := range out.Metrics {
 				if !strings.HasPrefix(key, "plex_") {
 					m.Status = "error"
@@ -83,6 +85,7 @@ func (s *Service) Current(ctx context.Context, c config.Config) (Snapshot, error
 				}
 			}
 		} else {
+			out.HostStatus = "available"
 			out.HostUpdatedAt = &host.CollectedAt
 			out.HostVersion = host.HostVersion
 			out.HostDetails = host.Details
@@ -101,6 +104,7 @@ func (s *Service) Current(ctx context.Context, c config.Config) (Snapshot, error
 				out.Metrics[key] = m
 			}
 			if stale {
+				out.HostStatus = "stale"
 				out.HostDetails = []HostDetail{}
 			}
 		}

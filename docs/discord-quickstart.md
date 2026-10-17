@@ -14,7 +14,7 @@ Ouvrir le [Discord Developer Portal](https://discord.com/developers/applications
 | Discord → Paramètres utilisateur → Avancés → Mode développeur, puis clic droit sur le serveur → Copier l'identifiant | Server/Guild ID | `DISCORD_GUILD_ID` |
 | Shell du NAS : `openssl rand -hex 32` | Secret interne aléatoire | `BOT_API_SECRET` |
 
-Dans [truenas-discord.yaml](../deploy/truenas-discord.yaml), le bloc `x-discord` partage les valeurs entre API et bot. Le **Client Secret OAuth2** et le **token du bot** sont deux secrets différents. Le token du bot n’est pas nécessaire au processus bot après l’enregistrement des commandes. Pour activer les DM facultatifs, le processus API en a besoin via `DISCORD_BOT_TOKEN` ou un fichier secret `DISCORD_BOT_TOKEN_FILE` ; voir le [guide des DM](discord-reminders.md).
+Dans [truenas-discord.yaml](../deploy/truenas-discord.yaml), le bloc `x-discord` partage les valeurs entre API et bot. Le **Client Secret OAuth2** et le **token du bot** sont deux secrets différents. Le processus bot utilise `DISCORD_BOT_TOKEN` ou un fichier secret `DISCORD_BOT_TOKEN_FILE` pour mettre à jour automatiquement les commandes à chaque démarrage. Le processus API utilise aussi ce token pour les notifications Discord ; voir le [guide des notifications](discord-reminders.md).
 
 Dans **OAuth2 → Redirects**, ajouter exactement :
 
@@ -48,7 +48,11 @@ Copier **Install Link**, l'ouvrir, choisir **Ajouter à un serveur**, puis ton s
 
 ## 5. Enregistrer les commandes
 
-Dans **Bot → Reset Token**, récupérer le token dans ton gestionnaire de mots de passe. Dans le **Shell du NAS**, lancer le script fourni, depuis le dossier où tu l'as copié :
+Dans **Bot → Reset Token**, récupérer le token dans ton gestionnaire de mots de passe, puis configurer `DISCORD_BOT_TOKEN` ou `DISCORD_BOT_TOKEN_FILE` dans le service **bot**. Au démarrage, il enregistre automatiquement le catalogue de sa version dans le serveur configuré. Les mises à jour d’image ajoutent donc les nouvelles commandes sans commande manuelle supplémentaire.
+
+Les logs indiquent `Discord guild commands updated` si l’enregistrement réussit. Une panne Discord ou un token refusé produit `Discord command registration failed` sans arrêter les interactions existantes. Après correction, redémarrer le bot ou relancer l’enregistrement explicite. Sans token configuré, le bot signale `Discord command registration skipped` et garde les commandes déjà installées.
+
+Pour un enregistrement ponctuel, sans conserver le token dans le service, le **Shell du NAS** peut toujours lancer le script fourni depuis le dossier où il a été copié :
 
 ```bash
 sudo bash truenas-admin.sh register
@@ -56,7 +60,9 @@ sudo bash truenas-admin.sh register
 
 Coller le token dans la saisie masquée. Le script l'injecte seulement dans le processus d'enregistrement, sans l'écrire dans le YAML ni l'ajouter à la ligne de commande. Ne pas le coller dans un salon Discord.
 
-Cette opération remplace les commandes de **cette application dans ce serveur** par `/aide`, `/mes-demandes`, `/nouveautes`, `/surprise`, `/recap`, `/suivre`, `/mes-suivis`, `/livres`, `/demander-livre` et `/diagnostic` : utiliser l'application dédiée créée à l'étape 1. On peut relancer la commande sans créer de doublons. Après une mise à jour ajoutant ces commandes ou leurs options, relancer cet enregistrement avec la nouvelle image du bot.
+L’enregistrement automatique ou explicite remplace les commandes de **cette application dans ce serveur** par `/aide`, `/mes-demandes`, `/nouveautes`, `/surprise`, `/recap`, `/suivre`, `/mes-suivis`, `/livres`, `/demander-livre` et `/diagnostic` : utiliser l'application dédiée créée à l'étape 1. Le répéter ne crée pas de doublons. Avec le mode ponctuel sans token dans le service, relancer le script après une mise à jour des commandes.
+
+`/mes-suivis` reprend automatiquement les demandes Seerr de la personne connectée, avec leurs états et saisons. Il n’y a rien à recopier. `/suivre` reste disponible pour les anciens suivis ajoutés séparément ; ce n’est pas nécessaire pour suivre ses demandes.
 
 `/diagnostic` est réservé aux administrateurs Discord ; son accès exige aussi une présence dans `ADMIN_DISCORD_IDS` côté API. Le bot lui-même n’a pas besoin de la permission Administrateur. Les clés Radarr/Sonarr facultatives et les limites de cette commande sont détaillées dans le [guide de diagnostic](diagnostics.md).
 
@@ -70,9 +76,9 @@ Avec plus de dix demandes Seerr, `/mes-demandes` propose **Suivant**, puis **Pr�
 
 `/nouveautes` affiche maintenant les titres, dates et liens vers Plex, avec **Suivant** puis **Début** pour revenir à la première page. Les épisodes d’une même série sont regroupés à l’intérieur de chaque page : six entrées Plex source peuvent donc donner moins de six cartes. La suite utilise le curseur réel de Plex et s’arrête à l’offset maximal 10 000 ; cette sélection n’est pas un inventaire exhaustif. **Début** revient au début, sans prétendre reconstituer une page précédente de taille variable. Tester une page courte, la dernière page et une perte d’accès pendant la navigation. Une panne retire les résultats et les boutons ; relancer la commande après rétablissement.
 
-Mettre à jour **API et bot** avec la même version puis enregistrer les commandes de cette version. Sauvegarder SQLite avant le premier démarrage qui applique les migrations, même si seuls les boutons Discord vous intéressent. Le [guide de déploiement](deployment.md#sauvegarde-et-retour-arrière) précise le retour arrière.
+Mettre à jour **API et bot** avec la même version. Avec le token configuré dans le bot, son démarrage met à jour les commandes. Le [guide de déploiement](deployment.md#sauvegarde-et-retour-arrière) précise le retour arrière.
 
-Si les commandes n'apparaissent pas : vérifier le serveur configuré, le résultat de `register`, les droits d'intégration, puis recharger Discord. Si elles invitent à se reconnecter, ouvrir le Hub : les autorisations expirent au plus tard après 12 h et sont perdues au redémarrage.
+Si les commandes n'apparaissent pas : vérifier le serveur configuré, le token et le résultat de l’enregistrement dans les logs du bot, les droits d'intégration, puis recharger Discord. Si elles invitent à se reconnecter, ouvrir le Hub : les autorisations expirent au plus tard après 12 h et sont perdues au redémarrage.
 
 En cas de `Discord reply rejected` avec statut 404 sur une ancienne image, mettre à jour **API et bot**. `/aide` répond directement sans webhook. Pour les commandes personnelles, le bot attend désormais la confirmation du callback initial avant de modifier le message ; les erreurs incluent le code Discord (`discord_code`) sans les tokens. Un 404 isolé ne permet pas de distinguer un webhook inconnu d’un message absent : ce code précis permet de poursuivre le diagnostic.
 

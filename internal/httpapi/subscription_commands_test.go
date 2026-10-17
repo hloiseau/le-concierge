@@ -7,13 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/hloiseau/le-concierge/internal/store"
 )
 
 func subscriptionInteraction(t *testing.T, s *Server) func(id, user, data string) *httptest.ResponseRecorder {
@@ -63,15 +62,6 @@ func TestSubscriptionCommandsShareOwnerStateAndRemainPrivate(t *testing.T) {
 	if w = request("90001", "11111", followFilmCommand); w.Code != 409 {
 		t.Fatalf("interaction replay accepted: %d %s", w.Code, w.Body)
 	}
-	w = request("90002", "11111", `{"name":"mes-suivis"}`)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "Shared film") || !strings.Contains(w.Body.String(), "/suivis") {
-		t.Fatalf("own list: %d %s", w.Code, w.Body)
-	}
-	seed(t, s, "22222", true)
-	w = request("90003", "22222", `{"name":"mes-suivis"}`)
-	if w.Code != 200 || strings.Contains(w.Body.String(), "Shared film") || !strings.Contains(w.Body.String(), "0 suivi(s)") {
-		t.Fatalf("cross-owner list: %d %s", w.Code, w.Body)
-	}
 }
 
 func TestSubscriptionCommandsValidateOptionsAndAccess(t *testing.T) {
@@ -111,15 +101,54 @@ func TestSubscriptionCommandsValidateOptionsAndAccess(t *testing.T) {
 	}
 }
 
-func TestSubscriptionCommandsPageFromSignedOptions(t *testing.T) {
-	s, _, _ := subscriptionFixture(t)
-	for id := int64(12); id <= 22; id++ {
-		if _, err := s.Store.SaveSubscription(context.Background(), "11111", store.SubscriptionTarget{Type: "movie", TMDBID: id}, "hub"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	w := subscriptionInteraction(t, s)("90001", "11111", `{"name":"mes-suivis","options":[{"name":"page","type":4,"value":2}]}`)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "Page 2") || !strings.Contains(w.Body.String(), "Shared film") {
-		t.Fatalf("wrong page: %d %s", w.Code, w.Body)
+func TestFollowingCommandsAutomaticallyListOwnSeerrRequests(t *testing.T) {
+	for _, tc := range []struct {
+		name, user, owner string
+		wantTitle         bool
+	}{
+		{"own requests without saved follows", "11111", "7", true},
+		{"another account", "22222", "7", false},
+		{"upstream mixes request owners", "11111", "8", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := fixture(t)
+			cookie := seed(t, s, tc.user, true)
+			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != "GET" {
+					t.Fatal("automatic following mutated upstream")
+				}
+				switch r.URL.Path {
+				case "/api/v1/user":
+					return response(200, `{"pageInfo":{"results":2},"results":[{"id":7,"plexId":11111},{"id":8,"plexId":22222}]}`), nil
+				case "/api/v1/user/7/requests":
+					if r.URL.Query().Get("skip") != "10" {
+						t.Error("request page was not forwarded")
+					}
+					return response(200, fmt.Sprintf(`{"pageInfo":{"results":11},"results":[{"id":73,"type":"tv","status":2,"requestedBy":{"id":%s},"media":{"tmdbId":12,"status":4},"seasons":[{"seasonNumber":2}]}]}`, tc.owner)), nil
+				case "/api/v1/user/8/requests":
+					return response(200, `{"pageInfo":{"results":0},"results":[]}`), nil
+				case "/api/v1/tv/12":
+					return response(200, `{"id":12,"name":"My requested series"}`), nil
+				default:
+					t.Errorf("unexpected source: %s", r.URL.Path)
+					return response(500, `{}`), nil
+				}
+			})
+			w := subscriptionInteraction(t, s)("90001", tc.user, `{"name":"mes-suivis","options":[{"name":"page","type":4,"value":2}]}`)
+			if w.Code != 200 || !strings.Contains(w.Body.String(), `"flags":64`) || strings.Contains(w.Body.String(), "My requested series") != tc.wantTitle {
+				t.Fatalf("automatic list/privacy: %d %s", w.Code, w.Body)
+			}
+			if tc.wantTitle && (!strings.Contains(w.Body.String(), "Page 2") || !strings.Contains(w.Body.String(), "Partiellement disponible") || !strings.Contains(w.Body.String(), "saisons [2]")) {
+				t.Fatalf("request status/seasons missing: %s", w.Body)
+			}
+			w = call(s, "GET", "/api/v1/requests?offset=10", cookie, "", "")
+			if strings.Contains(w.Body.String(), "My requested series") != tc.wantTitle {
+				t.Fatalf("Hub and bot disagree on ownership: %s", w.Body)
+			}
+			_, total, err := s.Store.Subscriptions(context.Background(), tc.user, 0)
+			if err != nil || total != 0 {
+				t.Fatalf("automatic requests created duplicate follows: %d %v", total, err)
+			}
+		})
 	}
 }

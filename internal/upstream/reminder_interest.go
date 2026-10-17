@@ -39,6 +39,7 @@ func (c *Client) RequestInterests(ctx context.Context, base, key string, user in
 				ID          int64     `json:"id"`
 				Type        string    `json:"type"`
 				Status      int       `json:"status"`
+				Is4K        bool      `json:"is4k"`
 				CreatedAt   time.Time `json:"createdAt"`
 				RequestedBy struct {
 					ID int64 `json:"id"`
@@ -73,10 +74,11 @@ func (c *Client) RequestInterests(ctx context.Context, base, key string, user in
 				continue
 			}
 			keys := []string{}
-			for _, key := range []string{row.Media.RatingKey, row.Media.RatingKey4K} {
-				if key == "" {
-					continue
-				}
+			key := row.Media.RatingKey
+			if row.Is4K {
+				key = row.Media.RatingKey4K
+			}
+			if key != "" {
 				n, err := strconv.ParseInt(key, 10, 64)
 				if err != nil || n <= 0 || strconv.FormatInt(n, 10) != key {
 					return nil, ErrIncomplete

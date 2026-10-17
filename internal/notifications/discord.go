@@ -112,6 +112,73 @@ func (d *Discord) SendValidated(ctx context.Context, discordID, nonce string, it
 }
 
 func (d *Discord) post(ctx context.Context, path string, payload, result any) error {
+	return d.request(ctx, http.MethodPost, path, payload, result)
+}
+
+// SendChannelValidated only permits explicit user mentions in the configured
+// guild's text channel. It never opens DMs or accepts names as mention targets.
+func (d *Discord) SendChannelValidated(ctx context.Context, guildID, channelID, nonce string, item Message, recipients []string, beforeSend func() error) error {
+	if d.token == "" || !snowflake(guildID) || !snowflake(channelID) || nonce == "" || len(nonce) > 25 || len(recipients) == 0 || len(recipients) > 25 {
+		return &DeliveryError{Code: "invalid_delivery", Permanent: true}
+	}
+	seen := map[string]bool{}
+	mentions := []string{}
+	for _, id := range recipients {
+		if !snowflake(id) {
+			return &DeliveryError{Code: "invalid_delivery", Permanent: true}
+		}
+		if !seen[id] {
+			mentions = append(mentions, id)
+			seen[id] = true
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var channel struct {
+		ID      string `json:"id"`
+		GuildID string `json:"guild_id"`
+		Type    int    `json:"type"`
+	}
+	if err := d.request(ctx, http.MethodGet, "/channels/"+channelID, nil, &channel); err != nil {
+		return err
+	}
+	if channel.ID != channelID || channel.GuildID != guildID || (channel.Type != 0 && channel.Type != 5) {
+		return &DeliveryError{Code: "invalid_guild_channel", Permanent: true}
+	}
+	if beforeSend != nil {
+		if err := beforeSend(); err != nil {
+			return &DeliveryError{Code: "authorization_changed", Permanent: true}
+		}
+	}
+	body := "Le Concierge — rappel avant retrait\n"
+	for _, id := range mentions {
+		body += "<@" + id + "> "
+	}
+	body += "\n" + plain(item.Title, 200) + " — " + plain(item.Description, 300)
+	if len(utf16.Encode([]rune(body))) > 1900 {
+		return &DeliveryError{Code: "invalid_delivery", Permanent: true}
+	}
+	if len(item.URL) <= 512 {
+		if u, err := url.Parse(item.URL); err == nil && u.Hostname() != "" && u.User == nil && (u.Scheme == "https" || u.Scheme == "http") && !strings.ContainsAny(item.URL, "<>\r\n") {
+			if link := "\n<" + u.String() + ">"; len(utf16.Encode([]rune(body+link))) <= 2000 {
+				body += link
+			}
+		}
+	}
+	var message struct {
+		ID        string `json:"id"`
+		ChannelID string `json:"channel_id"`
+	}
+	if err := d.post(ctx, "/channels/"+channelID+"/messages", map[string]any{"content": body, "nonce": nonce, "enforce_nonce": true, "allowed_mentions": map[string]any{"parse": []string{}, "users": mentions}, "flags": 4}, &message); err != nil {
+		return err
+	}
+	if !snowflake(message.ID) || message.ChannelID != channelID {
+		return &DeliveryError{Code: "invalid_response"}
+	}
+	return nil
+}
+
+func (d *Discord) request(ctx context.Context, method, path string, payload, result any) error {
 	d.mu.Lock()
 	denied, invalidRateLimit, wait := d.denied, d.invalidRateLimit, time.Until(d.until)
 	d.mu.Unlock()
@@ -128,7 +195,11 @@ func (d *Discord) post(ctx context.Context, path string, payload, result any) er
 	if err != nil {
 		return &DeliveryError{Code: "invalid_delivery", Permanent: true}
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://discord.com/api/v10"+path, bytes.NewReader(body))
+	var reader io.Reader
+	if method != http.MethodGet {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, "https://discord.com/api/v10"+path, reader)
 	if err != nil {
 		return &DeliveryError{Code: "invalid_delivery", Permanent: true}
 	}

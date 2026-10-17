@@ -252,6 +252,9 @@ func (s *Server) RunReminders(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
+		if err := s.deliverChannelReminders(ctx, time.Now().UTC()); err != nil && ctx.Err() == nil {
+			slog.Warn("Discord channel reminders deferred; current Seerr requesters and removal sources required")
+		}
 		if err := s.Store.PruneReminders(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			slog.Warn("Reminder retention cleanup deferred")
 		}

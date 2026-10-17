@@ -17,6 +17,7 @@ func TestUnstartedRemindersRequirePersonalIntentAndPositivePlexState(t *testing.
 		follow, requested, all, known, completed bool
 		owner                                    int
 		requestStatus                            int
+		is4k, missingKey                         bool
 		want                                     int
 	}{
 		{name: "default ignores unknown", known: true},
@@ -26,6 +27,9 @@ func TestUnstartedRemindersRequirePersonalIntentAndPositivePlexState(t *testing.
 		{name: "explicit all non vu", all: true, known: true, want: 1},
 		{name: "own request", requested: true, known: true, owner: 9, want: 1},
 		{name: "completed request still unwatched", requested: true, requestStatus: 5, known: true, owner: 9, want: 1},
+		{name: "4K request does not imply HD interest", requested: true, is4k: true, known: true, owner: 9},
+		{name: "request not indexed is not matched by title", requested: true, missingKey: true, known: true, owner: 9},
+		{name: "explicit follow still covers other quality", follow: true, requested: true, is4k: true, known: true, owner: 9, want: 1},
 		{name: "declined request excluded", requested: true, requestStatus: 3, known: true, owner: 9},
 		{name: "another requester", requested: true, known: true, owner: 10},
 	} {
@@ -55,7 +59,11 @@ func TestUnstartedRemindersRequirePersonalIntentAndPositivePlexState(t *testing.
 					if status == 0 {
 						status = 2
 					}
-					return response(200, fmt.Sprintf(`{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":%d,"requestedBy":{"id":%d},"media":{"tmdbId":22}}]}`, status, tc.owner)), nil
+					key := "42"
+					if tc.missingKey {
+						key = ""
+					}
+					return response(200, fmt.Sprintf(`{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":%d,"is4k":%v,"requestedBy":{"id":%d},"media":{"tmdbId":22,"ratingKey":%q,"ratingKey4k":"142"}}]}`, status, tc.is4k, tc.owner, key)), nil
 				case "/library/all":
 					if r.URL.Query().Get("unwatched") != "1" || r.Header.Get("X-Plex-Token") != "resource-11111" {
 						t.Fatal("not a personal unwatched query")
