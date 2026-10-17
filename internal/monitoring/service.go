@@ -34,6 +34,8 @@ type Snapshot struct {
 	ExpiresAt         time.Time                    `json:"expiresAt"`
 	HostUpdatedAt     *time.Time                   `json:"hostUpdatedAt"`
 	HostStatus        string                       `json:"hostStatus"`
+	ToparrUpdatedAt   *time.Time                   `json:"toparrUpdatedAt"`
+	ToparrStatus      string                       `json:"toparrStatus"`
 	ActivityUpdatedAt *time.Time                   `json:"activityUpdatedAt"`
 	Metrics           map[string]store.MetricValue `json:"metrics"`
 	Activity          upstream.ActivitySummary     `json:"activity"`
@@ -48,10 +50,11 @@ type Service struct {
 	mu     sync.Mutex
 	key    [32]byte
 	cached Snapshot
+	now    func() time.Time
 }
 
 func New(client *upstream.Client, db *store.Store) *Service {
-	return &Service{client: client, db: db, gate: make(chan struct{}, 1)}
+	return &Service{client: client, db: db, gate: make(chan struct{}, 1), now: time.Now}
 }
 
 func (s *Service) Current(ctx context.Context, c config.Config) (Snapshot, error) {
@@ -64,16 +67,17 @@ func (s *Service) Current(ctx context.Context, c config.Config) (Snapshot, error
 	case <-ctx.Done():
 		return Snapshot{}, ctx.Err()
 	}
-	key := sha256.Sum256([]byte(c.MetricsFile + "\x00" + c.TautulliURL + "\x00" + c.TautulliAPIKey + "\x00" + c.PlexServerID))
+	key := sha256.Sum256([]byte(c.MetricsFile + "\x00" + c.TautulliURL + "\x00" + c.TautulliAPIKey + "\x00" + c.PlexServerID + "\x00" + c.ToparrURL))
+	now := s.now().UTC()
 	s.mu.Lock()
 	cached := s.cached
 	same := s.key == key
 	s.mu.Unlock()
-	if same && time.Now().Before(cached.ExpiresAt) {
+	toparrFresh := cached.ToparrStatus != "available" || (cached.ToparrUpdatedAt != nil && now.Before(cached.ToparrUpdatedAt.Add(30*time.Second)))
+	if same && now.Before(cached.ExpiresAt) && toparrFresh {
 		return cached, nil
 	}
-	now := time.Now().UTC()
-	out := Snapshot{UpdatedAt: now, ExpiresAt: now.Add(30 * time.Second), HostStatus: "not_configured", Metrics: store.MissingMetrics("unavailable"), Activity: upstream.ActivitySummary{Status: "unavailable"}, Sessions: []upstream.ActivitySession{}, HostDetails: []HostDetail{}}
+	out := Snapshot{UpdatedAt: now, ExpiresAt: now.Add(30 * time.Second), HostStatus: "not_configured", ToparrStatus: "not_configured", Metrics: store.MissingMetrics("unavailable"), Activity: upstream.ActivitySummary{Status: "unavailable"}, Sessions: []upstream.ActivitySession{}, HostDetails: []HostDetail{}}
 	if c.MetricsFile != "" {
 		host, err := readHost(c.MetricsFile, now)
 		if err != nil {
@@ -129,6 +133,31 @@ func (s *Service) Current(ctx context.Context, c config.Config) (Snapshot, error
 					out.Metrics[key] = store.MetricValue{Value: &v, Status: "available", Unit: "count"}
 				}
 			}
+		}
+	}
+	if c.ToparrURL != "" {
+		gpu, err := s.client.ToparrGPU(ctx, c.ToparrURL)
+		out.ToparrStatus = "available"
+		switch {
+		case err != nil:
+			out.ToparrStatus = "error"
+		case gpu.UpdatedAt.IsZero():
+			out.ToparrStatus = "unavailable"
+		case s.now().Sub(gpu.UpdatedAt) >= 30*time.Second:
+			out.ToparrStatus = "stale"
+		}
+		if !gpu.UpdatedAt.IsZero() {
+			out.ToparrUpdatedAt = &gpu.UpdatedAt
+		}
+		for key, value := range map[string]*float64{"gpu_video_percent": gpu.VideoPercent, "gpu_render_percent": gpu.RenderPercent, "gpu_frequency_mhz": gpu.FrequencyMHz, "gpu_power_watts": gpu.PowerWatts} {
+			metric := store.MetricValue{Status: out.ToparrStatus, Unit: store.MetricUnits[key]}
+			if out.ToparrStatus == "available" {
+				metric.Value = value
+				if value == nil {
+					metric.Status = "unavailable"
+				}
+			}
+			out.Metrics[key] = metric
 		}
 	}
 	if ctx.Err() != nil {

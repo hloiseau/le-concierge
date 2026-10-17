@@ -5,6 +5,7 @@ services:
     build: ..
     image: le-concierge:local
     env_file: ../.env
+    # Optional TOPARR_URL is read from .env; the API needs no GPU device access.
     environment:
       LISTEN_ADDR: ':8080'
       DATABASE_PATH: /app/data/concierge.db

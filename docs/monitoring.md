@@ -1,10 +1,12 @@
 # Mesures du serveur et activité Plex
 
-Les tickets Concierge #16, #17, #18 et Hub #11, #12 disposent d'un chemin complet : collecteur local facultatif → fichier atomique → API privée → historique SQLite → page `/performances`. Les mesures s'activent dès qu'une source est configurée : Tautulli avec son identité Plex, ou un fichier de mesures hôte. L'activité Plex fonctionne seule avec Tautulli, sans collecteur hôte.
+Les tickets Concierge #16, #17, #18 et Hub #11, #12 disposent d'un chemin complet : sources en lecture seule → API privée → historique SQLite → page `/performances`. Les mesures s'activent dès qu'une source est configurée : Tautulli avec son identité Plex, Toparr, ou un fichier de mesures hôte. L'activité Plex et le GPU Toparr fonctionnent indépendamment du collecteur hôte.
 
 ## État de la validation
 
-Audit documentaire réalisé le 16 octobre 2026 sur la cible déclarée TrueNAS 25.10 et Tautulli 2.18.2. Les tests automatisés utilisent exclusivement des fixtures. Aucun collecteur n'a été installé sur le NAS, aucune permission GPU n'a été modifiée, aucune conversion ni lecture Plex n'a été déclenchée. La version effectivement installée de TrueNAS, le pilote Arc A310, la version de `intel_gpu_top`, les capteurs disponibles et le coût réel sur cet hôte restent à vérifier avant activation. Ne pas clôturer #16 pour la seule présence de ce collecteur.
+Validation sur le NAS les 17–18 octobre 2026 : TrueNAS 25.10.7, Intel Arc A310 `8086:56a6`, pilote i915, PCI `03:00.0`. Le collecteur hôte est installé sous UID 3001, sans capacité effective (`CapEff=0`), et planifié toutes les 60 secondes. CPU, RAM, température CPU `k10temp:Tctl`, réseau physique `enp5s0`, disques et pool ZFS `Main` sont ingérés. Les cinq disques sélectionnés incluent le cache et excluent le disque de démarrage. Une collecte a pris 1,04 s écoulée, 0,062 s CPU, environ 21 Mio RSS et produit 3233 octets. L'API UID 65532 lit le dossier via un montage en lecture seule ; ACL et absence de droit d'écriture vérifiées. Le contrôle Tautulli 2.18.2 et de son identité Plex réussit.
+
+L'instance Toparr 2.0.1 existante expose un seul GPU `card0`, Arc A310, sélection automatique. Deux GET depuis le client Go ont pris environ 9 ms et fourni un horodatage frais, 14,7 W, 0 MHz, et des moteurs absents. Ces valeurs viennent de Toparr ; l'absence de moteur n'est pas interprétée comme un GPU inactif. Aucun transcodage réel n'a été déclenché pour cette validation. La comparaison pendant un transcodage et le coût après une journée restent à vérifier ; ces observations ponctuelles ne suffisent pas à clôturer toute la validation matérielle de #16.
 
 Sources primaires et correspondances :
 
@@ -19,7 +21,7 @@ Sources primaires et correspondances :
 
 La configuration Tautulli/Plex existante suffit pour afficher l'activité Plex : laisser `MONITORING_ENABLED` absent ou vide. `MONITORING_ENABLED=false` reste une désactivation explicite, y compris lorsqu'une source est configurée. Une installation issue de l'ancien exemple peut encore avoir cette valeur `false` : la retirer ou utiliser `true` lors de la mise à jour. Le Hub choisit l'historique des sessions Plex par défaut lorsqu'aucun collecteur hôte n'est relié.
 
-L'activité Plex ne fournit pas CPU, RAM, GPU ou réseau du NAS. Ces mesures nécessitent le collecteur ci-dessous, son dossier partagé en lecture seule et `METRICS_FILE`. Le champ `hostStatus` de `/api/v1/monitoring` distingue `not_configured` (aucun fichier prévu), `error` (lecture ou validation impossible), `stale` (plus de deux minutes) et `available`. Un champ de mesure absent conserve son état indisponible ; le Hub explique l'absence du collecteur et conserve l'activité Plex. Un échec de chargement de l'historique ou des détails administrateur ne masque plus les observations actuelles.
+L'activité Plex ne fournit pas CPU, RAM, GPU ou réseau du NAS. CPU, RAM et réseau utilisent le collecteur ci-dessous, son dossier partagé en lecture seule et `METRICS_FILE` ; le GPU peut utiliser l'API Toparr existante. Le champ `hostStatus` de `/api/v1/monitoring` distingue `not_configured` (aucun fichier prévu), `error` (lecture ou validation impossible), `stale` (plus de deux minutes) et `available`. Le statut de cette source ne masque ni Toparr ni Plex. Un échec de chargement de l'historique ou des détails administrateur ne masque plus les observations actuelles.
 
 Le 17 octobre 2026, trois lectures du Tautulli configuré dans l'environnement de développement ont réussi : version 2.18.2, identité Plex concordante et activité valide. Cet environnement avait Tautulli/Plex configurés, sans `MONITORING_ENABLED` ni `METRICS_FILE`, ce qui permet de reproduire le masquage par l'ancien défaut `false`. Ce contrôle ne prouve pas la configuration des conteneurs déployés sur le NAS et ne valide aucun capteur matériel.
 
@@ -28,9 +30,25 @@ Configuration API :
 ```dotenv
 MONITORING_ENABLED=true
 METRICS_FILE=/run/concierge-metrics/host.json
+# Facultatif : URL interne de l'instance Toparr déjà installée.
+TOPARR_URL=http://192.0.2.10:30391
 ```
 
-`METRICS_FILE` peut rester vide pour l'activité Plex seule. Les variables Tautulli/Plex déjà utilisées par les départs sont réutilisées. Aucun secret Tautulli n'est transmis au navigateur. Le fichier et son dossier sont gérés par l'opérateur ; l'API les monte en lecture seule et n'obtient ni accès `/dev/dri`, ni socket Docker, ni privilège d'administration TrueNAS.
+`METRICS_FILE` peut rester vide pour Plex ou Toparr seuls. Les variables Tautulli/Plex déjà utilisées par les départs sont réutilisées. Aucun secret Tautulli n'est transmis au navigateur. Le fichier et son dossier sont gérés par l'opérateur ; l'API les monte en lecture seule et n'obtient ni accès `/dev/dri`, ni socket Docker, ni privilège d'administration TrueNAS.
+
+## GPU depuis Toparr
+
+`TOPARR_URL` désigne l'instance existante, joignable depuis l'API. Aucun changement de privilège, de périphérique ou de tâche NAS n'est nécessaire pour ce raccordement. Le contrat consulté est [Toparr v2.0.1, commit b0b8109](https://github.com/ajthom90/toparr/tree/v2.0.1) : cette version lit sysfs et fdinfo directement, contrairement à l'ancienne architecture `intel_gpu_top` encore décrite par son README.
+
+Le client effectue uniquement `GET /api/gpus` et `GET /api/status`. Il extrait `current.timestamp` (secondes Unix), les moteurs Video et Render/3D (%), `frequency.actual` (MHz) et `power.GPU` (W). Ces unités sont implicites dans le [backend 2.0.1](https://github.com/ajthom90/toparr/blob/v2.0.1/app/backends/intel.py). Les moteurs Toparr sont agrégés à partir des clients fdinfo et bornés à 100 % ; ce n'est pas une mesure PMU. VideoEnhance n'est pas assimilé à Video, et `power.PKG` représente le package CPU, jamais la seule puissance GPU. Toparr peut renvoyer 0 MHz lorsque la lecture sysfs échoue : cette version ne distingue pas ce cas du repos. Aucun `gpu_busy` de repli n'est utilisé.
+
+Les [routes Toparr](https://github.com/ajthom90/toparr/blob/v2.0.1/app/main.py) omettent le pilote dans l'inventaire et ne garantissent pas l'isolation des clients entre plusieurs cartes du même pilote. Le client accepte donc uniquement un inventaire non ambigu d'une carte, avec une sélection concordante ou automatique. Il ne modifie jamais la sélection globale. La température GPU éventuelle reste fournie par le fichier hôte.
+
+`toparrStatus` et `toparrUpdatedAt` sont indépendants de `hostStatus` : `not_configured`, `unavailable` au démarrage sans observation, `available`, `stale` après 30 secondes, ou `error` lors d'un échec HTTP/contrat. Les quatre mesures Toparr remplacent celles du fichier hôte lorsque cette source est configurée. Une erreur ne réutilise pas d'ancienne mesure ; un moteur ou une puissance absente reste `null`, tandis qu'un zéro explicitement fourni est conservé. Le [moniteur Toparr](https://github.com/ajthom90/toparr/blob/v2.0.1/app/gpu_monitor.py) peut conserver une ancienne observation après erreur : l'horodatage source est donc vérifié et limite la durée du cache. Un horodatage de plus de 15 secondes dans le futur est rejeté.
+
+Les deux lectures partagent un délai de huit secondes et le cache monitoring de 30 secondes. La fraîcheur GPU est revérifiée après la lecture des autres sources ; son échéance invalide le cache sans raccourcir `expiresAt` pour CPU/Plex. Le Hub dérive `toparrUpdatedAt + 30 s` et masque uniquement les quatre mesures Toparr à cette échéance. Chaque réponse est bornée à 2 Mio. L'historique brut, les PID, noms et commandes des processus Toparr ne sont ni retenus, ni publiés, ni historisés ; seules les quatre mesures entrent dans l'historique agrégé existant. Le flux SSE n'est pas nécessaire pour la cadence actuelle du Hub.
+
+## Collecteur hôte
 
 `tools/collect_metrics.py` est un programme Python 3 standard, indépendant du serveur web. Il ne contacte aucun réseau et ne change ni matériel, ni ZFS, ni permissions système. Exemple à adapter **après** identification des vrais périphériques, exécuté sous un compte dédié sur l'hôte Linux :
 
@@ -71,7 +89,7 @@ Une absence de transcodage ne signifie jamais GPU à 0 %. Les sessions en pause 
 - API : cache partagé 30 s et une seule collecte Tautulli à la fois ; trois commandes de lecture Tautulli par actualisation, délai global 8 s. Aucun retour à d'anciennes sessions après une erreur. La péremption est raccourcie si un snapshot approche de ses deux minutes.
 - SQLite : un échantillon agrégé par minute, au plus 10 080 lignes, conservation sept jours, remplacement d'une minute déjà enregistrée. Aucun nom d'utilisateur/titre/adresse/identifiant matériel n'est historisé. Le redémarrage préserve les lignes ; aucune interpolation pendant l'arrêt.
 - Fenêtres API fixes : 1 h / pas 1 min, 24 h / pas 5 min, 7 j / pas 30 min ; au maximum 337 points. Agrégation moyenne. Une panne ou un trou entre observations d'un même bucket rend la valeur absente ; les buckets totalement absents sont omis, et la courbe les coupe explicitement. Les buckets partiels aux bords portent la moyenne des observations disponibles.
-- Chaque payload stocké est limité à 8 Kio, donc moins de 79 Mio de payloads pour sept jours au plafond. Prévoir au moins 128 Mio supplémentaires pour cette fonction, plus marge WAL/SQLite et sauvegardes partagées. Ce plafond n'est pas une garantie sur la taille totale de la base (autres tables). Le coût CPU, disque et perf réel sur le NAS reste à mesurer après validation de l'opérateur.
+- Chaque payload stocké est limité à 8 Kio, donc moins de 79 Mio de payloads pour sept jours au plafond. Prévoir au moins 128 Mio supplémentaires pour cette fonction, plus marge WAL/SQLite et sauvegardes partagées. Ce plafond n'est pas une garantie sur la taille totale de la base (autres tables). Le coût d'une collecte a été mesuré ci-dessus ; le volume réel et le coût cumulé après une journée restent à vérifier.
 - Les routes ordinaires exigent une session et un accès Plex encore valides. Elles renvoient seulement agrégats. `/api/v1/admin/plex-activity` vérifie le statut administrateur avant lecture et à nouveau après lecture ; seuls noms/titres/codecs, indicateurs matériels et détails des équipements autorisés y figurent. Aucun IP, chemin de fichier, jeton ou identifiant de session brut.
 - Le Hub poll toutes les 30 s, suspend en onglet masqué, invalide après logout, retire les valeurs actuelles à leur expiration. L'historique affiche sa propre date de chargement ; il ne prétend pas que les noms de sessions sont historiques. Zoom, infobulles, clavier et tableau utilisent les mêmes points.
 

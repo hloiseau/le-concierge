@@ -59,8 +59,9 @@ services:
       DOWNLOADARR_URL: ''
       DOWNLOADARR_REVISION: ''
       # Mesures optionnelles ; fichiers sur un volume distinct monte en lecture seule.
-      MONITORING_ENABLED: '' # Auto avec Tautulli ou METRICS_FILE ; false pour desactiver.
+      MONITORING_ENABLED: '' # Auto avec Tautulli, Toparr ou METRICS_FILE ; false pour desactiver.
       METRICS_FILE: ''
+      TOPARR_URL: '' # API Toparr existante, sans nouvel acces materiel.
       # Diagnostic administrateur : URL + cle de la meme instance Seerr HD/4K.
       RADARR_URL: ''
       RADARR_API_KEY: ''

@@ -4344,6 +4344,21 @@
             "format": "date-time",
             "nullable": true
           },
+          "toparrUpdatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "toparrStatus": {
+            "type": "string",
+            "enum": [
+              "not_configured",
+              "unavailable",
+              "available",
+              "stale",
+              "error"
+            ]
+          },
           "activityUpdatedAt": {
             "type": "string",
             "format": "date-time",
@@ -4369,6 +4384,8 @@
           "updatedAt",
           "expiresAt",
           "hostUpdatedAt",
+          "toparrUpdatedAt",
+          "toparrStatus",
           "activityUpdatedAt",
           "metrics",
           "activity",
