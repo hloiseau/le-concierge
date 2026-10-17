@@ -4,7 +4,7 @@ Repository: `hloiseau/LibraryDownloadarr`, branch `codex/download-quality-a6fa82
 
 Related: https://github.com/hloiseau/le-concierge/issues/24 and https://github.com/hloiseau/le-hub/issues/15.
 
-Published contract and implementation: [draft pull request #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1). The repository has Issues disabled (GitHub 410), so the pull request carries this contract. It has not been merged or deployed.
+Published contract and implementation: [merged pull request #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1), revision `ed22017c7b7ff2cab9da8d0dd9e20d4f83bef7a2`, published as `quality-preview`. The repository has Issues disabled (GitHub 410), so the pull request carries this contract. The administrator confirmed installation and a working Downloadarr flow on October 17.
 
 The fork already implements personal conversion jobs, quality/audio/subtitle options, bounded queue, real progress, reuse and single-use download tickets. Concierge should reuse these endpoints. The missing prerequisite is a versioned identity/session contract: `/api/auth/me` exposes only a local user ID/name/admin flag, and `/api/health` exposes no build revision. A separate Downloadarr Plex login cannot currently be proven to belong to the same numeric Plex account and configured server as the Hub session. Matching usernames/emails or sharing administrator tokens would be unsafe.
 
@@ -38,4 +38,4 @@ Add a read-only, `Cache-Control: no-store` endpoint `GET /api/integrations/conci
 
 Tests: anonymous, local admin, expired/logged-out session, wrong/unconfigured server, legacy identity, restricted/revoked library, distinct Plex accounts, policy-filtered quality options, no secret/URL leakage, valid and absent build revisions. No live conversion is required; use fixtures.
 
-After that contract is tested and deployed, Concierge can start a distinct Downloadarr PIN flow server-side, compare the returned numeric Plex ID/server ID with its current grant, keep the Downloadarr bearer only in memory per Hub owner/session, and proxy allowlisted existing job endpoints. No Plex token exchange between the two services, no shared administrator session, no reimplementation of conversion.
+Concierge starts a distinct Downloadarr PIN flow server-side and authorizes it at Plex's fixed `/api/v2/pins/link` endpoint with the current Hub Plex account. This reuses the existing login without sending the Hub's Plex token to Downloadarr. It still compares the returned numeric Plex ID/server ID with its current grant, keeps the Downloadarr bearer only in memory per Hub owner/session, and proxies allowlisted existing job endpoints. No Plex token exchange between the two services, no shared administrator session, no reimplementation of conversion.

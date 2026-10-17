@@ -80,7 +80,7 @@ func (s *Server) downloadarrFailure(w http.ResponseWriter, userID string, g down
 	var remote *upstream.DownloadarrError
 	if errors.Is(err, upstream.ErrDenied) {
 		s.forgetDownloadarrGrant(userID, g)
-		status, code, message = 403, "downloadarr_link_required", "Reconnectez Downloadarr avec le même compte Plex et ses droits de téléchargement."
+		status, code, message = 403, "downloadarr_link_required", "L’accès Downloadarr n’est plus actif. Actualisez votre accès avec votre compte Plex."
 	} else if errors.Is(err, upstream.ErrNotFound) {
 		status, code, message = 404, "download_not_found", "Cette préparation a expiré ou a disparu. Actualisez la liste ; aucune conversion n’a été relancée."
 	} else if errors.As(err, &remote) {
@@ -212,10 +212,23 @@ func (s *Server) downloadarrLink(w http.ResponseWriter, r *http.Request) {
 	g.ExpiresAt = minDownloadarrExpiry(g.ExpiresAt, pin.ExpiresAt)
 	s.downloadarrGrants[user.ID] = g
 	s.mu.Unlock()
-	jsonOut(w, 200, struct {
-		URL       string    `json:"url"`
-		ExpiresAt time.Time `json:"expiresAt"`
-	}{pin.URL, g.ExpiresAt.UTC()})
+	// Plex authorizes the new application credential with the current account;
+	// the Hub's Plex token never reaches Downloadarr or the browser.
+	if err := s.Upstream.DownloadarrAuthorize(callCtx, pin, plex); err != nil {
+		s.forgetDownloadarrGrant(user.ID, g)
+		s.downloadarrFailure(w, user.ID, g, err)
+		return
+	}
+	if !s.revalidateUser(w, r, key, user) {
+		s.forgetDownloadarrGrant(user.ID, g)
+		return
+	}
+	current, exists = s.currentDownloadarrGrant(key, user.ID)
+	if !exists || current.Revision != g.Revision {
+		problem(w, 409, "link_changed", "La connexion a été annulée. Actualisez votre accès.")
+		return
+	}
+	jsonOut(w, 200, downloadarrLinkStatus{ExpiresAt: &g.ExpiresAt})
 }
 
 func minDownloadarrExpiry(a, b time.Time) time.Time {
@@ -270,7 +283,14 @@ func (s *Server) downloadarrPoll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pending {
-		jsonOut(w, 200, downloadarrLinkStatus{})
+		if !s.revalidateUser(w, r, key, user) {
+			return
+		}
+		if current, ok := s.currentDownloadarrGrant(key, user.ID); !ok || current.Revision != g.Revision {
+			problem(w, 409, "link_changed", "La connexion a été annulée. Actualisez votre accès.")
+			return
+		}
+		jsonOut(w, 200, downloadarrLinkStatus{ExpiresAt: &g.ExpiresAt})
 		return
 	}
 	g.Bearer = bearer
