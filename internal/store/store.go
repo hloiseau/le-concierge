@@ -61,7 +61,7 @@ func Open(path string) (*Store, error) {
 		tx.Rollback()
 		return fail(e)
 	}
-	if version > 6 {
+	if version > 7 {
 		tx.Rollback()
 		return fail(errors.New("database schema is newer than this binary; restore a compatible backup"))
 	}
@@ -101,6 +101,12 @@ INSERT INTO schema_migrations(version) VALUES(2);`); e != nil {
 	}
 	if version < 6 {
 		if _, e = tx.Exec(channelReminderSchema + `INSERT INTO schema_migrations(version) VALUES(6);`); e != nil {
+			tx.Rollback()
+			return fail(e)
+		}
+	}
+	if version < 7 {
+		if _, e = tx.Exec(extensionRequestsLifecycleSchema + `INSERT INTO schema_migrations(version) VALUES(7);`); e != nil {
 			tx.Rollback()
 			return fail(e)
 		}

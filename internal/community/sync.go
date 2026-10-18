@@ -24,6 +24,7 @@ type ForumSelection struct {
 	ID            string            `json:"id"`
 	Kind          string            `json:"kind"`
 	ThreadIDs     []string          `json:"threadIds"`
+	AllThreads    bool              `json:"allThreads,omitempty"`
 	StatusTags    map[string]string `json:"statusTags"`
 	DefaultStatus string            `json:"defaultStatus,omitempty"`
 }
@@ -71,11 +72,13 @@ func (m Manifest) Validate() error {
 		return invalid
 	}
 	forums, threads, issues, ids := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
+	allThreads := false
 	for _, f := range m.Forums {
-		if !ValidForumID(f.ID) || forums[f.ID] || !oneOf(f.Kind, "proposal", "problem") || len(f.StatusTags) > 20 || (f.DefaultStatus != "" && !oneOf(f.DefaultStatus, "open", "planned", "in_progress", "resolved", "declined")) {
+		if !ValidForumID(f.ID) || forums[f.ID] || (f.AllThreads && len(f.ThreadIDs) != 0) || !oneOf(f.Kind, "proposal", "problem") || len(f.StatusTags) > 20 || (f.DefaultStatus != "" && !oneOf(f.DefaultStatus, "open", "planned", "in_progress", "resolved", "declined")) {
 			return invalid
 		}
 		forums[f.ID] = true
+		allThreads = allThreads || f.AllThreads
 		for _, id := range f.ThreadIDs {
 			if !ValidForumID(id) || threads[id] {
 				return invalid
@@ -97,7 +100,7 @@ func (m Manifest) Validate() error {
 			return invalid
 		}
 		issues[key], ids[item.ID] = true, true
-		if item.ThreadID != "" && !threads[item.ThreadID] {
+		if item.ThreadID != "" && (!ValidForumID(item.ThreadID) || (!threads[item.ThreadID] && !allThreads)) {
 			return invalid
 		}
 		for _, status := range []string{item.OpenStatus, item.CompletedStatus} {
@@ -283,7 +286,7 @@ func publishedThread(thread, parent discordChannel, selected ForumSelection, gui
 	return PublishedThread{ForumID: selected.ID, ThreadID: thread.ID, Title: thread.Name, Kind: selected.Kind, Status: status, Archived: thread.ThreadMetadata.Archived, UpdatedAt: now.UTC()}, true
 }
 
-// Sync performs only selected GETs; no guild-wide thread or issue listing.
+// Sync performs only GETs. Forum-wide discovery requires explicit AllThreads selection.
 func (c SyncClient) Sync(ctx context.Context, m Manifest, now time.Time) (Publication, error) {
 	if err := m.Validate(); err != nil {
 		return Publication{}, err
@@ -318,6 +321,8 @@ func (c SyncClient) Sync(ctx context.Context, m Manifest, now time.Time) (Public
 		if exists && !known {
 			return Publication{}, &SyncError{}
 		}
+		var active *threadListing
+		selectedCount := 0
 		for _, f := range m.Forums {
 			selection.ForumIDs = append(selection.ForumIDs, f.ID)
 			if !exists {
@@ -331,7 +336,28 @@ func (c SyncClient) Sync(ctx context.Context, m Manifest, now time.Time) (Public
 			if !ok || parent.ID != f.ID || !publicForum(parent, m.GuildID, everyone) {
 				continue
 			}
-			for _, id := range f.ThreadIDs {
+			ids := f.ThreadIDs
+			if f.AllThreads {
+				if active == nil {
+					active = &threadListing{}
+					found, err := c.read(ctx, "discord", "/guilds/"+m.GuildID+"/threads/active", active)
+					if err != nil {
+						return Publication{}, err
+					}
+					if !found || active.Threads == nil || len(*active.Threads) > 1000 {
+						return Publication{}, &SyncError{}
+					}
+				}
+				ids, err = c.forumThreads(ctx, m.GuildID, f.ID, *active)
+				if err != nil {
+					return Publication{}, err
+				}
+			}
+			selectedCount += len(ids)
+			if selectedCount > 100 {
+				return Publication{}, errors.New("selected forums exceed 100 threads; publication withdrawn")
+			}
+			for _, id := range ids {
 				var thread discordChannel
 				ok, err := c.read(ctx, "discord", "/channels/"+id, &thread)
 				if err != nil {

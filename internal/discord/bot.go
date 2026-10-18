@@ -127,7 +127,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 					if options.Public && PublicCommand(command) && len([]rune(m.PublicContent)) <= 2000 {
 						publicContent = m.PublicContent
 					}
-					if command == "mes-demandes" && m.Pagination != nil && m.Pagination.Offset == offset {
+					if command == "mes-demandes" && m.Pagination != nil && m.Pagination.Offset == offset && m.Pagination.Status == options.Status {
 						reply["components"] = m.Pagination.Components(i.Member.User.ID)
 					}
 					if command == "nouveautes" && m.RecentPagination != nil && m.RecentPagination.Offset == offset {
@@ -232,7 +232,19 @@ func (b *Bot) Register(ctx context.Context) error {
 	}
 	commands := []map[string]any{
 		{"name": "aide", "description": "Guides, services et liaison des comptes", "type": 1},
-		{"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1},
+		{"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1, "options": []map[string]any{
+			{"name": "etat", "description": "Filtrer toutes vos demandes par état", "type": 3, "choices": []map[string]any{
+				{"name": "Tous les états", "value": "all"},
+				{"name": "En attente", "value": "pending"},
+				{"name": "Approuvée", "value": "approved"},
+				{"name": "En cours", "value": "processing"},
+				{"name": "Disponibilité partielle", "value": "partial"},
+				{"name": "Disponible", "value": "available"},
+				{"name": "Refusée", "value": "declined"},
+				{"name": "En erreur", "value": "error"},
+				{"name": "État inconnu", "value": "unknown"},
+			}},
+		}},
 		{"name": "a-voir", "description": "Voir vos contenus avant leur départ estimé de Plex", "type": 1},
 		{"name": "nouveautes", "description": "Voir les derniers ajouts Plex autorisés", "type": 1},
 		{"name": "surprise", "description": "Tirer un titre dans votre catalogue Plex", "type": 1, "options": []map[string]any{

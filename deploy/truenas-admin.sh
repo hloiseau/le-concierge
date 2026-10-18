@@ -36,7 +36,7 @@ case "${1:-}" in
     # Docker lit la variable appelante ; sa valeur n'apparait pas dans les arguments.
     docker exec -e DISCORD_BOT_TOKEN "$bot_container" /app/bot --register
     unset DISCORD_BOT_TOKEN
-    printf '%s\n' 'Trois commandes enregistrees. Tester /aide dans le serveur Discord.'
+    printf '%s\n' 'Commandes enregistrees. Tester /aide dans le serveur Discord.'
     ;;
   link-seerr)
     [[ $# == 3 && "$2" =~ ^[0-9]{5,24}$ && "$3" =~ ^[1-9][0-9]*$ ]] || { printf '%s\n' 'Usage : truenas-admin.sh link-seerr ID_DISCORD ID_SEERR' >&2; exit 1; }

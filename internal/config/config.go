@@ -25,7 +25,7 @@ type Service struct {
 type Config struct {
 	DownloadarrURL, DownloadarrRevision                                                     string
 	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
-	CommunityFeedFile                                                                       string
+	CommunityFeedFile, CommunitySyncManifest                                                string
 	CommunityForumIDs, RoadmapIssueIDs                                                      []string
 	Env, Listen, BotListen, PublicOrigin, DatabasePath                                      string
 	DiscordClientID, DiscordClientSecret, DiscordGuildID, DiscordPublicKey, DiscordBotToken string
@@ -84,6 +84,7 @@ func Load() (Config, error) {
 	c.RadarrURL = strings.TrimRight(os.Getenv("RADARR_URL"), "/")
 	c.SonarrURL = strings.TrimRight(os.Getenv("SONARR_URL"), "/")
 	c.CommunityFeedFile = os.Getenv("COMMUNITY_FEED_FILE")
+	c.CommunitySyncManifest = os.Getenv("COMMUNITY_SYNC_MANIFEST")
 	for _, entry := range []struct {
 		name  string
 		dest  *[]string
@@ -124,6 +125,9 @@ func Load() (Config, error) {
 	}
 	if c.CommunityFeedFile != "" && !filepath.IsAbs(c.CommunityFeedFile) {
 		return c, errors.New("COMMUNITY_FEED_FILE requires an absolute path")
+	}
+	if c.CommunitySyncManifest != "" && (!filepath.IsAbs(c.CommunitySyncManifest) || c.CommunityFeedFile == "" || strings.EqualFold(filepath.Clean(c.CommunitySyncManifest), filepath.Clean(c.CommunityFeedFile)) || strings.EqualFold(filepath.Clean(c.CommunitySyncManifest), filepath.Clean(c.CommunityFeedFile)+".retry-after")) {
+		return c, errors.New("COMMUNITY_SYNC_MANIFEST requires an absolute path distinct from the configured publication and retry file")
 	}
 	c.MonitoringEnabled, err = strconv.ParseBool(fallback("MONITORING_ENABLED", strconv.FormatBool(c.MetricsFile != "" || c.ToparrURL != "" || (c.TautulliURL != "" && c.TautulliAPIKey != "" && c.PlexServerID != ""))))
 	if err != nil || (c.MetricsFile != "" && !filepath.IsAbs(c.MetricsFile)) {

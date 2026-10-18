@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/hloiseau/le-concierge/internal/config"
+	"github.com/hloiseau/le-concierge/internal/upstream"
 )
 
 type Interaction struct {
@@ -51,6 +52,7 @@ type Options struct {
 	TMDBID    int
 	Season    *int
 	Page      int
+	Status    string
 }
 
 func PublicCommand(command string) bool {
@@ -60,6 +62,11 @@ func PublicCommand(command string) bool {
 // Validate values again after signature verification; Discord registration is not an authorization boundary.
 func CommandOptions(i Interaction) (Options, error) {
 	options := Options{Page: 1}
+	if i.Type == 3 {
+		_, _, status, err := paginationCommand(i)
+		options.Status = status
+		return options, err
+	}
 	if i.Type != 2 {
 		return options, nil
 	}
@@ -71,6 +78,13 @@ func CommandOptions(i Interaction) (Options, error) {
 		}
 		seen[option.Name] = true
 		switch option.Name {
+		case "etat":
+			if i.Data.Name != "mes-demandes" || option.Type != 3 || json.Unmarshal(option.Value, &options.Status) != nil || (options.Status != "all" && !upstream.ValidRequestStatus(options.Status)) {
+				return Options{}, invalid
+			}
+			if options.Status == "all" {
+				options.Status = ""
+			}
 		case "public":
 			if !PublicCommand(i.Data.Name) || option.Type != 5 || string(option.Value) == "null" || json.Unmarshal(option.Value, &options.Public) != nil {
 				return Options{}, invalid
@@ -137,18 +151,30 @@ func Command(i Interaction) (string, int, error) {
 		_, err := CommandOptions(i)
 		return i.Data.Name, 0, err
 	}
+	command, offset, _, err := paginationCommand(i)
+	return command, offset, err
+}
+
+func paginationCommand(i Interaction) (string, int, string, error) {
 	parts := strings.Split(i.Data.CustomID, ":")
-	if i.Type != 3 || i.Data.ComponentType != 2 || i.Message.Flags&64 == 0 || len(parts) != 3 || (parts[0] != "requests" && parts[0] != "recent") || parts[1] != i.Member.User.ID {
-		return "", 0, errors.New("invalid pagination interaction")
+	if i.Type != 3 || i.Data.ComponentType != 2 || i.Message.Flags&64 == 0 || (len(parts) != 3 && len(parts) != 4) || (parts[0] != "requests" && parts[0] != "recent") || parts[1] != i.Member.User.ID || len(i.Data.Options) != 0 {
+		return "", 0, "", errors.New("invalid pagination interaction")
+	}
+	status := ""
+	if len(parts) == 4 {
+		if parts[0] != "requests" || !upstream.ValidRequestStatus(parts[3]) {
+			return "", 0, "", errors.New("invalid pagination status")
+		}
+		status = parts[3]
 	}
 	offset, err := strconv.Atoi(parts[2])
 	if err != nil || offset < 0 || offset > 10000 || (parts[0] == "requests" && offset%10 != 0) || strconv.Itoa(offset) != parts[2] {
-		return "", 0, errors.New("invalid pagination offset")
+		return "", 0, "", errors.New("invalid pagination offset")
 	}
 	if parts[0] == "recent" {
-		return "nouveautes", offset, nil
+		return "nouveautes", offset, "", nil
 	}
-	return "mes-demandes", offset, nil
+	return "mes-demandes", offset, status, nil
 }
 
 type RecentPagination struct {
@@ -178,18 +204,23 @@ func (p RecentPagination) Components(userID string) []map[string]any {
 }
 
 type RequestPagination struct {
-	Offset int `json:"offset"`
-	Total  int `json:"total"`
+	Offset int    `json:"offset"`
+	Total  int    `json:"total"`
+	Status string `json:"status,omitempty"`
 }
 
 func (p RequestPagination) Components(userID string) []map[string]any {
 	rows := []map[string]any{}
-	if p.Offset < 0 || p.Offset > 10000 || p.Offset%10 != 0 || p.Total < 0 {
+	if p.Offset < 0 || p.Offset > 10000 || p.Offset%10 != 0 || p.Total < 0 || (p.Status != "" && !upstream.ValidRequestStatus(p.Status)) {
 		return rows
 	}
 	buttons := []map[string]any{}
 	button := func(label string, offset int) map[string]any {
-		return map[string]any{"type": 2, "style": 2, "label": label, "custom_id": "requests:" + userID + ":" + strconv.Itoa(offset)}
+		id := "requests:" + userID + ":" + strconv.Itoa(offset)
+		if p.Status != "" {
+			id += ":" + p.Status
+		}
+		return map[string]any{"type": 2, "style": 2, "label": label, "custom_id": id}
 	}
 	if p.Offset > 0 {
 		buttons = append(buttons, button("Précédent", p.Offset-10))
@@ -232,6 +263,7 @@ func Message(content string) map[string]any {
 
 func Help(origin string, services []config.Service) string {
 	text := "**Le Concierge**\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/a-voir — Vos contenus avant leur départ estimé de Plex (privé)\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
+	text += "Ajoutez etat à /mes-demandes pour filtrer toutes vos demandes Seerr (par exemple Disponible ou En cours).\n\n"
 	// Encode Markdown delimiters without changing the configured public destination.
 	link := func(label, target string) string {
 		return "[" + label + "](" + strings.NewReplacer("(", "%28", ")", "%29", "[", "%5B", "]", "%5D", "<", "%3C", ">", "%3E").Replace(target) + ")"
