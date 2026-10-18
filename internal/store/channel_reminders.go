@@ -62,13 +62,12 @@ func (s *Store) FinishChannelReminder(ctx context.Context, channel, key string, 
 		_, err := s.DB.ExecContext(ctx, `UPDATE channel_reminders SET sent_at=?,last_error='' WHERE channel_id=? AND decision_key=? AND sent_at IS NULL`, now.UnixMilli(), channel, key)
 		return err
 	}
-	if retry < time.Minute {
-		retry = time.Minute
-	}
 	if retry > 24*time.Hour {
 		permanent = true
 	}
-	_, err := s.DB.ExecContext(ctx, `UPDATE channel_reminders SET last_error=?,next_attempt=?,attempts=CASE WHEN ? THEN 5 ELSE attempts END WHERE channel_id=? AND decision_key=? AND sent_at IS NULL`, code, now.Add(retry).UnixMilli(), permanent, channel, key)
+	// Compute from the persisted attempt in the same update: 1/2/4/8/16 minutes,
+	// never sooner than Discord's Retry-After.
+	_, err := s.DB.ExecContext(ctx, `UPDATE channel_reminders SET last_error=?,next_attempt=?+MAX(?,?*(1<<MIN(MAX(attempts-1,0),4))),attempts=CASE WHEN ? THEN 5 ELSE attempts END WHERE channel_id=? AND decision_key=? AND sent_at IS NULL`, code, now.UnixMilli(), retry.Milliseconds(), time.Minute.Milliseconds(), permanent, channel, key)
 	return err
 }
 

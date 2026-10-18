@@ -12,7 +12,7 @@ import (
 )
 
 func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
-	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours"} {
+	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "season", "episode", "episode missing index", "episode zero index", "episode other season"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fixture(t)
 			s.Config.DiscordNotificationChannelID = "456"
@@ -21,6 +21,21 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 			s.Config.SeerrURL = "https://seerr.example"
 			s.Config.SeerrAPIKey = "fixture-key"
 			s.Config.PlexServerID = "server-a"
+			kind, requestedKind, requestedKey, title := "movie", "movie", "42", "Film demandé"
+			if mode == "season" || strings.HasPrefix(mode, "episode") {
+				s.Config.TautulliURL = "https://tautulli.example"
+				s.Config.TautulliAPIKey = "fixture-key"
+				kind, requestedKind, requestedKey, title = "season", "tv", "38", "Série demandée — saison 3"
+				if strings.HasPrefix(mode, "episode") {
+					kind = "episode"
+					title += ", épisode 2"
+					if mode == "episode missing index" {
+						title = "Série demandée — saison 3, un épisode (numéro indisponible)"
+					} else if mode == "episode zero index" {
+						title = "Série demandée — saison 3, épisode 0"
+					}
+				}
+			}
 			now := time.Now().UTC()
 			loc, _ := time.LoadLocation("Europe/Paris")
 			local := now.In(loc)
@@ -62,7 +77,7 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					if mode == "changed source" {
 						return response(503, "private error"), nil
 					}
-					body = fmt.Sprintf(`[{"id":1,"mediaServerType":"plex","libraryId":"2","type":"movie","isActive":true,"arrAction":0,"deleteAfterDays":7,"mediaCount":1,"media":[{"id":1,"collectionId":1,"mediaServerId":"42","addDate":%q,"isManual":false,"ruleEvaluationFailed":false}]}]`, added.Format(time.RFC3339))
+					body = fmt.Sprintf(`[{"id":1,"mediaServerType":"plex","libraryId":"2","type":%q,"isActive":true,"arrAction":0,"deleteAfterDays":7,"mediaCount":1,"media":[{"id":1,"collectionId":1,"mediaServerId":"42","addDate":%q,"isManual":false,"ruleEvaluationFailed":false}]}]`, kind, added.Format(time.RFC3339))
 				case "/api/rules":
 					body = fmt.Sprintf(`[{"id":5,"collectionId":1,"isActive":%v}]`, mode != "inactive")
 				case "/api/rules/exclusion":
@@ -76,14 +91,18 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 						break
 					}
 					status := 2
-					key := "42"
+					key := requestedKey
 					if mode == "declined" {
 						status = 3
 					}
 					if mode == "wrong key" {
 						key = "999"
 					}
-					body = fmt.Sprintf(`{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":%d,"is4k":%v,"requestedBy":{"id":7},"media":{"tmdbId":99,"ratingKey":%q,"ratingKey4k":"43"}}]}`, status, mode == "wrong quality", key)
+					season := 3
+					if mode == "episode other season" {
+						season = 4
+					}
+					body = fmt.Sprintf(`{"pageInfo":{"results":1},"results":[{"id":1,"type":%q,"status":%d,"is4k":%v,"requestedBy":{"id":7},"media":{"tmdbId":99,"ratingKey":%q,"ratingKey4k":"43"},"seasons":[{"seasonNumber":%d}]}]}`, requestedKind, status, mode == "wrong quality", key, season)
 				case "/api/v1/user/8":
 					if mode == "temporary requester error" {
 						return response(503, "unavailable"), nil
@@ -98,6 +117,30 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					}
 				case "/api/v1/movie/99":
 					body = `{"title":"Film demandé @everyone"}`
+				case "/api/v1/tv/99":
+					body = `{"name":"Série demandée"}`
+				case "/api/v2":
+					data := ""
+					switch r.URL.Query().Get("cmd") {
+					case "get_tautulli_info":
+						data = `{"tautulli_version":"v2.18.2"}`
+					case "get_server_info":
+						data = `{"pms_identifier":"server-a"}`
+					case "get_metadata":
+						index, parent := "3", "38"
+						if kind == "episode" {
+							index, parent = "2", "40"
+						}
+						if mode == "episode missing index" {
+							index = ""
+						} else if mode == "episode zero index" {
+							index = "0"
+						}
+						data = fmt.Sprintf(`{"rating_key":"42","media_type":%q,"section_id":"2","parent_rating_key":%q,"grandparent_rating_key":"38","media_index":%q,"parent_media_index":"3"}`, kind, parent, index)
+					default:
+						t.Fatal("unexpected Tautulli query")
+					}
+					body = `{"response":{"result":"success","data":` + data + `}}`
 				default:
 					t.Errorf("unexpected path %s", r.URL.Path)
 					return response(404, ""), nil
@@ -118,8 +161,11 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					} `json:"allowed_mentions"`
 				}
 				json.NewDecoder(r.Body).Decode(&body)
-				if len(body.Mentions.Users) != 1 || body.Mentions.Users[0] != "789" || len(body.Mentions.Parse) != 0 || strings.Contains(body.Content, "@everyone") || !strings.Contains(body.Content, "Film demandé") {
+				if len(body.Mentions.Users) != 1 || body.Mentions.Users[0] != "789" || len(body.Mentions.Parse) != 0 || strings.Contains(body.Content, "@everyone") || !strings.Contains(body.Content, title) {
 					t.Fatalf("incorrect channel reminder: %+v", body)
+				}
+				if mode == "season" && strings.Contains(body.Content, "épisode") {
+					t.Fatal("season reminder narrowed to an episode", body.Content)
 				}
 				return response(200, `{"id":"111","channel_id":"456"}`), nil
 			})
@@ -134,7 +180,7 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 				}
 			}
 			want := 0
-			if mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" {
+			if mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" || mode == "season" || mode == "episode" || mode == "episode missing index" || mode == "episode zero index" {
 				want = 1
 			}
 			if posts != want {

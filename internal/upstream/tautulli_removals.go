@@ -40,5 +40,13 @@ func (c *Client) TautulliRemovalParent(ctx context.Context, base, key, serverID 
 	if err != nil || n < 0 || n > 10000 || parent == "" || parent == "0" {
 		return PlexItem{}, nil, ErrIncomplete
 	}
-	return PlexItem{ID: string(metadata.ID), Kind: metadata.Kind, ParentID: string(metadata.ParentID), GrandparentID: string(metadata.GrandparentID), LibraryID: string(metadata.LibraryID)}, &n, nil
+	item := PlexItem{ID: string(metadata.ID), Kind: metadata.Kind, ParentID: string(metadata.ParentID), GrandparentID: string(metadata.GrandparentID), LibraryID: string(metadata.LibraryID)}
+	if metadata.Index != "" {
+		index, err := strconv.Atoi(string(metadata.Index))
+		if err != nil || index < 0 || index > 10000 {
+			return PlexItem{}, nil, ErrIncomplete
+		}
+		item.Index = &index
+	}
+	return item, &n, nil
 }

@@ -167,6 +167,13 @@ func (s *Server) deliverChannelReminders(ctx context.Context, now time.Time) err
 		}
 		if season != nil {
 			title += fmt.Sprintf(" — saison %d", *season)
+			if removal.Kind == "episode" {
+				if metadata.Index != nil {
+					title += fmt.Sprintf(", épisode %d", *metadata.Index)
+				} else {
+					title += ", un épisode (numéro indisponible)"
+				}
+			}
 		}
 		nonce, claimed, err := s.Store.ClaimChannelReminder(ctx, channel, key, *removal.EstimatedAt, now)
 		if err != nil {
