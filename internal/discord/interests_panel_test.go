@@ -32,6 +32,7 @@ func panelBot() *Bot {
 
 const panelChannel = `{"id":"34567","guild_id":"23456","type":0}`
 const panelMessage = `{"id":"67890","channel_id":"34567","author":{"id":"12345"}}`
+const panelActor = `{"id":"12345","bot":true}`
 
 func TestPublishInterestsCreatesOrUpdatesOnlyAfterVerification(t *testing.T) {
 	for _, messageID := range []string{"", "67890"} {
@@ -45,6 +46,9 @@ func TestPublishInterestsCreatesOrUpdatesOnlyAfterVerification(t *testing.T) {
 					t.Fatal("unsafe or unbounded publication request")
 				}
 				if r.Method == http.MethodGet {
+					if r.URL.Path == "/api/v10/users/@me" {
+						return botResponse(200, panelActor), nil
+					}
 					if r.URL.Path == "/api/v10/channels/34567" {
 						return botResponse(200, panelChannel), nil
 					}
@@ -85,9 +89,9 @@ func TestPublishInterestsCreatesOrUpdatesOnlyAfterVerification(t *testing.T) {
 				return botResponse(200, panelMessage), nil
 			})
 			id, err := b.PublishInterests(t.Context(), messageID)
-			want := []string{"GET /api/v10/channels/34567", "POST /api/v10/channels/34567/messages"}
+			want := []string{"GET /api/v10/users/@me", "GET /api/v10/channels/34567", "POST /api/v10/channels/34567/messages"}
 			if messageID != "" {
-				want = []string{"GET /api/v10/channels/34567", "GET /api/v10/channels/34567/messages/67890", "PATCH /api/v10/channels/34567/messages/67890"}
+				want = []string{"GET /api/v10/users/@me", "GET /api/v10/channels/34567", "GET /api/v10/channels/34567/messages/67890", "PATCH /api/v10/channels/34567/messages/67890"}
 			}
 			if err != nil || id != "67890" || !slices.Equal(calls, want) || b.Client.Timeout != 8*time.Second {
 				t.Fatalf("publication: id=%q err=%v calls=%v", id, err, calls)
@@ -114,6 +118,9 @@ func TestPublishInterestsRefusesUnverifiedChannelOrMessage(t *testing.T) {
 			b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 				if r.Method != http.MethodGet {
 					t.Fatal("unverified destination or author reached a write")
+				}
+				if r.URL.Path == "/api/v10/users/@me" {
+					return botResponse(200, panelActor), nil
 				}
 				if strings.HasSuffix(r.URL.Path, "/67890") {
 					return botResponse(200, tc.message), nil
@@ -161,7 +168,7 @@ func TestPublishInterestsRejectsInvalidConfigurationBeforeRequests(t *testing.T)
 }
 
 func TestPublishInterestsErrorsDoNotRetryRedirectOrLeak(t *testing.T) {
-	for _, stage := range []string{"channel", "message", "write"} {
+	for _, stage := range []string{"identity", "channel", "message", "write"} {
 		for _, failure := range []string{"network", "forbidden", "rate limit", "redirect", "oversized", "invalid JSON", "invalid ID", "missing identity"} {
 			t.Run(stage+"/"+failure, func(t *testing.T) {
 				b := panelBot()
@@ -175,6 +182,9 @@ func TestPublishInterestsErrorsDoNotRetryRedirectOrLeak(t *testing.T) {
 						t.Fatal("followed a redirect with the bot credential")
 					}
 					current := "channel"
+					if r.URL.Path == "/api/v10/users/@me" {
+						current = "identity"
+					}
 					if strings.Contains(r.URL.Path, "/messages/") {
 						current = "message"
 					}
@@ -183,6 +193,9 @@ func TestPublishInterestsErrorsDoNotRetryRedirectOrLeak(t *testing.T) {
 						writes++
 					}
 					if stage != current {
+						if current == "identity" {
+							return botResponse(200, panelActor), nil
+						}
 						if current == "channel" {
 							return botResponse(200, panelChannel), nil
 						}
@@ -244,6 +257,9 @@ func TestPublishInterestsCreateNeverRetriesAnUnconfirmedPost(t *testing.T) {
 	writes := 0
 	b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		if r.Method == http.MethodGet {
+			if r.URL.Path == "/api/v10/users/@me" {
+				return botResponse(200, panelActor), nil
+			}
 			return botResponse(200, panelChannel), nil
 		}
 		writes++
@@ -265,6 +281,9 @@ func TestPublishInterestsFitsMaximumConfiguredLabels(t *testing.T) {
 	}
 	b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		if r.Method == http.MethodGet {
+			if r.URL.Path == "/api/v10/users/@me" {
+				return botResponse(200, panelActor), nil
+			}
 			return botResponse(200, panelChannel), nil
 		}
 		var body struct {
@@ -280,5 +299,31 @@ func TestPublishInterestsFitsMaximumConfiguredLabels(t *testing.T) {
 	})
 	if _, err := b.PublishInterests(t.Context(), ""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPublishInterestsRequiresTheConfiguredBotBeforeAnyWrite(t *testing.T) {
+	for _, actor := range []string{
+		`{"id":"99999","bot":true}`,
+		`{"id":"12345","bot":false}`,
+		`{"id":"12345"}`,
+		`{"bot":true}`,
+	} {
+		for _, messageID := range []string{"", "67890"} {
+			t.Run(actor+"/"+messageID, func(t *testing.T) {
+				b := panelBot()
+				calls := 0
+				b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+					calls++
+					if r.Method != http.MethodGet || r.URL.Path != "/api/v10/users/@me" {
+						t.Fatal("wrong token identity reached the destination or a write")
+					}
+					return botResponse(200, actor), nil
+				})
+				if id, err := b.PublishInterests(t.Context(), messageID); err == nil || id != "" || calls != 1 {
+					t.Fatalf("unverified actor accepted: id=%q err=%v calls=%d", id, err, calls)
+				}
+			})
+		}
 	}
 }

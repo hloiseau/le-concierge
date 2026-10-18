@@ -64,6 +64,9 @@ func TestInterestPanelCommandPrintsOnlyTheVerifiedID(t *testing.T) {
 		writes := 0
 		http.DefaultTransport = registrationTransport(func(r *http.Request) (*http.Response, error) {
 			body := `{"id":"67890","channel_id":"34567","author":{"id":"12345"}}`
+			if r.Method == http.MethodGet && r.URL.Path == "/api/v10/users/@me" {
+				body = `{"id":"12345","bot":true}`
+			}
 			if r.Method == http.MethodGet && r.URL.Path == "/api/v10/channels/34567" {
 				body = `{"id":"34567","guild_id":"23456","type":0}`
 			}

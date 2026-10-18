@@ -39,7 +39,7 @@ func (b *Bot) PublishInterests(ctx context.Context, messageID string) (string, e
 		if ctx.Err() != nil {
 			return errors.New("Discord interest panel operation was cancelled")
 		}
-		req, err := http.NewRequestWithContext(ctx, method, "https://discord.com/api/v10/channels/"+b.Config.DiscordInterestsChannelID+path, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, method, "https://discord.com/api/v10"+path, bytes.NewReader(body))
 		if err != nil {
 			return errors.New("cannot prepare the Discord interest panel request")
 		}
@@ -62,12 +62,23 @@ func (b *Bot) PublishInterests(ctx context.Context, messageID string) (string, e
 		}
 		return nil
 	}
+	var actor struct {
+		ID  string `json:"id"`
+		Bot bool   `json:"bot"`
+	}
+	if err := request(http.MethodGet, "/users/@me", nil, &actor); err != nil {
+		return "", err
+	}
+	if actor.ID != b.Config.DiscordClientID || !actor.Bot {
+		return "", errors.New("interest panel publication requires the configured application's bot token")
+	}
+	channelPath := "/channels/" + b.Config.DiscordInterestsChannelID
 	var channel struct {
 		ID      string `json:"id"`
 		GuildID string `json:"guild_id"`
 		Type    *int   `json:"type"`
 	}
-	if err := request(http.MethodGet, "", nil, &channel); err != nil {
+	if err := request(http.MethodGet, channelPath, nil, &channel); err != nil {
 		return "", err
 	}
 	if channel.ID != b.Config.DiscordInterestsChannelID || channel.GuildID != b.Config.DiscordGuildID || channel.Type == nil || *channel.Type != 0 {
@@ -81,7 +92,7 @@ func (b *Bot) PublishInterests(ctx context.Context, messageID string) (string, e
 			ID string `json:"id"`
 		} `json:"author"`
 	}
-	method, path := http.MethodPost, "/messages"
+	method, path := http.MethodPost, channelPath+"/messages"
 	if messageID != "" {
 		path += "/" + messageID
 		if err := request(http.MethodGet, path, nil, &message); err != nil {
