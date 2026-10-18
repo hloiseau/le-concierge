@@ -28,7 +28,7 @@ func activityTransport(t *testing.T, s *Server, wait func()) *atomic.Int32 {
 			if wait != nil {
 				wait()
 			}
-			data = `{"stream_count":1,"sessions":[{"friendly_name":"PRIVATE PERSON","full_title":"PRIVATE TITLE","state":"playing","transcode_decision":"transcode","stream_video_codec":"hevc","stream_audio_codec":"aac","bandwidth":"5000","transcode_hw_decoding":1,"transcode_hw_encoding":0,"ip_address":"PRIVATE ADDRESS","file":"PRIVATE PATH"}]}`
+			data = `{"stream_count":1,"sessions":[{"friendly_name":"PRIVATE PERSON","full_title":"PRIVATE TITLE","state":"playing","transcode_decision":"transcode","video_decision":"transcode","audio_decision":"copy","stream_video_codec":"hevc","stream_audio_codec":"aac","bandwidth":"5000","transcode_hw_decoding":1,"transcode_hw_encoding":0,"ip_address":"PRIVATE ADDRESS","file":"PRIVATE PATH"}]}`
 		default:
 			t.Errorf("unexpected activity request %s", r.URL.Path)
 		}
@@ -53,7 +53,7 @@ func TestMonitoringAuthorizationAndPrivacy(t *testing.T) {
 		t.Fatal("nonadmin fetched named sessions")
 	}
 	w := call(s, "GET", "/api/v1/monitoring", cookie, "", "")
-	if w.Code != 200 || strings.Contains(w.Body.String(), "PRIVATE") || strings.Contains(w.Body.String(), "hevc") {
+	if w.Code != 200 || strings.Contains(w.Body.String(), "PRIVATE") || strings.Contains(w.Body.String(), "hevc") || strings.Contains(w.Body.String(), "videoDecision") || strings.Contains(w.Body.String(), "audioDecision") {
 		t.Fatalf("unsafe public snapshot %d %s", w.Code, w.Body)
 	}
 	var current struct {
@@ -73,7 +73,7 @@ func TestMonitoringAuthorizationAndPrivacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	w = call(s, "GET", "/api/v1/monitoring/history?range=1h", cookie, "", "")
-	if w.Code != 200 || strings.Contains(w.Body.String(), "PRIVATE") {
+	if w.Code != 200 || strings.Contains(w.Body.String(), "PRIVATE") || strings.Contains(w.Body.String(), "videoDecision") || strings.Contains(w.Body.String(), "audioDecision") {
 		t.Fatal("unsafe history")
 	}
 	var history struct {
@@ -90,6 +90,12 @@ func TestMonitoringAuthorizationAndPrivacy(t *testing.T) {
 	w = call(s, "GET", "/api/v1/admin/plex-activity", cookie, "", "")
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "PRIVATE PERSON") || !strings.Contains(w.Body.String(), "hevc") || strings.Contains(w.Body.String(), "PRIVATE ADDRESS") || strings.Contains(w.Body.String(), "PRIVATE PATH") {
 		t.Fatalf("wrong admin details %d %s", w.Code, w.Body)
+	}
+	if !strings.Contains(w.Body.String(), `"videoDecision":"transcode"`) || !strings.Contains(w.Body.String(), `"audioDecision":"copy"`) {
+		t.Fatal("admin details lost the audio/video decisions")
+	}
+	if err := validateContractResponse(loadContract(t), "GET", "/api/v1/admin/plex-activity", w); err != nil {
+		t.Fatal(err)
 	}
 	for _, path := range []string{"/api/v1/monitoring?user=other", "/api/v1/admin/plex-activity?user=other", "/api/v1/monitoring/history?range=forever", "/api/v1/monitoring/history?range=1h&range=7d", "/api/v1/monitoring/history?user=other"} {
 		if w = call(s, "GET", path, cookie, "", ""); w.Code != 400 {

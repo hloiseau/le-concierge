@@ -107,3 +107,74 @@ func TestTautulliActivityPrivacyAndUnits(t *testing.T) {
 		})
 	}
 }
+
+func TestTautulliActivityKeepsVideoAndAudioDecisionsOptionalAndSeparate(t *testing.T) {
+	for _, tc := range []struct {
+		name, overall        string
+		video, audio         any
+		wantVideo, wantAudio string
+	}{
+		{"direct play", "direct play", "direct play", "direct play", "direct play", "direct play"},
+		{"copy", "copy", "copy", "copy", "copy", "copy"},
+		{"audio transcode", "transcode", "copy", "transcode", "copy", "transcode"},
+		{"video transcode", "transcode", "transcode", "copy", "transcode", "copy"},
+		{"both transcode", "transcode", "transcode", "transcode", "transcode", "transcode"},
+		{"missing", "transcode", nil, nil, "", ""},
+		{"empty", "transcode", "", "", "", ""},
+		{"unknown", "transcode", "private-source-value", "DIRECT PLAY", "", ""},
+		{"one unknown", "transcode", "new-decision", "copy", "", "copy"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var data any
+				switch r.URL.Query().Get("cmd") {
+				case "get_tautulli_info":
+					data = map[string]any{"tautulli_version": "v2.18.2"}
+				case "get_server_info":
+					data = map[string]any{"pms_identifier": "server"}
+				case "get_activity":
+					session := map[string]any{"state": "playing", "transcode_decision": tc.overall, "stream_video_codec": "hevc", "stream_audio_codec": "aac", "bandwidth": "5000", "transcode_hw_decoding": 0, "transcode_hw_encoding": 0}
+					if tc.video != nil {
+						session["video_decision"] = tc.video
+					}
+					if tc.audio != nil {
+						session["audio_decision"] = tc.audio
+					}
+					data = map[string]any{"stream_count": 1, "sessions": []map[string]any{session}}
+				default:
+					t.Error("unexpected source command")
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"response": map[string]any{"result": "success", "data": data}})
+			}))
+			defer source.Close()
+			got, err := New().TautulliActivity(t.Context(), source.URL, "secret", "server")
+			if err != nil || len(got.Sessions) != 1 {
+				t.Fatalf("optional decisions broke activity: %+v %v", got, err)
+			}
+			session := got.Sessions[0]
+			if session.Decision != tc.overall || session.VideoDecision != tc.wantVideo || session.AudioDecision != tc.wantAudio {
+				t.Fatalf("decisions conflated or guessed: %+v", session)
+			}
+			encoded, _ := json.Marshal(session)
+			var fields map[string]any
+			_ = json.Unmarshal(encoded, &fields)
+			for field, want := range map[string]string{"videoDecision": tc.wantVideo, "audioDecision": tc.wantAudio} {
+				value, exists := fields[field]
+				if (want == "" && exists) || (want != "" && value != want) {
+					t.Fatalf("unknown decision not omitted: %s", encoded)
+				}
+			}
+			wantTranscodes := 0
+			if tc.overall == "transcode" {
+				wantTranscodes = 1
+			}
+			if *got.Summary.Sessions != 1 || *got.Summary.Transcodes != wantTranscodes || *got.Summary.HardwareTranscodes != 0 || *got.Summary.BandwidthKbps != 5000 {
+				t.Fatalf("component decisions changed aggregates: %+v", got.Summary)
+			}
+			summary, _ := json.Marshal(got.Summary)
+			if strings.Contains(string(summary), "videoDecision") || strings.Contains(string(summary), "audioDecision") {
+				t.Fatal("component decisions leaked into summary")
+			}
+		})
+	}
+}

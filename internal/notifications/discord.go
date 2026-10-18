@@ -62,8 +62,6 @@ func (d *Discord) SendValidated(ctx context.Context, discordID, nonce string, it
 	if d.token == "" || !snowflake(discordID) || nonce == "" || len(nonce) > 25 || len(items) == 0 || len(items) > 100 {
 		return &DeliveryError{Code: "invalid_delivery", Permanent: true}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	var channel struct {
 		ID         string `json:"id"`
 		Type       int    `json:"type"`
@@ -75,7 +73,10 @@ func (d *Discord) SendValidated(ctx context.Context, discordID, nonce string, it
 	channelID := d.channels[discordID]
 	d.mu.Unlock()
 	if channelID == "" {
-		if err := d.post(ctx, "/users/@me/channels", map[string]string{"recipient_id": discordID}, &channel); err != nil {
+		lookupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := d.post(lookupCtx, "/users/@me/channels", map[string]string{"recipient_id": discordID}, &channel)
+		cancel()
+		if err != nil {
 			return err
 		}
 		if !snowflake(channel.ID) || channel.Type != 1 || len(channel.Recipients) != 1 || channel.Recipients[0].ID != discordID {
@@ -94,6 +95,9 @@ func (d *Discord) SendValidated(ctx context.Context, discordID, nonce string, it
 			return &DeliveryError{Code: "authorization_changed", Permanent: true}
 		}
 	}
+	if ctx.Err() != nil {
+		return &DeliveryError{Code: "transport_unavailable"}
+	}
 	payload := map[string]any{
 		"content": digest(items), "nonce": nonce, "enforce_nonce": true,
 		"allowed_mentions": map[string]any{"parse": []string{}},
@@ -103,7 +107,9 @@ func (d *Discord) SendValidated(ctx context.Context, discordID, nonce string, it
 		ID        string `json:"id"`
 		ChannelID string `json:"channel_id"`
 	}
-	if err := d.post(ctx, "/channels/"+channelID+"/messages", payload, &message); err != nil {
+	sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := d.post(sendCtx, "/channels/"+channelID+"/messages", payload, &message); err != nil {
 		return err
 	}
 	if !snowflake(message.ID) || message.ChannelID != channelID {

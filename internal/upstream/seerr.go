@@ -23,6 +23,7 @@ type Request struct {
 	Seasons       []int  `json:"seasons"`
 	PosterURL     string `json:"posterUrl,omitempty"`
 	RequesterName string `json:"requesterName,omitempty"`
+	Is4k          *bool  `json:"is4k,omitempty"`
 }
 type RequestPage struct {
 	Items  []Request `json:"items"`
@@ -35,7 +36,7 @@ type seerrRequest struct {
 	ID          int64  `json:"id"`
 	Type        string `json:"type"`
 	Status      int    `json:"status"`
-	Is4k        bool   `json:"is4k"`
+	Is4k        *bool  `json:"is4k"`
 	CreatedAt   string `json:"createdAt"`
 	RequestedBy struct {
 		ID           int64  `json:"id"`
@@ -83,7 +84,7 @@ func (r seerrRequest) normalizedStatus() string {
 	}
 	if r.Status != 3 && r.Status != 4 {
 		mediaStatus := r.Media.Status
-		if r.Is4k {
+		if r.Is4k != nil && *r.Is4k {
 			mediaStatus = r.Media.Status4k
 		}
 		switch mediaStatus {
@@ -223,7 +224,7 @@ func (c *Client) enrichRequest(ctx context.Context, base, key string, r seerrReq
 	if requester == "" {
 		requester = strings.TrimSpace(r.RequestedBy.PlexUsername)
 	}
-	return Request{ID: r.ID, Title: title, Type: r.Type, Status: r.normalizedStatus(), CreatedAt: createdAt, MediaID: r.Media.TmdbID, Seasons: seasons, PosterURL: seerrPosterURL(detail.PosterPath), RequesterName: requester}
+	return Request{ID: r.ID, Title: title, Type: r.Type, Status: r.normalizedStatus(), CreatedAt: createdAt, MediaID: r.Media.TmdbID, Seasons: seasons, PosterURL: seerrPosterURL(detail.PosterPath), RequesterName: requester, Is4k: r.Is4k}
 }
 
 var seerrPosterPath = regexp.MustCompile(`^/[A-Za-z0-9_-]+\.(jpg|jpeg|png|webp)$`)

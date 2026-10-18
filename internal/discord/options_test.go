@@ -16,6 +16,9 @@ func TestCommandOptionsValidateNamesTypesAndBounds(t *testing.T) {
 		id, season, page       int
 	}{
 		{name: "unfiltered surprise", command: "surprise", options: `[]`, valid: true, page: 1, season: -1},
+		{name: "personal departures", command: "a-voir", options: `[]`, valid: true, page: 1, season: -1},
+		{name: "departures public denied", command: "a-voir", options: `[{"name":"public","type":5,"value":true}]`},
+		{name: "departures page denied", command: "a-voir", options: `[{"name":"page","type":4,"value":2}]`},
 		{name: "books browse", command: "livres", options: `[]`, valid: true, page: 1, season: -1},
 		{name: "diagnostic", command: "diagnostic", options: `[{"name":"demande","type":4,"value":17}]`, valid: true, page: 1, season: -1},
 		{name: "diagnostic missing", command: "diagnostic", options: `[]`},
@@ -111,7 +114,7 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&commands); err != nil {
 			t.Fatal(err)
 		}
-		want := map[string]int{"aide": 0, "mes-demandes": 0, "nouveautes": 1, "surprise": 2, "recap": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
+		want := map[string]int{"aide": 0, "mes-demandes": 0, "a-voir": 0, "nouveautes": 1, "surprise": 2, "recap": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
 		if len(commands) != len(want) {
 			t.Fatalf("wrong command count: %d", len(commands))
 		}

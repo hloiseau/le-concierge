@@ -26,6 +26,8 @@ type ActivitySession struct {
 	Title            string   `json:"title"`
 	State            string   `json:"state"`
 	Decision         string   `json:"decision"`
+	VideoDecision    string   `json:"videoDecision,omitempty"`
+	AudioDecision    string   `json:"audioDecision,omitempty"`
 	VideoCodec       string   `json:"videoCodec"`
 	AudioCodec       string   `json:"audioCodec"`
 	BandwidthKbps    *float64 `json:"bandwidthKbps"`
@@ -50,15 +52,17 @@ func (c *Client) TautulliActivity(ctx context.Context, base, key, serverID strin
 	var input struct {
 		Count    json.RawMessage `json:"stream_count"`
 		Sessions []struct {
-			User       string          `json:"friendly_name"`
-			Title      string          `json:"full_title"`
-			State      string          `json:"state"`
-			Decision   string          `json:"transcode_decision"`
-			VideoCodec string          `json:"stream_video_codec"`
-			AudioCodec string          `json:"stream_audio_codec"`
-			Bandwidth  json.RawMessage `json:"bandwidth"`
-			HWDecode   json.RawMessage `json:"transcode_hw_decoding"`
-			HWEncode   json.RawMessage `json:"transcode_hw_encoding"`
+			User          string          `json:"friendly_name"`
+			Title         string          `json:"full_title"`
+			State         string          `json:"state"`
+			Decision      string          `json:"transcode_decision"`
+			VideoDecision string          `json:"video_decision"`
+			AudioDecision string          `json:"audio_decision"`
+			VideoCodec    string          `json:"stream_video_codec"`
+			AudioCodec    string          `json:"stream_audio_codec"`
+			Bandwidth     json.RawMessage `json:"bandwidth"`
+			HWDecode      json.RawMessage `json:"transcode_hw_decoding"`
+			HWEncode      json.RawMessage `json:"transcode_hw_encoding"`
 		} `json:"sessions"`
 	}
 	if err := c.tautulli(ctx, base, key, "get_activity", nil, &input); err != nil {
@@ -73,7 +77,8 @@ func (c *Client) TautulliActivity(ctx context.Context, base, key, serverID strin
 	bandwidth := 0.0
 	knownBandwidth, knownHardware := true, true
 	for _, s := range input.Sessions {
-		if s.Decision != "direct play" && s.Decision != "copy" && s.Decision != "transcode" {
+		decision := activityDecision(s.Decision)
+		if decision == "" {
 			return Activity{}, ErrIncomplete
 		}
 		if s.State != "playing" && s.State != "paused" && s.State != "buffering" {
@@ -89,7 +94,7 @@ func (c *Client) TautulliActivity(ctx context.Context, base, key, serverID strin
 			bandwidth += *bw
 		}
 		decode, encode := activityBool(s.HWDecode), activityBool(s.HWEncode)
-		switch s.Decision {
+		switch decision {
 		case "direct play":
 			direct++
 		case "copy":
@@ -102,7 +107,12 @@ func (c *Client) TautulliActivity(ctx context.Context, base, key, serverID strin
 				knownHardware = false
 			}
 		}
-		out.Sessions = append(out.Sessions, ActivitySession{cleanActivity(s.User, 100), cleanActivity(s.Title, 200), s.State, s.Decision, cleanActivity(s.VideoCodec, 30), cleanActivity(s.AudioCodec, 30), bw, decode, encode})
+		out.Sessions = append(out.Sessions, ActivitySession{
+			User: cleanActivity(s.User, 100), Title: cleanActivity(s.Title, 200), State: s.State, Decision: decision,
+			VideoDecision: activityDecision(s.VideoDecision), AudioDecision: activityDecision(s.AudioDecision),
+			VideoCodec: cleanActivity(s.VideoCodec, 30), AudioCodec: cleanActivity(s.AudioCodec, 30),
+			BandwidthKbps: bw, HardwareDecoding: decode, HardwareEncoding: encode,
+		})
 	}
 	out.Summary = ActivitySummary{Status: "available", Sessions: &total, DirectPlay: &direct, DirectStream: &copying, Transcodes: &transcodes}
 	if knownHardware {
@@ -112,6 +122,15 @@ func (c *Client) TautulliActivity(ctx context.Context, base, key, serverID strin
 		out.Summary.BandwidthKbps = &bandwidth
 	}
 	return out, nil
+}
+
+func activityDecision(value string) string {
+	switch value {
+	case "direct play", "copy", "transcode":
+		return value
+	default:
+		return ""
+	}
 }
 
 func activityNumber(raw json.RawMessage) *float64 {

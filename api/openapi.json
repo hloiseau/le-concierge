@@ -2564,6 +2564,10 @@
           },
           "requesterName": {
             "type": "string"
+          },
+          "is4k": {
+            "type": "boolean",
+            "description": "Seerr request variant, not the measured resolution of a file. Omitted when the source does not provide it; false means a standard request."
           }
         },
         "required": [
@@ -4249,6 +4253,24 @@
           "hardwareEncoding": {
             "type": "boolean",
             "nullable": true
+          },
+          "videoDecision": {
+            "type": "string",
+            "enum": [
+              "direct play",
+              "copy",
+              "transcode"
+            ],
+            "description": "Stream decision reported by Tautulli. Omitted when absent or unrecognized; never inferred from the overall session decision."
+          },
+          "audioDecision": {
+            "type": "string",
+            "enum": [
+              "direct play",
+              "copy",
+              "transcode"
+            ],
+            "description": "Stream decision reported by Tautulli. Omitted when absent or unrecognized; never inferred from the overall session decision."
           }
         },
         "required": [
