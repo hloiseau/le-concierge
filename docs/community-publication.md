@@ -1,8 +1,8 @@
 # Communauté et roadmap publiées
 
-Cette version publie un instantané **explicitement approuvé**, commun aux pages `/communaute` et `/roadmap` du Hub. « Public » signifie ici consultable par les membres connectés au Hub avec Plex, pas accessible sur Internet sans authentification. Le serveur lit uniquement le fichier publié. Un exporteur séparé peut le produire par des lectures Discord/GitHub ; la publication entièrement manuelle reste possible.
+Cette version publie un instantané **explicitement approuvé**, commun aux pages `/communaute` et `/roadmap` du Hub. « Public » signifie ici consultable par les membres connectés au Hub avec Plex, pas accessible sur Internet sans authentification. Les routes HTTP lisent uniquement le fichier publié. L’exporteur peut tourner dans le processus API sur activation explicite, ou séparément via le CLI, par des lectures Discord/GitHub ; la publication entièrement manuelle reste possible.
 
-La synchronisation porte uniquement sur les fils et issues choisis dans un manifeste. Elle relit les permissions à chaque passage, mais n’est pas un flux d’événements instantané : les changements deviennent visibles au prochain rafraîchissement, avec un instantané valable cinq minutes au maximum. Les votes et statuts des discussions ont une seule source : Discord. Les liens vers le fil permettent de consulter et voter avec son identité Discord, qui applique ses droits ; le Hub n’invente ni compteur ni vote local. Les statuts de la roadmap suivent les états et labels GitHub explicitement mappés.
+La synchronisation porte uniquement sur les fils et issues choisis dans un manifeste. Un forum explicitement sélectionné avec `allThreads: true` inclut ses sujets publics actuels et futurs, actifs ou archivés. Elle relit les permissions à chaque passage, mais n’est pas un flux d’événements instantané : les changements deviennent visibles au prochain rafraîchissement, avec un instantané valable cinq minutes au maximum. Les votes et statuts des discussions ont une seule source : Discord. Les liens vers le fil permettent de consulter et voter avec son identité Discord, qui applique ses droits ; le Hub n’invente ni compteur ni vote local. Les statuts de la roadmap suivent les états et labels GitHub explicitement mappés.
 
 ## Sélection et configuration
 
@@ -66,7 +66,7 @@ Les tests locaux vérifient les exclusions privées, les références cachées, 
 
 ## Exporteur synchronisé en lecture seule
 
-Un manifeste distinct de la publication définit les fils choisis et les textes GitHub autorisés. Les nouveaux sujets n’apparaissent qu’après ajout explicite de leur `threadId`. Exemple neutre :
+Un manifeste distinct de la publication définit les fils choisis et les textes GitHub autorisés. Avec `threadIds`, les nouveaux sujets n’apparaissent qu’après ajout explicite de leur identifiant. Pour approuver tous les sujets publics actuels et futurs d’un forum, remplacer `threadIds` par `allThreads: true` ; les deux modes sont exclusifs. Les forums conservent chacun leur type et leur correspondance de tags. Exemple neutre :
 
 ```json
 {
@@ -85,13 +85,13 @@ Un manifeste distinct de la publication définit les fils choisis et les textes 
 }
 ```
 
-Fournir `COMMUNITY_DISCORD_TOKEN` dans l’environnement de l’exporteur, avec un bot disposant uniquement des lectures nécessaires. `COMMUNITY_GITHUB_TOKEN` est facultatif pour les issues publiques ; pour un dépôt privé, utiliser un jeton limité aux dépôts nécessaires avec la permission `Issues: read`. La sélection par issue est ensuite appliquée par l’exporteur. Ne jamais mettre un secret dans le manifeste ou dans les arguments de commande. Le serveur HTTP ne reçoit aucun de ces secrets.
+Fournir `COMMUNITY_DISCORD_TOKEN` dans l’environnement de l’exporteur, avec un bot disposant uniquement des lectures nécessaires. `COMMUNITY_GITHUB_TOKEN` est facultatif pour les issues publiques ; pour un dépôt privé, utiliser un jeton limité aux dépôts nécessaires avec la permission `Issues: read`. La sélection par issue est ensuite appliquée par l’exporteur. Ne jamais mettre un secret dans le manifeste ou dans les arguments de commande. Ces variables sont propres au CLI. Le worker intégré réutilise `DISCORD_BOT_TOKEN` déjà fourni à l’API ; il ne reçoit pas de token GitHub supplémentaire et ne peut donc pas lire une issue GitHub privée.
 
 ```sh
 go run ./cmd/community-feed -sync manifest.json -output /config/community/publication.json
 ```
 
-Programmer ce passage toutes les deux minutes avec le planificateur de l’hôte, sans exécutions simultanées. Le répertoire doit être accessible en écriture à l’exporteur et en lecture au serveur ; le fichier temporaire et le fichier cible restent sur le même système de fichiers. Sur Unix, les fichiers sont privés (`0600`) : exécuter l’exporteur avec le même UID que le serveur lecteur. La commande ne démarre pas de tâche persistante et ne réalise aucune écriture distante.
+Pour un export externe, programmer ce passage toutes les deux minutes avec le planificateur de l’hôte, sans exécutions simultanées. Le répertoire doit être accessible en écriture à l’exporteur et en lecture au serveur ; le fichier temporaire et le fichier cible restent sur le même système de fichiers. Sur Unix, les fichiers sont privés (`0600`) : exécuter l’exporteur avec le même UID que le serveur lecteur. La commande ne démarre pas de tâche persistante et ne réalise aucune écriture distante.
 
 À chaque passage, l’exporteur consulte les rôles du serveur Discord, les forums et les fils sélectionnés. Il exige un forum de type 15 et des fils publics de type 11 dans le serveur et le parent attendus, sans NSFW, spoiler ou métadonnées masquées. Le rôle `@everyone` doit pouvoir voir le forum et son historique ; toute restriction de ces droits par rôle ou membre entraîne son exclusion. Des permissions manquantes ou ambiguës ne sont pas devinées. Avant de publier, les fils retenus sont relus, puis les rôles et permissions des forums sont vérifiés à nouveau. Aucun message, auteur, réaction, vote ou fil privé n’est extrait. `updatedAt` indique ici l’observation, pas une date de modification inconnue. [Canaux et types Discord](https://docs.discord.com/developers/resources/channel), [permissions](https://docs.discord.com/developers/topics/permissions), [lecture des rôles](https://docs.discord.com/developers/resources/guild).
 
@@ -99,6 +99,21 @@ Les tags Discord utilisent leurs IDs stables et une correspondance de statuts d�
 
 GitHub ne fournit que la présence, l’état et les labels de chaque issue sélectionnée. Les titres et résumés exportés proviennent **toujours du manifeste approuvé**, même pour un dépôt public ; aucun texte privé brut n’est copié. Une issue fermée n’est livrée que si GitHub indique `completed` et qu’une correspondance `completedStatus` a été configurée. Les fermetures `not_planned` ou `duplicate` sont retirées ; une PR n’est pas traitée comme une issue. Des labels de statut contradictoires invalident le passage. [Contrat officiel des issues GitHub](https://docs.github.com/en/rest/issues/issues#get-an-issue).
 
-La sélection est bornée à 20 forums, 50 fils et 50 issues. Les lectures utilisent des URLs construites sur les domaines officiels, sans redirection, cinq secondes par appel, 1 Mio par réponse et 45 secondes pour le passage entier. Les ressources sont lues directement par ID : aucune liste paginée de salons ou d’issues, aucun lien `next` arbitraire n’est parcouru. Une réponse `403` ou `404` retire la ressource ; une panne, un contrat invalide ou `429` retire immédiatement l’ancien fichier de publication. Le délai demandé par la source est conservé dans `publication.json.retry-after` et respecté aux prochaines exécutions, sans attente bloquante ni nouvel appel prématuré. Ne pas supprimer ce fichier pour contourner une limite de débit.
+La sélection est bornée à 20 forums, 50 fils explicitement nommés et 50 issues. La découverte `allThreads` lit la liste des fils actifs du serveur puis les archives publiques de chaque forum choisi, avec au plus cinq pages de 100 archives. Elle déduplique les identifiants avant les lectures individuelles et refuse une publication de plus de 100 fils ; une liste incomplète ou trop volumineuse retire la publication au lieu d’en montrer une partie. Les autres forums et les fils privés ne sont pas publiés. Voir [les fils actifs Discord](https://docs.discord.com/developers/resources/guild#list-active-guild-threads) et [les archives publiques paginées](https://docs.discord.com/developers/resources/channel#list-public-archived-threads). Les lectures utilisent des URLs construites sur les domaines officiels, sans redirection, cinq secondes par appel, 1 Mio par réponse et 45 secondes pour le passage entier. Après découverte éventuelle, les ressources sont lues directement par ID : aucun lien `next` arbitraire ni liste d’issues n’est parcouru. La pagination des archives utilise uniquement le curseur horodaté documenté par Discord. Une réponse `403` ou `404` retire la ressource ; une panne, un contrat invalide ou `429` retire immédiatement l’ancien fichier de publication. Le délai demandé par la source est conservé dans `publication.json.retry-after` et respecté aux prochaines exécutions, sans attente bloquante ni nouvel appel prématuré. Ne pas supprimer ce fichier pour contourner une limite de débit.
 
-Les tests utilisent des transports simulés : permissions de rôle/membre, changement de permissions pendant une lecture, canaux privés et NSFW, tags, titre modifié, archivage, suppression, textes GitHub privés, redirections, bornes, remplacement atomique et reprise après limite de débit. L’exporteur n’a pas été exécuté avec les identifiants réels du serveur ; cette recette reste à réaliser avant activation du planificateur.
+Les tests utilisent des transports simulés : permissions de rôle/membre, changement de permissions pendant une lecture, canaux privés et NSFW, tags, titre modifié, archivage, suppression, textes GitHub privés, redirections, bornes, remplacement atomique et reprise après limite de débit. Le 18 octobre 2026, un passage en lecture seule sur les deux forums autorisés a produit une publication valide de deux sujets, sans issue GitHub. La réception des interactions et les votes dans Discord restent une recette distincte.
+
+## Actualisation intégrée à l’API
+
+Cette option évite un planificateur ou un conteneur supplémentaire. Placer le manifeste approuvé dans le volume existant et configurer, par exemple :
+
+```dotenv
+COMMUNITY_SYNC_MANIFEST=/app/data/community-manifest.json
+COMMUNITY_FEED_FILE=/app/data/community-publication.json
+COMMUNITY_FORUM_IDS=11111,44444
+ROADMAP_ISSUE_IDS=
+```
+
+Le manifeste et la publication doivent être deux chemins absolus distincts. L’UID 65532 doit lire le manifeste et écrire le dossier de publication ; les fichiers produits sont privés (`0600`). La liste des forums et des issues du manifeste doit être incluse dans la sélection configurée, avec le même serveur Discord. Une sélection invalide retire l’ancien fichier sans lire de source supplémentaire.
+
+Le worker effectue un passage dès le démarrage, puis toutes les deux minutes, sans chevauchement ; il s’arrête avec l’API et réutilise les mêmes limites, permissions et délais de reprise que le CLI. Ne pas programmer un export externe sur le même fichier. Une valeur vide désactive le worker et conserve le fonctionnement par publication externe. Les nouvelles discussions apparaissent au passage suivant ; une archive déplacée pendant la lecture peut attendre le cycle suivant. Les pages cessent d’afficher la publication si elle expire ou si une lecture échoue.

@@ -297,6 +297,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/roadmap", s.getRoadmap)
 	m.HandleFunc("GET /api/v1/extension-requests", s.getExtensionRequests)
 	m.HandleFunc("POST /api/v1/extension-requests", s.postExtensionRequest)
+	m.HandleFunc("DELETE /api/v1/extension-requests/{id}", s.cancelExtensionRequest)
 	m.HandleFunc("GET /api/v1/admin/extension-requests", s.adminExtensionRequests)
 	m.HandleFunc("PUT /api/v1/admin/extension-requests", s.reviewExtensionRequest)
 	m.HandleFunc("GET /api/v1/preferences", s.getPreferences)
@@ -892,45 +893,7 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 		} else if command == "suivre" {
 			text = s.subscriptionMessage(r.Context(), u, options)
 		} else if command == "mes-demandes" {
-			if s.Config.SeerrURL == "" {
-				text = "Seerr n’est pas encore configuré."
-			} else {
-				seerrID, e := s.resolveSeerr(r.Context(), u)
-				var p upstream.RequestPage
-				if e == nil {
-					p, e = s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, off)
-				}
-				if errors.Is(e, upstream.ErrSeerrUserNotFound) {
-					text = seerrMissing
-				} else if e != nil {
-					text = "Seerr est momentanément indisponible."
-				} else {
-					text = "**Vos demandes**\n"
-					pagination = &discord.RequestPagination{Offset: off, Total: p.Total}
-					if p.Total > 0 {
-						text += fmt.Sprintf("Page %d · %d demande(s)\n", off/10+1, p.Total)
-					}
-					if len(p.Items) == 0 {
-						if off == 0 {
-							text += "Aucune demande pour le moment."
-						} else {
-							text += "Aucune demande sur cette page. Revenez à la page précédente."
-						}
-					}
-					for _, v := range p.Items {
-						line := "• " + safeText(v.Title) + " — " + statusLabel(v.Status)
-						if len(v.Seasons) > 0 {
-							line += fmt.Sprintf(" · saisons %v", v.Seasons)
-						}
-						if len(text)+len(line) > 1500 {
-							text += "Suite dans le Hub.\n"
-							break
-						}
-						text += line + "\n"
-					}
-					text += "\nVos demandes et notifications : " + s.Config.PublicOrigin + "/demandes"
-				}
-			}
+			text, pagination = s.requestMessage(r.Context(), u, off, options.Status)
 		} else {
 			p, e := s.Upstream.RecentPage(r.Context(), s.Config.PlexURL, s.Config.PlexServerID, g, off, 6)
 			if e == nil {
@@ -1007,7 +970,7 @@ func safeText(v string) string {
 	return v
 }
 func statusLabel(v string) string {
-	m := map[string]string{"pending": "En attente", "approved": "Approuvée", "declined": "Refusée", "error": "En erreur", "processing": "En cours", "partial": "Partiellement disponible", "available": "Disponible", "unknown": "État inconnu"}
+	m := map[string]string{"pending": "En attente", "approved": "Approuvée", "declined": "Refusée", "error": "En erreur", "processing": "En cours", "partial": "Disponibilité partielle", "available": "Disponible", "unknown": "État inconnu"}
 	if x := m[v]; x != "" {
 		return x
 	}

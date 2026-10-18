@@ -138,7 +138,7 @@ func TestFollowingCommandsAutomaticallyListOwnSeerrRequests(t *testing.T) {
 			if w.Code != 200 || !strings.Contains(w.Body.String(), `"flags":64`) || strings.Contains(w.Body.String(), "My requested series") != tc.wantTitle {
 				t.Fatalf("automatic list/privacy: %d %s", w.Code, w.Body)
 			}
-			if tc.wantTitle && (!strings.Contains(w.Body.String(), "Page 2") || !strings.Contains(w.Body.String(), "Partiellement disponible") || !strings.Contains(w.Body.String(), "saisons [2]")) {
+			if tc.wantTitle && (!strings.Contains(w.Body.String(), "Page 2") || !strings.Contains(w.Body.String(), "Disponibilité partielle") || !strings.Contains(w.Body.String(), "saisons [2]")) {
 				t.Fatalf("request status/seasons missing: %s", w.Body)
 			}
 			w = call(s, "GET", "/api/v1/requests?offset=10", cookie, "", "")

@@ -274,6 +274,14 @@ func TestOpenAPIResponses(t *testing.T) {
 		check(t, "GET", "/api/v1/extension-requests", call(s, "GET", "/api/v1/extension-requests", cookie, "", ""), 200)
 		check(t, "GET", "/api/v1/admin/extension-requests", call(s, "GET", "/api/v1/admin/extension-requests", admin, "", ""), 200)
 		check(t, "PUT", "/api/v1/admin/extension-requests", call(s, "PUT", "/api/v1/admin/extension-requests", admin, s.Config.PublicOrigin, fmt.Sprintf(`{"id":%d,"status":"reviewed","note":"Vérifié"}`, item.ID)), 200)
+		item.Key = "contract-cancel"
+		cancellable, err := s.Store.CreateExtensionRequest(t.Context(), "11111", item, time.Now().UTC())
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := fmt.Sprintf("/api/v1/extension-requests/%d", cancellable.ID)
+		check(t, "DELETE", path, call(s, "DELETE", path, cookie, s.Config.PublicOrigin, ""), 200)
+		check(t, "GET", "/api/v1/extension-requests", call(s, "GET", "/api/v1/extension-requests", cookie, "", ""), 200)
 	})
 	t.Run("book catalog and external requests", func(t *testing.T) {
 		s, cookie, _ := booksFixture(t)

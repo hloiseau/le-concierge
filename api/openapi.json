@@ -851,7 +851,7 @@
             }
           }
         },
-        "description": "The owner’s 100 latest requests, retained for 90 days."
+        "description": "The owner's 100 latest requests, retained for 90 days. Pending requests past their estimated deadline are reported as expired."
       },
       "post": {
         "operationId": "postExtensionRequest",
@@ -892,7 +892,7 @@
             }
           }
         },
-        "description": "Fresh authorized departure required, matching Origin. One request per owner/action/deadline, at most ten pending or created within 24h. Creates an administrative request without changing Maintainerr."
+        "description": "Fresh authorized departure required, matching Origin. One request per owner/action/deadline, at most ten unexpired pending requests or requests created within 24 hours. Cancelled requests retain their identity and count toward the creation limit. Creates an administrative request without changing Maintainerr."
       }
     },
     "/api/v1/admin/extension-requests": {
@@ -925,7 +925,7 @@
             }
           }
         },
-        "description": "Configured administrator only; 100 oldest pending requests, including requester display name."
+        "description": "Configured administrator only; 100 oldest unexpired pending requests, including requester display name."
       },
       "put": {
         "operationId": "reviewExtensionRequest",
@@ -966,7 +966,7 @@
             }
           }
         },
-        "description": "Configured administrator only, matching Origin. Records manual handling or refusal; does not modify Maintainerr."
+        "description": "Configured administrator only, matching Origin. Records manual handling or refusal for an unexpired pending request; does not modify Maintainerr. A concurrent cancellation, review or expiry returns request_changed (409)."
       }
     },
     "/api/v1/subscriptions/notifications": {
@@ -2200,6 +2200,50 @@
           }
         }
       }
+    },
+    "/api/v1/extension-requests/{id}": {
+      "delete": {
+        "operationId": "cancelExtensionRequest",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationOK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin and current Plex authorization required. Cancels an unexpired pending request, retaining history and the 24-hour creation limit. A concurrent review, expiry or unavailable request returns request_changed (409). Does not modify Maintainerr.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3162,8 +3206,11 @@
             "enum": [
               "pending",
               "reviewed",
-              "declined"
-            ]
+              "declined",
+              "cancelled",
+              "expired"
+            ],
+            "description": "Cancelled requests are retained. Expired is derived for a pending request whose estimated deadline has passed; it does not confirm media removal."
           },
           "adminNote": {
             "type": "string",

@@ -114,7 +114,7 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&commands); err != nil {
 			t.Fatal(err)
 		}
-		want := map[string]int{"aide": 0, "mes-demandes": 0, "a-voir": 0, "nouveautes": 1, "surprise": 2, "recap": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
+		want := map[string]int{"aide": 0, "mes-demandes": 1, "a-voir": 0, "nouveautes": 1, "surprise": 2, "recap": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
 		if len(commands) != len(want) {
 			t.Fatalf("wrong command count: %d", len(commands))
 		}
@@ -126,6 +126,20 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 			delete(want, command.Name)
 			for index, option := range command.Options {
 				switch option.Name {
+				case "etat":
+					if command.Name != "mes-demandes" || option.Type != 3 || option.Required || len(option.Choices) != 9 {
+						t.Fatalf("bad request status choices %+v", option)
+					}
+					seen := map[string]bool{}
+					for _, choice := range option.Choices {
+						var interaction Interaction
+						body, _ := json.Marshal(map[string]any{"type": 2, "data": map[string]any{"name": "mes-demandes", "options": []map[string]any{{"name": "etat", "type": 3, "value": choice.Value}}}})
+						_ = json.Unmarshal(body, &interaction)
+						if _, err := CommandOptions(interaction); err != nil || choice.Name == "" || seen[choice.Value] {
+							t.Fatalf("invalid registered status choice %+v", choice)
+						}
+						seen[choice.Value] = true
+					}
 				case "public":
 					if !PublicCommand(command.Name) || option.Type != 5 || option.Required {
 						t.Fatalf("bad public option %+v", option)

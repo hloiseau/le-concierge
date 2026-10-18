@@ -108,6 +108,28 @@ func TestCommunityConfigurationRequiresExplicitValidSelections(t *testing.T) {
 	}
 }
 
+func TestCommunitySyncPaths(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	dir := t.TempDir()
+	publication := filepath.Join(dir, "publication.json")
+	t.Setenv("COMMUNITY_FEED_FILE", publication)
+	for _, manifest := range []string{"relative.json", publication, publication + ".retry-after"} {
+		t.Setenv("COMMUNITY_SYNC_MANIFEST", manifest)
+		if _, err := Load(); err == nil {
+			t.Fatal("unsafe publication/manifest paths accepted")
+		}
+	}
+	t.Setenv("COMMUNITY_SYNC_MANIFEST", filepath.Join(dir, "manifest.json"))
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COMMUNITY_FEED_FILE", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("sync without a publication path accepted")
+	}
+}
+
 func TestRemovalSourceConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")

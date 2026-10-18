@@ -3,12 +3,202 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hloiseau/le-concierge/internal/store"
 )
+
+func pendingExtensionFixture(t *testing.T) (*Server, string, store.ExtensionRequest, *reminderSources) {
+	t.Helper()
+	s, cookie, source := reminderFixture(t)
+	s.Config.AdminIDs = []string{"99999"}
+	w := call(s, "POST", "/api/v1/extension-requests", cookie, s.Config.PublicOrigin, `{"mediaId":"42","days":7,"reason":"Finir"}`)
+	var item store.ExtensionRequest
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &item) != nil || item.Status != "pending" {
+		t.Fatalf("pending request fixture: %d %s", w.Code, w.Body)
+	}
+	return s, cookie, item, source
+}
+
+func TestExtensionRequestCancellationIsOwnerOnlyAndPreservesHistory(t *testing.T) {
+	for _, mode := range []string{"owner", "other owner", "admin", "anonymous", "CSRF", "missing", "reviewed", "declined", "cancelled", "expired", "body injection", "query injection", "noncanonical id", "invalid id", "sources disabled"} {
+		t.Run(mode, func(t *testing.T) {
+			s, cookie, item, source := pendingExtensionFixture(t)
+			path, origin, body := fmt.Sprintf("/api/v1/extension-requests/%d", item.ID), s.Config.PublicOrigin, ""
+			want := 200
+			switch mode {
+			case "other owner", "admin":
+				user := "22222"
+				if mode == "admin" {
+					user = "99999"
+				}
+				cookie = seed(t, s, user, true)
+				want = 409
+			case "anonymous":
+				cookie, want = "", 401
+			case "CSRF":
+				origin, want = "https://another.example", 403
+			case "missing":
+				path, want = "/api/v1/extension-requests/999999", 409
+			case "reviewed", "declined":
+				if err := s.Store.ReviewExtensionRequest(t.Context(), item.ID, mode, "Admin reply", time.Now()); err != nil {
+					t.Fatal(err)
+				}
+				want = 409
+			case "cancelled":
+				if err := s.Store.CancelExtensionRequest(t.Context(), "11111", item.ID, time.Now()); err != nil {
+					t.Fatal(err)
+				}
+				want = 409
+			case "expired":
+				if _, err := s.Store.DB.Exec(`UPDATE extension_requests SET estimated_at=? WHERE id=?`, time.Now().Add(-time.Second).UnixMilli(), item.ID); err != nil {
+					t.Fatal(err)
+				}
+				want = 409
+			case "body injection":
+				body, want = `{"userId":"11111"}`, 400
+			case "query injection":
+				path, want = path+"?userId=11111", 400
+			case "noncanonical id":
+				path, want = "/api/v1/extension-requests/01", 400
+			case "invalid id":
+				path, want = "/api/v1/extension-requests/0", 400
+			case "sources disabled":
+				s.Config.MaintainerrURL = ""
+			}
+			reads := source.collectionReads
+			w := call(s, "DELETE", path, cookie, origin, body)
+			if w.Code != want || (want == 409 && !strings.Contains(w.Body.String(), "request_changed")) {
+				t.Fatalf("cancel: %d want %d %s", w.Code, want, w.Body)
+			}
+			if source.collectionReads != reads {
+				t.Fatal("cancellation depended on Maintainerr")
+			}
+			history, err := s.Store.ExtensionRequests(t.Context(), "11111", time.Now())
+			if err != nil || len(history) != 1 || history[0].ID != item.ID {
+				t.Fatal("cancellation removed request history", history, err)
+			}
+			status := "pending"
+			if want == 200 || mode == "cancelled" {
+				status = "cancelled"
+			} else if mode == "reviewed" || mode == "declined" || mode == "expired" {
+				status = mode
+			}
+			if history[0].Status != status || history[0].Reason != item.Reason || !history[0].CreatedAt.Equal(item.CreatedAt) {
+				t.Fatalf("unexpected request history: %+v", history[0])
+			}
+			if mode == "owner" {
+				w = call(s, "POST", "/api/v1/extension-requests", cookie, s.Config.PublicOrigin, `{"mediaId":"42","days":14,"reason":"Changed"}`)
+				var duplicate store.ExtensionRequest
+				if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &duplicate) != nil || duplicate.ID != item.ID || duplicate.Status != "cancelled" || duplicate.Days != item.Days || duplicate.Reason != item.Reason {
+					t.Fatalf("POST revived a cancelled request: %d %s", w.Code, w.Body)
+				}
+			}
+		})
+	}
+}
+
+type extensionCancelBody struct{ beforeRead func() }
+
+func (b *extensionCancelBody) Read([]byte) (int, error) {
+	if b.beforeRead != nil {
+		run := b.beforeRead
+		b.beforeRead = nil
+		run()
+	}
+	return 0, io.EOF
+}
+
+func TestExtensionRequestCancellationRevalidatesAtMutation(t *testing.T) {
+	for _, mode := range []string{"logout", "session changed", "session expired", "grant expired", "grant replaced", "identity changed", "reviewed", "cancelled"} {
+		t.Run(mode, func(t *testing.T) {
+			s, cookie, item, _ := pendingExtensionFixture(t)
+			body := &extensionCancelBody{beforeRead: func() {
+				switch mode {
+				case "logout":
+					if w := call(s, "POST", "/api/v1/auth/logout", cookie, s.Config.PublicOrigin, ""); w.Code != 200 {
+						t.Fatal(w.Body)
+					}
+				case "session changed", "session expired":
+					s.mu.Lock()
+					sess := s.sessions[digest(cookie)]
+					if mode == "session changed" {
+						sess.UserID = "22222"
+					} else {
+						sess.Expires = time.Now().Add(-time.Second)
+					}
+					s.sessions[digest(cookie)] = sess
+					s.mu.Unlock()
+				case "grant expired", "grant replaced":
+					s.mu.Lock()
+					grant := s.grants["11111"]
+					if mode == "grant expired" {
+						grant.ExpiresAt = time.Now().Add(-time.Second)
+					} else {
+						grant.AccountToken = "new-account-token"
+					}
+					s.grants["11111"] = grant
+					s.mu.Unlock()
+				case "identity changed":
+					if err := s.Store.Unlink(t.Context(), "11111"); err != nil {
+						t.Fatal(err)
+					}
+					if err := s.Store.LinkPlex(t.Context(), "11111", "22222"); err != nil {
+						t.Fatal(err)
+					}
+				case "reviewed":
+					if err := s.Store.ReviewExtensionRequest(t.Context(), item.ID, "reviewed", "Admin reply", time.Now()); err != nil {
+						t.Fatal(err)
+					}
+				case "cancelled":
+					if err := s.Store.CancelExtensionRequest(t.Context(), "11111", item.ID, time.Now()); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}}
+			r := httptest.NewRequest("DELETE", fmt.Sprintf("/api/v1/extension-requests/%d", item.ID), body)
+			r.Header.Set("Origin", s.Config.PublicOrigin)
+			r.AddCookie(&http.Cookie{Name: s.cookieName(), Value: cookie})
+			w := httptest.NewRecorder()
+			s.Handler().ServeHTTP(w, r)
+			want, status := 403, "pending"
+			if mode == "reviewed" || mode == "cancelled" {
+				want, status = 409, mode
+			}
+			if w.Code != want {
+				t.Fatalf("stale cancellation accepted: %d want %d %s", w.Code, want, w.Body)
+			}
+			history, err := s.Store.ExtensionRequests(t.Context(), "11111", time.Now())
+			if err != nil || len(history) != 1 || history[0].Status != status {
+				t.Fatal("stale cancellation changed the request", history, err)
+			}
+		})
+	}
+}
+
+func TestExtensionRequestPastDeadlineLeavesAdminQueueAndCannotBeReviewed(t *testing.T) {
+	s, cookie, item, _ := pendingExtensionFixture(t)
+	admin := seed(t, s, "99999", true)
+	if _, err := s.Store.DB.Exec(`UPDATE extension_requests SET estimated_at=? WHERE id=?`, time.Now().Add(-time.Second).UnixMilli(), item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if w := call(s, "GET", "/api/v1/extension-requests", cookie, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"expired"`) {
+		t.Fatalf("expired history missing: %d %s", w.Code, w.Body)
+	}
+	if w := call(s, "GET", "/api/v1/admin/extension-requests", admin, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"items":[]`) {
+		t.Fatalf("expired request still actionable: %d %s", w.Code, w.Body)
+	}
+	for _, status := range []string{"reviewed", "declined"} {
+		if w := call(s, "PUT", "/api/v1/admin/extension-requests", admin, s.Config.PublicOrigin, fmt.Sprintf(`{"id":%d,"status":%q,"note":"Too late"}`, item.ID, status)); w.Code != 409 || !strings.Contains(w.Body.String(), "request_changed") {
+			t.Fatalf("expired request reviewed: %d %s", w.Code, w.Body)
+		}
+	}
+}
 
 func TestExtensionRequestsOwnerAndAdminWorkflow(t *testing.T) {
 	s, cookie, _ := reminderFixture(t)
@@ -101,7 +291,7 @@ func TestExtensionRequestsRejectStaleAndUntrustedInput(t *testing.T) {
 			if w.Code != tc.code {
 				t.Fatalf("got %d want %d: %s", w.Code, tc.code, w.Body)
 			}
-			items, err := s.Store.ExtensionRequests(t.Context(), "11111")
+			items, err := s.Store.ExtensionRequests(t.Context(), "11111", time.Now())
 			if err != nil || len(items) != 0 {
 				t.Fatal("rejected request persisted", err, items)
 			}

@@ -25,7 +25,7 @@ func (s *Server) getExtensionRequests(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_query", "La liste utilise uniquement votre compte connecté.")
 		return
 	}
-	items, err := s.Store.ExtensionRequests(r.Context(), u.ID)
+	items, err := s.Store.ExtensionRequests(r.Context(), u.ID, time.Now())
 	if err != nil {
 		problem(w, 500, "storage_error", "Lecture des demandes impossible.")
 		return
@@ -113,6 +113,50 @@ func (s *Server) postExtensionRequest(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, created)
 }
 
+func (s *Server) cancelExtensionRequest(w http.ResponseWriter, r *http.Request) {
+	if !s.origin(w, r) {
+		return
+	}
+	key, u, ok := s.user(w, r)
+	if !ok {
+		return
+	}
+	g, ok := s.requireGrant(w, r, u)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 || strconv.FormatInt(id, 10) != r.PathValue("id") || len(r.URL.Query()) != 0 {
+		problem(w, 400, "invalid_id", "Identifiant de demande invalide.")
+		return
+	}
+	if json.NewDecoder(r.Body).Decode(new(any)) != io.EOF {
+		problem(w, 400, "invalid_body", "L’annulation ne prend aucun paramètre supplémentaire.")
+		return
+	}
+	s.mu.Lock()
+	now := time.Now().UTC()
+	current, exists := s.grants[u.ID]
+	sess, sessionExists := s.sessions[key]
+	owner, err := s.Store.User(r.Context(), u.ID)
+	if err != nil || !exists || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || owner.PlexID != u.PlexID || current.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !now.Before(current.ExpiresAt) {
+		s.mu.Unlock()
+		problem(w, 403, "plex_required", "Votre accès a changé. Reconnectez-vous avec Plex.")
+		return
+	}
+	err = s.Store.CancelExtensionRequest(r.Context(), u.ID, id, now)
+	s.mu.Unlock()
+	if errors.Is(err, sql.ErrNoRows) {
+		problem(w, 409, "request_changed", "Cette demande n’est plus en attente ou son échéance est passée.")
+		return
+	}
+	if err != nil {
+		problem(w, 500, "storage_error", "Annulation de la demande impossible.")
+		return
+	}
+	jsonOut(w, 200, map[string]bool{"ok": true})
+}
+
 func (s *Server) extensionAdmin(w http.ResponseWriter, r *http.Request) (string, store.User, bool) {
 	key, u, ok := s.user(w, r)
 	if !ok {
@@ -134,7 +178,7 @@ func (s *Server) adminExtensionRequests(w http.ResponseWriter, r *http.Request) 
 		problem(w, 400, "invalid_query", "La file affiche les 100 plus anciennes demandes en attente.")
 		return
 	}
-	items, err := s.Store.ExtensionRequests(r.Context(), "")
+	items, err := s.Store.ExtensionRequests(r.Context(), "", time.Now())
 	if err != nil {
 		problem(w, 500, "storage_error", "Lecture de la file impossible.")
 		return
@@ -182,7 +226,7 @@ func (s *Server) reviewExtensionRequest(w http.ResponseWriter, r *http.Request) 
 	err = s.Store.ReviewExtensionRequest(r.Context(), input.ID, input.Status, input.Note, now)
 	s.mu.Unlock()
 	if errors.Is(err, sql.ErrNoRows) {
-		problem(w, 409, "request_changed", "Cette demande a déjà été traitée ou supprimée.")
+		problem(w, 409, "request_changed", "Cette demande n’est plus en attente ou son échéance est passée.")
 		return
 	}
 	if err != nil {
