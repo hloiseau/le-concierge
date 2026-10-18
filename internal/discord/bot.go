@@ -17,16 +17,18 @@ import (
 )
 
 type Bot struct {
-	Config  config.Config
-	Client  *http.Client
-	mu      sync.Mutex
-	seen    map[string]time.Time
-	slots   chan struct{}
-	workers sync.WaitGroup
+	Config          config.Config
+	Client          *http.Client
+	mu              sync.Mutex
+	seen            map[string]time.Time
+	interestBusy    map[string]bool
+	interestRetryAt time.Time
+	slots           chan struct{}
+	workers         sync.WaitGroup
 }
 
 func NewBot(c config.Config) *Bot {
-	return &Bot{Config: c, Client: upstream.New().HTTP, seen: map[string]time.Time{}, slots: make(chan struct{}, 8)}
+	return &Bot{Config: c, Client: upstream.New().HTTP, seen: map[string]time.Time{}, interestBusy: map[string]bool{}, slots: make(chan struct{}, 8)}
 }
 func (b *Bot) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -53,6 +55,10 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	command, offset, commandErr := Command(i)
+	if (i.Type == 2 && i.Data.Name == "salons") || (i.Type == 3 && strings.HasPrefix(i.Data.CustomID, "interests:")) {
+		_, commandErr = b.interestAction(i)
+		command = "salons"
+	}
 	if commandErr != nil || i.GuildID != b.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) || len(i.Token) < 8 || len(i.Token) > 4096 {
 		http.Error(w, "unsupported interaction", 403)
 		return
@@ -75,9 +81,17 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "duplicate interaction", 409)
 		return
 	}
+	if command == "salons" {
+		b.handleInterests(w, i)
+		return
+	}
 	// Static help must work even when the API is unavailable.
 	if command == "aide" {
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message(Help(b.Config.PublicOrigin, b.Config.Services))})
+		help := Help(b.Config.PublicOrigin, b.Config.Services)
+		if len(b.Config.DiscordInterests) > 0 {
+			help = "/salons — Choisir ou quitter vos salons thématiques, sans compte Plex.\n\n" + help
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message(help)})
 		return
 	}
 	select {
@@ -201,7 +215,7 @@ func (b *Bot) acknowledge(ctx context.Context, i Interaction) bool {
 	defer cancel()
 	target := "https://discord.com/api/v10/interactions/" + i.ID + "/" + url.PathEscape(i.Token) + "/callback"
 	callback := `{"type":5,"data":{"flags":64}}`
-	if i.Type == 3 {
+	if i.Type == 3 && i.Data.CustomID != "interests:open" {
 		callback = `{"type":6}`
 	}
 	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(callback))
@@ -261,6 +275,9 @@ func (b *Bot) Register(ctx context.Context) error {
 		{"name": "demander-livre", "description": "Choisir et confirmer une édition dans Shelfmark", "type": 1, "options": []map[string]any{
 			{"name": "recherche", "description": "Titre, auteur ou ISBN à rechercher dans Shelfmark", "type": 3, "required": true, "min_length": 1, "max_length": 200},
 		}},
+	}
+	if len(b.Config.DiscordInterests) > 0 {
+		commands = append(commands, map[string]any{"name": "salons", "description": "Choisir ou quitter vos salons par centre d’intérêt", "type": 1})
 	}
 	for _, command := range commands {
 		if PublicCommand(command["name"].(string)) {

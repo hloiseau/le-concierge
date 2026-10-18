@@ -37,6 +37,8 @@ type Config struct {
 	AdminIDs                                                                                []string
 	DiscordDMsEnabled                                                                       bool
 	DiscordNotificationChannelID                                                            string
+	DiscordInterests                                                                        []DiscordInterest
+	DiscordInterestsChannelID                                                               string
 	Services                                                                                []Service
 }
 
@@ -115,6 +117,9 @@ func Load() (Config, error) {
 			return c, e
 		}
 		*p.dest = v
+	}
+	if err := c.loadDiscordInterests(); err != nil {
+		return c, err
 	}
 	if c.Env != "production" && c.Env != "development" {
 		return c, errors.New("APP_ENV must be production or development")

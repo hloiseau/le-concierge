@@ -130,6 +130,9 @@ services:
       # Meme token que l'API : les commandes sont synchronisees au demarrage.
       # Preferer _FILE avec le meme secret monte en lecture seule.
       DISCORD_BOT_TOKEN: ''
+      # Facultatif, bot uniquement : menu de salons par interet (docs/discord-interests.md).
+      DISCORD_INTERESTS_JSON: ''
+      DISCORD_INTERESTS_CHANNEL_ID: ''
     ports:
       - '192.0.2.10:18081:8081'
     depends_on:

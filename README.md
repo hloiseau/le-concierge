@@ -9,7 +9,7 @@ Bot Discord et API Go commune pour un écosystème multimédia auto-hébergé.
 - [Contribuer](CONTRIBUTING.md)
 - [Projet complémentaire : le-hub](https://github.com/hloiseau/le-hub)
 
-Le Hub utilise une connexion Plex obligatoire avec vérification de l’accès au serveur. Discord se lie ensuite, de façon facultative, pour utiliser le bot.
+Le Hub utilise une connexion Plex obligatoire avec vérification de l’accès au serveur. Discord se lie ensuite, de façon facultative, pour utiliser les commandes personnelles du bot. Le [choix des salons par intérêt](docs/discord-interests.md) fonctionne directement dans Discord, sans liaison Plex.
 
 ## Démarrer
 
@@ -20,6 +20,8 @@ Voir le [guide de déploiement](docs/deployment.md) pour Go, Discord, Plex, Seer
 Le [contrat HTTP 0.9.0](api/openapi.json) décrit l’API du portail. Les réponses réelles des handlers Go sont vérifiées contre ce contrat dans les tests, y compris les erreurs, champs requis, types, statuts et dates UTC. Le Hub utilise une copie synchronisée et des types TypeScript générés. Les [téléchargements personnels Downloadarr](docs/downloadarr.md) proposent une recherche Plex et réutilisent la connexion du Hub pour obtenir un accès personnel Downloadarr, avec une révision de service explicitement vérifiée ; cette intégration reste désactivée par défaut.
 
 Les nouveautés Plex sont paginées dans le Hub et `/nouveautes`. [Mes demandes](docs/subscriptions.md) regroupe les demandes personnelles Seerr et leurs réglages de notifications ; `/mes-demandes` possède sa navigation Discord. Les anciens suivis ajoutés séparément restent modifiables dans cette même page. Les demandes Seerr et nouveautés Plex disposent d’affiches ; les images Plex exigent une session et un accès personnel encore valides. [`/nouveautes`, `/surprise` et `/recap`](docs/discord-discovery.md) répondent en privé par défaut ; l’option `public:true` partage les titres du catalogue dans le salon sans publier de liens Plex personnels.
+
+Le [menu d’intérêts Discord](docs/discord-interests.md), facultatif, permet de rejoindre ou quitter les salons thématiques depuis un panneau public ou `/salons`. Les choix et confirmations restent privés. Le bot modifie uniquement les rôles configurés ; le panneau se publie une fois avec `--publish-interests`, puis se met à jour avec `--message-id`.
 
 Les [rappels de salon Discord](docs/discord-channel-reminders.md) mentionnent les demandeurs Seerr avant un retrait estimé par Maintainerr, sans exposer leur visionnage. Les [rappels personnels](docs/removal-reminders.md) conservent une boîte Hub et des [DM facultatifs](docs/discord-reminders.md), avec consentement distinct, file durable et vérification des accès juste avant envoi. Ils couvrent lectures commencées, demandes, suivis et, sur option, contenus marqués non vus par Plex. « Demander un délai » ouvre une file administrateur sans modifier Maintainerr. Le demandeur peut annuler une demande encore en attente avant son échéance ; les annulations restent dans son historique et les demandes échues sortent de la file active. La mise à jour migre SQLite vers le schéma **v7**, en conservant les préférences et les demandes existantes. Aucun rappel réel de salon ou DM n’a été envoyé par les tests.
 

@@ -44,6 +44,8 @@ Enregistrer. Discord envoie un PING signé : la sauvegarde doit réussir. Si ell
 
 Dans **Installation**, activer **Guild Install**. Le Concierge ne gère pas l'installation personnelle pour cette version. Dans **Default Install Settings → Guild Install**, sélectionner les scopes **`applications.commands`** et **`bot`**. Ne pas donner la permission Administrateur ; les réponses actuelles passent par les interactions.
 
+Pour le [menu facultatif des salons par intérêt](discord-interests.md), ajouter **Gérer les rôles** et placer Le Concierge au-dessus des rôles d’intérêts. Cette fonction utilise directement Discord et ne nécessite pas de liaison Plex. Les permissions des salons et la publication du panneau sont détaillées dans son guide.
+
 Copier **Install Link**, l'ouvrir, choisir **Ajouter à un serveur**, puis ton serveur. Le compte qui installe doit pouvoir gérer ce serveur. Dans les paramètres d'intégration du serveur, autoriser les commandes aux rôles/salons voulus ; les membres doivent pouvoir utiliser les commandes d'application dans le salon.
 
 ## 5. Enregistrer les commandes
@@ -61,6 +63,8 @@ sudo bash truenas-admin.sh register
 Coller le token dans la saisie masquée. Le script l'injecte seulement dans le processus d'enregistrement, sans l'écrire dans le YAML ni l'ajouter à la ligne de commande. Ne pas le coller dans un salon Discord.
 
 L’enregistrement automatique ou explicite remplace les commandes de **cette application dans ce serveur** par `/aide`, `/mes-demandes`, `/a-voir`, `/nouveautes`, `/surprise`, `/recap`, `/livres`, `/demander-livre` et `/diagnostic` : utiliser l'application dédiée créée à l'étape 1. Le répéter ne crée pas de doublons. Avec le mode ponctuel sans token dans le service, relancer le script après une mise à jour des commandes.
+
+`/salons` s’ajoute lorsque les deux variables d’intérêts sont configurées. Son menu reste privé, même depuis le bouton du panneau public. Le panneau est publié manuellement, jamais au démarrage : voir [configuration et publication](discord-interests.md#publier-une-fois-puis-modifier-le-panneau-existant).
 
 `/mes-demandes` reprend les demandes Seerr de la personne connectée et renvoie vers leurs notifications dans le Hub. Il n’y a rien à recopier. `/a-voir` reprend **Avant leur départ**, avec vos états de visionnage et les dates de retrait estimées ; cette commande reste privée. Les anciens noms `/mes-suivis` et `/suivre` ne sont plus publiés dans le catalogue de commandes ; les interactions déjà enregistrées restent reconnues pendant la mise à jour.
 
