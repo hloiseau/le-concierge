@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/discord"
 	"log/slog"
@@ -35,15 +36,34 @@ func run() error {
 		return nil
 	}
 	register := flag.Bool("register", false, "register this app's guild commands, then exit")
+	publishInterests := flag.Bool("publish-interests", false, "publish the configured interest panel, then exit")
+	messageID := flag.String("message-id", "", "update this bot's existing interest panel message instead of creating one")
 	flag.Parse()
+	messageIDSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "message-id" {
+			messageIDSet = true
+		}
+	})
+	if (*register && *publishInterests) || (messageIDSet && (!*publishInterests || *messageID == "")) {
+		return errors.New("--register and --publish-interests are exclusive; --message-id requires --publish-interests")
+	}
 	c, e := config.Load()
 	if e != nil {
 		return e
 	}
+	bot := discord.NewBot(c)
+	if *publishInterests {
+		id, err := bot.PublishInterests(context.Background(), *messageID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Interest panel message: %s\n", id)
+		return nil
+	}
 	if c.DiscordPublicKey == "" {
 		return errors.New("configure Discord application, guild, public key and BOT_API_SECRET first")
 	}
-	bot := discord.NewBot(c)
 	if *register {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()

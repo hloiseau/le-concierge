@@ -21,6 +21,7 @@ type Interaction struct {
 	ApplicationID string `json:"application_id"`
 	Type          int    `json:"type"`
 	GuildID       string `json:"guild_id"`
+	ChannelID     string `json:"channel_id"`
 	Token         string `json:"token"`
 	Member        struct {
 		User struct {
@@ -32,9 +33,14 @@ type Interaction struct {
 		CustomID      string              `json:"custom_id"`
 		ComponentType int                 `json:"component_type"`
 		Options       []InteractionOption `json:"options"`
+		Values        []string            `json:"values"`
 	} `json:"data"`
 	Message struct {
-		Flags int `json:"flags"`
+		Flags  int    `json:"flags"`
+		ID     string `json:"id"`
+		Author struct {
+			ID string `json:"id"`
+		} `json:"author"`
 	} `json:"message"`
 }
 
