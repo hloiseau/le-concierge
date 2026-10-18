@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -156,13 +157,13 @@ func TestDiscordWorkerFreshSourcesAndDurableDedup(t *testing.T) {
 	if err := s.deliverDiscordReminders(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	if calls != 2 || sources.collectionReads != 2 || sources.metadataReads != 2 || discordState(t, s) != "sent" {
+	if calls != 2 || sources.collectionReads != 3 || sources.metadataReads != 3 || discordState(t, s) != "sent" {
 		t.Fatalf("calls=%d freshSources=%d state=%s", calls, sources.collectionReads, discordState(t, s))
 	}
 	if err := s.deliverDiscordReminders(context.Background(), u); err != nil {
 		t.Fatal(err)
 	}
-	if calls != 2 || sources.collectionReads != 2 {
+	if calls != 2 || sources.collectionReads != 3 {
 		t.Fatal("sent notification was retried")
 	}
 }
@@ -243,9 +244,9 @@ func TestDiscordWorkerRetriesUnavailableSourcesWithoutOldContent(t *testing.T) {
 }
 
 func TestDiscordWorkerRechecksAfterDMSetup(t *testing.T) {
-	for _, mode := range []string{"logout", "opt_out", "identity_changed", "lease_expired"} {
+	for _, mode := range []string{"logout", "grant_expired", "opt_out", "identity_changed", "lease_expired", "completed", "excluded", "inactive", "moved_deadline", "metadata_denied", "source_failure"} {
 		t.Run(mode, func(t *testing.T) {
-			s, u, _ := queuedDiscordFixture(t)
+			s, u, sources := queuedDiscordFixture(t)
 			calls := 0
 			s.Discord.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 				calls++
@@ -253,9 +254,27 @@ func TestDiscordWorkerRechecksAfterDMSetup(t *testing.T) {
 					t.Fatal("revoked message POST")
 				}
 				switch mode {
+				case "completed":
+					sources.completed = true
+				case "excluded":
+					sources.excluded = true
+				case "inactive":
+					sources.inactive = true
+				case "moved_deadline":
+					sources.addedAt = sources.addedAt.Add(time.Hour)
+				case "metadata_denied":
+					sources.metadataStatus = 403
+				case "source_failure":
+					sources.failing = true
 				case "logout":
 					s.mu.Lock()
 					delete(s.grants, u.ID)
+					s.mu.Unlock()
+				case "grant_expired":
+					s.mu.Lock()
+					grant := s.grants[u.ID]
+					grant.ExpiresAt = time.Now().Add(-time.Second)
+					s.grants[u.ID] = grant
 					s.mu.Unlock()
 				case "opt_out":
 					if err := s.Store.Preferences(context.Background(), u.ID, false); err != nil {
@@ -275,6 +294,205 @@ func TestDiscordWorkerRechecksAfterDMSetup(t *testing.T) {
 			_ = s.deliverDiscordReminders(context.Background(), u)
 			if calls != 1 || discordState(t, s) == "sent" {
 				t.Fatal("late revocation leaked private content")
+			}
+			if mode == "grant_expired" && discordState(t, s) != "failed" {
+				t.Fatal("expired authorization must remain a permanent rejection")
+			}
+			if mode == "source_failure" {
+				var code string
+				if err := s.Store.DB.QueryRow(`SELECT last_error FROM notification_deliveries`).Scan(&code); err != nil || code != "source_unavailable" || discordState(t, s) != "queued" {
+					t.Fatal("temporary failure must remain retryable", code, err)
+				}
+				sources.failing = false
+				if _, err := s.Store.DB.Exec(`UPDATE notification_deliveries SET not_before=0`); err != nil {
+					t.Fatal(err)
+				}
+				s.Discord.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+					calls++
+					if r.URL.Path != "/api/v10/channels/456/messages" {
+						t.Fatal("unexpected retry destination")
+					}
+					return response(200, `{"id":"789","channel_id":"456"}`), nil
+				})
+				if err := s.deliverDiscordReminders(context.Background(), u); err != nil || calls != 2 || discordState(t, s) != "sent" {
+					t.Fatal("recovered source did not resume the pending message", err, calls)
+				}
+			}
+		})
+	}
+}
+
+func TestDiscordWorkerUsesFreshTitleAfterDMSetup(t *testing.T) {
+	s, u, _ := queuedDiscordFixture(t)
+	changed := false
+	original := s.Upstream.HTTP.Transport
+	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		out, err := original.RoundTrip(r)
+		if err == nil && changed && r.URL.Path == "/library/metadata/42" {
+			body, err := io.ReadAll(out.Body)
+			out.Body.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			out.Body = io.NopCloser(strings.NewReader(strings.ReplaceAll(string(body), "Private reminder movie", "Fresh reminder title")))
+		}
+		return out, err
+	})
+	posts := 0
+	s.Discord.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == "/api/v10/users/@me/channels" {
+			changed = true
+			return response(200, `{"id":"456","type":1,"recipients":[{"id":"11111"}]}`), nil
+		}
+		posts++
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "Fresh reminder title") || strings.Contains(string(body), "Private reminder movie") {
+			t.Fatal("old title sent after revalidation")
+		}
+		return response(200, `{"id":"789","channel_id":"456"}`), nil
+	})
+	if err := s.deliverDiscordReminders(context.Background(), u); err != nil || posts != 1 || discordState(t, s) != "sent" {
+		t.Fatal("fresh message was not delivered", err, posts)
+	}
+}
+
+func TestDiscordWorkerRebuildsDigestAfterOneItemIsNoLongerCurrent(t *testing.T) {
+	for _, mode := range []string{"completed", "expired"} {
+		t.Run(mode, func(t *testing.T) {
+			s, _, source := reminderFixture(t)
+			s.Config.DiscordDMsEnabled = true
+			s.Discord = notifications.NewDiscord("fixture-token")
+			p, err := s.Store.GetReminderPreferences(t.Context(), "11111")
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.DiscordDM = true
+			if err := s.Store.SaveReminderPreferences(t.Context(), "11111", p); err != nil {
+				t.Fatal(err)
+			}
+			remainingAddedAt := source.addedAt
+			if mode == "expired" {
+				source.addedAt = time.Now().UTC().Add(-7*24*time.Hour + time.Second)
+			}
+			original := s.Upstream.HTTP.Transport
+			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				switch r.URL.Path {
+				case "/api/collections/overlay-data":
+					return response(200, fmt.Sprintf(`[{"id":1,"mediaServerType":"plex","libraryId":"2","type":"movie","isActive":true,"arrAction":0,"deleteAfterDays":7,"mediaCount":2,"media":[{"id":1,"collectionId":1,"mediaServerId":"42","addDate":%q,"isManual":false,"ruleEvaluationFailed":false},{"id":2,"collectionId":1,"mediaServerId":"43","addDate":%q,"isManual":false,"ruleEvaluationFailed":false}]}]`, source.addedAt.Format(time.RFC3339Nano), remainingAddedAt.Format(time.RFC3339Nano))), nil
+				case "/api/v2":
+					if r.URL.Query().Get("cmd") == "get_history" {
+						return response(200, `{"response":{"result":"success","data":{"recordsFiltered":2,"data":[{"row_id":1,"user_id":11111,"rating_key":42,"media_type":"movie","guid":"plex://movie/reminder","percent_complete":50,"watched_status":0.5,"live":0},{"row_id":2,"user_id":11111,"rating_key":43,"media_type":"movie","guid":"plex://movie/remaining","percent_complete":50,"watched_status":0.5,"live":0}]}}}`), nil
+					}
+				case "/library/metadata/43":
+					return response(200, `{"MediaContainer":{"size":1,"librarySectionID":"2","Metadata":[{"ratingKey":"43","title":"Remaining movie B","type":"movie","guid":"plex://movie/remaining","viewCount":0}]}}`), nil
+				}
+				return original.RoundTrip(r)
+			})
+			u, err := s.Store.User(t.Context(), "11111")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.refreshReminders(t.Context(), u); err != nil {
+				t.Fatal(err)
+			}
+			var nonce string
+			var reminders int
+			if err := s.Store.DB.QueryRow(`SELECT nonce FROM notification_deliveries`).Scan(&nonce); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Store.DB.QueryRow(`SELECT COUNT(*) FROM reminder_outbox WHERE state='sent'`).Scan(&reminders); err != nil || reminders != 2 {
+				t.Fatalf("two-item digest was not prepared: %d %v", reminders, err)
+			}
+			posts := 0
+			s.Discord.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/api/v10/users/@me/channels" {
+					if mode == "completed" {
+						source.completed = true
+					} else {
+						timer := time.NewTimer(time.Until(source.addedAt.Add(7 * 24 * time.Hour)))
+						defer timer.Stop()
+						select {
+						case <-timer.C:
+						case <-r.Context().Done():
+							return nil, r.Context().Err()
+						}
+					}
+					return response(200, `{"id":"456","type":1,"recipients":[{"id":"11111"}]}`), nil
+				}
+				posts++
+				var payload struct {
+					Content string `json:"content"`
+					Nonce   string `json:"nonce"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || !strings.Contains(payload.Content, "Remaining movie B") || strings.Contains(payload.Content, "Private reminder movie") || payload.Nonce != nonce {
+					t.Fatalf("remaining digest lost its content or nonce: %+v %v", payload, err)
+				}
+				return response(200, `{"id":"789","channel_id":"456"}`), nil
+			})
+			if err := s.deliverDiscordReminders(t.Context(), u); err != nil || posts != 0 || discordState(t, s) != "queued" {
+				t.Fatalf("changed selection must retry without posting: %v, posts=%d, state=%s", err, posts, discordState(t, s))
+			}
+			var code string
+			if err := s.Store.DB.QueryRow(`SELECT last_error FROM notification_deliveries`).Scan(&code); err != nil || code != "source_unavailable" {
+				t.Fatalf("changed selection must remain retryable: %s %v", code, err)
+			}
+			if _, err := s.Store.DB.Exec(`UPDATE notification_deliveries SET not_before=0`); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.deliverDiscordReminders(t.Context(), u); err != nil || posts != 1 || discordState(t, s) != "sent" {
+				t.Fatalf("remaining reminder was lost: %v, posts=%d, state=%s", err, posts, discordState(t, s))
+			}
+			if err := s.deliverDiscordReminders(t.Context(), u); err != nil || posts != 1 {
+				t.Fatal("completed digest was delivered again", err, posts)
+			}
+		})
+	}
+}
+
+func TestDiscordWorkerRetriesChangedFollowSelection(t *testing.T) {
+	for _, phase := range []string{"initial source read", "DM setup", "final source read"} {
+		t.Run(phase, func(t *testing.T) {
+			s, u, source := queuedDiscordFixture(t)
+			changed := false
+			change := func() {
+				if !changed {
+					changed = true
+					if _, err := s.Store.SaveSubscription(t.Context(), u.ID, store.SubscriptionTarget{Type: "movie", TMDBID: 123}, "hub"); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			original := s.Upstream.HTTP.Transport
+			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/library/all" {
+					return response(200, `{"MediaContainer":{"size":0,"totalSize":0,"Metadata":[]}}`), nil
+				}
+				return original.RoundTrip(r)
+			})
+			if phase == "initial source read" {
+				source.beforeMetadata = change
+			}
+			posts := 0
+			s.Discord.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Path == "/api/v10/users/@me/channels" {
+					if phase == "DM setup" {
+						change()
+					} else if phase == "final source read" {
+						source.beforeMetadata = change
+					}
+					return response(200, `{"id":"456","type":1,"recipients":[{"id":"11111"}]}`), nil
+				}
+				posts++
+				return response(200, `{"id":"789","channel_id":"456"}`), nil
+			})
+			if err := s.deliverDiscordReminders(t.Context(), u); err != nil || posts != 0 || discordState(t, s) != "queued" {
+				t.Fatalf("follow selection change cancelled a valid reminder: %v %d %s", err, posts, discordState(t, s))
+			}
+			if _, err := s.Store.DB.Exec(`UPDATE notification_deliveries SET not_before=0`); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.deliverDiscordReminders(t.Context(), u); err != nil || posts != 1 || discordState(t, s) != "sent" {
+				t.Fatalf("stable follow selection did not resume: %v %d %s", err, posts, discordState(t, s))
 			}
 		})
 	}

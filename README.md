@@ -29,7 +29,7 @@ Le [catalogue de livres](docs/books-contracts.md) et les [collections](docs/book
 
 - V1 : `/mes-demandes`, `/nouveautes`, `/aide`.
 - Rappels : boîte personnelle Hub, DM facultatifs, ciblage des demandes/suivis et demandes de délai.
-- Découverte : `/surprise`, `/recap`, partage des résultats sur choix explicite et alertes de disponibilité.
+- Découverte : `/surprise`, `/recap`, partage des résultats sur choix explicite et alertes de disponibilité. [`/a-voir`](docs/discord-discovery.md) retrouve en privé les départs estimés qui vous concernent.
 - V3 : `/livres`, `/demander-livre` ; suivi d’import des lectures restant dépendant des API utilisateur installées.
 - V4 : `/diagnostic`, réservé aux administrateurs.
 - Socle commun : identité, API, données et intégrations nécessaires au Hub.

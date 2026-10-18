@@ -231,7 +231,7 @@ func Message(content string) map[string]any {
 }
 
 func Help(origin string, services []config.Service) string {
-	text := "**Le Concierge**\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
+	text := "**Le Concierge**\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/a-voir — Vos contenus avant leur départ estimé de Plex (privé)\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
 	// Encode Markdown delimiters without changing the configured public destination.
 	link := func(label, target string) string {
 		return "[" + label + "](" + strings.NewReplacer("(", "%28", ")", "%29", "[", "%5B", "]", "%5D", "<", "%3C", ">", "%3E").Replace(target) + ")"

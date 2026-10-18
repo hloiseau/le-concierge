@@ -362,11 +362,19 @@ func TestAvailableRequestSourceChangesDuringDiscordChannelCreation(t *testing.T)
 				t.Fatal(err)
 			}
 			state := "failed"
-			if mode == "source_failure" {
+			if mode == "source_failure" || mode == "tautulli_started" || mode == "request_deleted" {
 				state = "queued"
 			}
 			if calls != 1 || discordState(t, s) != state {
 				t.Fatalf("calls=%d state=%s want=%s", calls, discordState(t, s), state)
+			}
+			if mode == "tautulli_started" || mode == "request_deleted" {
+				if _, err := s.Store.DB.Exec(`UPDATE notification_deliveries SET not_before=0`); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.deliverDiscordReminders(context.Background(), u); err != nil || calls != 1 || discordState(t, s) != "failed" {
+					t.Fatalf("empty rebuilt digest must stop without another Discord call: %v %d %s", err, calls, discordState(t, s))
+				}
 			}
 		})
 	}

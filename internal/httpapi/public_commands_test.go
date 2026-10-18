@@ -94,7 +94,7 @@ func TestPublicCatalogueCommandsRequireConsentAndCurrentAccess(t *testing.T) {
 }
 
 func TestPersonalCommandsRejectPublicOptionAtAPIBoundary(t *testing.T) {
-	for _, command := range []string{"mes-demandes", "mes-suivis", "suivre", "livres", "demander-livre", "diagnostic", "aide"} {
+	for _, command := range []string{"mes-demandes", "mes-suivis", "a-voir", "suivre", "livres", "demander-livre", "diagnostic", "aide"} {
 		t.Run(command, func(t *testing.T) {
 			s := fixture(t)
 			seed(t, s, "11111", true)

@@ -869,7 +869,7 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 	var recentPagination *discord.RecentPagination
 	if command == "aide" {
 		text = discord.Help(s.Config.PublicOrigin, s.Config.Services)
-	} else if command == "mes-demandes" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "livres" || command == "demander-livre" || command == "diagnostic" {
+	} else if command == "mes-demandes" || command == "a-voir" || command == "nouveautes" || command == "surprise" || command == "recap" || command == "suivre" || command == "livres" || command == "demander-livre" || command == "diagnostic" {
 		u, e := s.Store.UserByDiscord(r.Context(), i.Member.User.ID)
 		var g upstream.Grant
 		if e == nil {
@@ -881,6 +881,8 @@ func (s *Server) interaction(w http.ResponseWriter, r *http.Request) {
 			text = "Patientez avant de relancer une commande personnelle."
 		} else if command == "diagnostic" {
 			text = s.diagnosticMessage(r.Context(), u, int64(options.RequestID))
+		} else if command == "a-voir" {
+			text = s.departuresMessage(r.Context(), u, g)
 		} else if command == "livres" {
 			text = s.booksMessage(r.Context(), u, options.Query, options.Page)
 		} else if command == "demander-livre" {

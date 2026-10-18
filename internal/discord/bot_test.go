@@ -73,7 +73,7 @@ func TestHelpUsesOnlyConfiguredPublicServiceLinksWithinDiscordLimit(t *testing.T
 		{ID: "unknown", Name: "@everyone", URL: "https://unknown.example"},
 		{ID: "plex", URL: "https://duplicate.example"},
 	})
-	if len(text) > 2000 || !strings.Contains(text, "https://plex.example/path%28with%29") || !strings.Contains(text, "https://hub.example/aide") {
+	if len(text) > 2000 || !strings.Contains(text, "https://plex.example/path%28with%29") || !strings.Contains(text, "https://hub.example/aide") || !strings.Contains(text, "/a-voir") {
 		t.Fatalf("invalid help links or bounds: %s", text)
 	}
 	for _, excluded := range []string{"secret", "javascript", "shelfmark.example", "unknown.example", "@everyone", "duplicate.example"} {
@@ -135,6 +135,49 @@ func TestDeferredReplyWaitsForAcknowledgement(t *testing.T) {
 		})
 	}
 }
+
+func TestDeferredPersonalAPIBudgetKeepsDiscordDeadlines(t *testing.T) {
+	b, r := signedCommand(t, "a-voir")
+	stages := []string{}
+	started := time.Now()
+	b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		deadline, bounded := r.Context().Deadline()
+		remaining := time.Until(deadline)
+		if !bounded || remaining <= 0 || deadline.After(started.Add(25*time.Second)) {
+			t.Error("request escaped the overall interaction budget")
+		}
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/callback"):
+			stages = append(stages, "ack")
+			if remaining > 2500*time.Millisecond {
+				t.Error("Discord acknowledgement deadline was lengthened")
+			}
+			return botResponse(204, ""), nil
+		case r.URL.Host == "api.test":
+			stages = append(stages, "api")
+			if remaining <= 20*time.Second || remaining > 22*time.Second {
+				t.Errorf("API cannot complete its 20-second source read: %v", remaining)
+			}
+			return botResponse(200, `{"content":"Départs vérifiés"}`), nil
+		default:
+			stages = append(stages, "reply")
+			if remaining > 8*time.Second || r.Method != "PATCH" {
+				t.Error("Discord reply deadline was lengthened")
+			}
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), "Départs vérifiés") || !strings.Contains(string(body), `"flags":64`) {
+				t.Error("API response was not delivered privately")
+			}
+			return botResponse(200, `{}`), nil
+		}
+	})
+	b.Handler().ServeHTTP(httptest.NewRecorder(), r)
+	b.Wait()
+	if b.Client.Timeout != 8*time.Second || strings.Join(stages, ",") != "ack,api,reply" {
+		t.Fatalf("shared Discord client or callback order changed: timeout=%v stages=%v", b.Client.Timeout, stages)
+	}
+}
+
 func TestWebhook404IsLoggedWithoutSecretsAndNotRetried(t *testing.T) {
 	var logs bytes.Buffer
 	old := slog.Default()

@@ -46,6 +46,39 @@ func TestRequestArtworkAndRequesterUseValidatedUpstreamFields(t *testing.T) {
 	}
 }
 
+func TestRequestVariantPreservesMissingStandardAnd4K(t *testing.T) {
+	for _, source := range []string{"", `,"is4k":null`, `,"is4k":false`, `,"is4k":true`} {
+		t.Run(source, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v1/user/42/requests" {
+					fmt.Fprintf(w, `{"pageInfo":{"results":1},"results":[{"id":1,"type":"movie","status":2,"requestedBy":{"id":42},"media":{"tmdbId":100,"status":3,"status4k":5}%s}]}`, source)
+					return
+				}
+				fmt.Fprint(w, `{"title":"Fixture film"}`)
+			}))
+			defer server.Close()
+			status := "processing"
+			if source == `,"is4k":true` {
+				status = "available"
+			}
+			for _, filter := range []string{"all", status} {
+				page, err := New().RequestsByStatus(t.Context(), server.URL, "key", 42, 0, filter)
+				if err != nil || len(page.Items) != 1 || page.Items[0].Status != status {
+					t.Fatal("request variant changed its status", page, err)
+				}
+				encoded, _ := json.Marshal(page.Items[0])
+				var item map[string]any
+				_ = json.Unmarshal(encoded, &item)
+				value, exists := item["is4k"]
+				wantPresent := strings.Contains(source, "true") || strings.Contains(source, "false")
+				if exists != wantPresent || (exists && value != (source == `,"is4k":true`)) {
+					t.Fatal("request variant omitted or invented", string(encoded))
+				}
+			}
+		})
+	}
+}
+
 func TestSeerrPlexIdentityLookup(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string

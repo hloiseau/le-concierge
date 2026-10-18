@@ -109,7 +109,10 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		req.Header.Set("X-Signature-Ed25519", signature)
 		reply := Message("Le service est momentanément indisponible. Réessayez plus tard.")
 		publicContent := ""
-		resp, e := b.Client.Do(req)
+		// Personal source reads can take 20 seconds; keep Discord's shorter timeout.
+		apiClient := *b.Client
+		apiClient.Timeout = 22 * time.Second
+		resp, e := apiClient.Do(req)
 		if e == nil {
 			if resp.StatusCode == 200 {
 				var m struct {
@@ -230,6 +233,7 @@ func (b *Bot) Register(ctx context.Context) error {
 	commands := []map[string]any{
 		{"name": "aide", "description": "Guides, services et liaison des comptes", "type": 1},
 		{"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1},
+		{"name": "a-voir", "description": "Voir vos contenus avant leur départ estimé de Plex", "type": 1},
 		{"name": "nouveautes", "description": "Voir les derniers ajouts Plex autorisés", "type": 1},
 		{"name": "surprise", "description": "Tirer un titre dans votre catalogue Plex", "type": 1, "options": []map[string]any{
 			{"name": "type", "description": "Films ou séries (les deux par défaut)", "type": 3, "choices": []map[string]any{{"name": "Film", "value": "movie"}, {"name": "Série", "value": "show"}}},

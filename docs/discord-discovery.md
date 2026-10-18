@@ -12,6 +12,14 @@ Le partage contient uniquement les titres et informations du catalogue, sans lie
 
 L’API autorise séparément le contenu public après les vérifications d’identité et d’accès. Le bot acquitte toujours en privé, termine ce message privé, puis publie un message de suivi dans le salon ; il confirme le résultat de l’envoi en privé. Cet ordre respecte [le comportement des réponses différées Discord](https://docs.discord.com/developers/interactions/receiving-and-responding#followup-messages), dont la visibilité ne peut pas être changée après création. Une erreur réseau après publication peut laisser l’état de l’envoi incertain : le message privé invite alors à vérifier le salon avant de réessayer.
 
+## `/a-voir` : vos départs personnels
+
+`/a-voir` retrouve la même liste personnelle que **Avant leur départ** dans le Hub : demandes Seerr, suivis et lectures concernés par un retrait estimé dans les trente prochains jours, selon les préférences du compte. Les contenus terminés sont masqués. La commande reste privée et n'accepte pas l'option `public` ; elle ne crée ni rappel, demande de délai ou modification de Maintainerr.
+
+Chaque élément indique son type, son état de visionnage, sa date estimée en Europe/Paris et son lien Plex. Un état inconnu reste incertain. La réponse affiche au plus huit éléments, parfois moins pour tenir dans les 2 000 caractères, puis le nombre restant et un lien vers la liste complète et les préférences. La fraîcheur des sources est indiquée ; une erreur ou une observation expirée n'affiche pas une ancienne liste.
+
+La commande partage le quota de six lectures par minute avec la page des départs. Elle utilise le cache Maintainerr commun de 25 secondes, relit l'historique personnel et les accès, et dispose d'un budget total de vingt secondes. L'identité et l'autorisation sont revérifiées avant la réponse. Elle est enregistrée automatiquement au démarrage du bot ; aucune nouvelle configuration n'est nécessaire.
+
 ## `/surprise`
 
 Le filtre facultatif permet de choisir films ou séries ; sans filtre, les deux types sont réunis. Le tirage utilise `crypto/rand` sur les identifiants Plex uniques de tout le catalogue autorisé qui a été lu. Les titres marqués supprimés et les séries explicitement sans épisode sont exclus. Les candidats sont examinés dans un ordre aléatoire sans répétition : un film doit avoir un média dont toutes les parties sont présentes et accessibles selon Plex ; une série doit avoir au moins un épisode répondant à ce critère. Un catalogue vide donne une réponse explicite. Le titre retenu est contrôlé à nouveau avec le jeton du membre avant sa restitution.
