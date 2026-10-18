@@ -748,6 +748,12 @@ func (s *Server) requests(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_offset", "Pagination invalide.")
 		return
 	}
+	statuses := r.URL.Query()["status"]
+	status := r.URL.Query().Get("status")
+	if len(statuses) > 1 || (status != "" && status != "all" && !upstream.ValidRequestStatus(status)) {
+		problem(w, 400, "invalid_status", "Filtre de statut invalide.")
+		return
+	}
 	seerrID, e := s.resolveSeerr(r.Context(), u)
 	if e != nil {
 		if errors.Is(e, upstream.ErrSeerrUserNotFound) {
@@ -757,9 +763,13 @@ func (s *Server) requests(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	data, e := s.Upstream.Requests(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, off)
+	data, e := s.Upstream.RequestsByStatus(r.Context(), s.Config.SeerrURL, s.Config.SeerrAPIKey, seerrID, off, status)
 	if e != nil {
-		problem(w, 502, "seerr_unavailable", "Les demandes ne sont pas disponibles actuellement.")
+		if errors.Is(e, upstream.ErrIncomplete) {
+			problem(w, 502, "seerr_incomplete", "La liste complète des demandes est indisponible. Le filtre ne peut pas être appliqué ; réessayez ou affichez tous les statuts.")
+		} else {
+			problem(w, 502, "seerr_unavailable", "Les demandes ne sont pas disponibles actuellement.")
+		}
 		return
 	}
 	if s.revalidateUser(w, r, key, u) {

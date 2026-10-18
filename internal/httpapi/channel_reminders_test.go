@@ -12,7 +12,7 @@ import (
 )
 
 func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
-	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "season", "season long title", "episode", "episode long title", "episode missing index", "episode zero index", "episode other season"} {
+	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "quiet boundary source", "quiet boundary channel", "season", "season long title", "episode", "episode long title", "episode missing index", "episode zero index", "episode other season", "late exclusion", "late inactive rule", "late postponed", "late removed", "late non-destructive action", "late source error", "late request cancelled", "late recipient changed", "late local identity removed", "late title changed"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fixture(t)
 			s.Config.DiscordNotificationChannelID = "456"
@@ -45,11 +45,23 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 			now = time.Date(local.Year(), local.Month(), local.Day(), 12, 0, 0, 0, loc).UTC()
 			if mode == "quiet hours" {
 				now = now.Add(-8 * time.Hour)
+			} else if strings.HasPrefix(mode, "quiet boundary") {
+				now = time.Date(local.Year(), local.Month(), local.Day(), 22, 0, 0, 0, loc).Add(-10 * time.Millisecond).UTC()
+			}
+			waitForQuietHours := func(r *http.Request) (*http.Response, error) {
+				deadline, ok := r.Context().Deadline()
+				if !ok || time.Until(deadline) > 10*time.Millisecond {
+					t.Fatal("request deadline extends beyond quiet hours")
+				}
+				<-r.Context().Done()
+				return nil, r.Context().Err()
 			}
 			added := now.Add(-6 * 24 * time.Hour)
 			posts := 0
 			reads := 0
-			if mode == "linked identity" {
+			changed := false
+			changeDuringLookup := true
+			if mode == "linked identity" || mode == "late local identity removed" {
 				u, err := s.Store.LoginPlex(context.Background(), "777", "Fixture")
 				if err != nil {
 					t.Fatal(err)
@@ -65,6 +77,9 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 				body := ""
 				switch r.URL.Path {
 				case "/api/v1/settings/plex":
+					if mode == "quiet boundary source" {
+						return waitForQuietHours(r)
+					}
 					body = `{"machineId":"server-a"}`
 					if mode == "wrong Seerr server" {
 						body = `{"machineId":"server-b"}`
@@ -77,15 +92,24 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					body = `{"machineId":"server-a"}`
 				case "/api/collections/overlay-data":
 					reads++
-					if mode == "changed source" {
+					if mode == "changed source" || (changed && mode == "late source error") {
 						return response(503, "private error"), nil
 					}
+					if changed && mode == "late removed" {
+						body = `[]`
+						break
+					}
 					body = fmt.Sprintf(`[{"id":1,"mediaServerType":"plex","libraryId":"2","type":%q,"isActive":true,"arrAction":0,"deleteAfterDays":7,"mediaCount":1,"media":[{"id":1,"collectionId":1,"mediaServerId":"42","addDate":%q,"isManual":false,"ruleEvaluationFailed":false}]}]`, kind, added.Format(time.RFC3339))
+					if changed && mode == "late postponed" {
+						body = strings.Replace(body, `"deleteAfterDays":7`, `"deleteAfterDays":8`, 1)
+					} else if changed && mode == "late non-destructive action" {
+						body = strings.Replace(body, `"arrAction":0`, `"arrAction":3`, 1)
+					}
 				case "/api/rules":
-					body = fmt.Sprintf(`[{"id":5,"collectionId":1,"isActive":%v}]`, mode != "inactive")
+					body = fmt.Sprintf(`[{"id":5,"collectionId":1,"isActive":%v}]`, mode != "inactive" && !(changed && mode == "late inactive rule"))
 				case "/api/rules/exclusion":
 					body = `[]`
-					if mode == "excluded" {
+					if mode == "excluded" || (changed && mode == "late exclusion") {
 						body = `[{"id":1,"mediaServerId":"42","ruleGroupId":5,"type":"movie"}]`
 					}
 				case "/api/v1/request":
@@ -95,7 +119,7 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					}
 					status := 2
 					key := requestedKey
-					if mode == "declined" {
+					if mode == "declined" || (changed && mode == "late request cancelled") {
 						status = 3
 					}
 					if mode == "wrong key" {
@@ -115,11 +139,16 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					body = `{"id":7,"plexId":777,"displayName":"@everyone"}`
 				case "/api/v1/user/7/settings/notifications":
 					body = `{"discordIds":["789"]}`
-					if mode == "no Discord identity" || mode == "linked identity" {
+					if mode == "no Discord identity" || mode == "linked identity" || mode == "late local identity removed" {
 						body = `{"discordIds":[]}`
+					} else if changed && mode == "late recipient changed" {
+						body = `{"discordIds":["790"]}`
 					}
 				case "/api/v1/movie/99":
 					body = `{"title":"Film demandé @everyone"}`
+					if changed && mode == "late title changed" {
+						body = `{"title":"Titre actuel"}`
+					}
 				case "/api/v1/tv/99":
 					body = `{"name":"Série demandée"}`
 					if strings.HasSuffix(mode, "long title") {
@@ -156,6 +185,15 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 			s.Discord = notifications.NewDiscord("fixture-token")
 			s.Discord.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 				if r.Method == "GET" {
+					if mode == "quiet boundary channel" {
+						return waitForQuietHours(r)
+					}
+					changed = changeDuringLookup
+					if mode == "late local identity removed" {
+						if _, err := s.Store.DB.Exec(`UPDATE users SET discord_id=NULL WHERE plex_id='777'`); err != nil {
+							t.Fatal(err)
+						}
+					}
 					return response(200, `{"id":"456","type":0,"guild_id":"123"}`), nil
 				}
 				posts++
@@ -178,13 +216,20 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 				}
 				return response(200, `{"id":"111","channel_id":"456"}`), nil
 			})
-			for i := 0; i < 2; i++ {
+			cycles := 2
+			if strings.HasPrefix(mode, "late ") || strings.HasPrefix(mode, "quiet boundary") {
+				cycles = 1
+			}
+			for i := 0; i < cycles; i++ {
 				err := s.deliverChannelReminders(context.Background(), now)
+				if (strings.HasPrefix(mode, "late ") || strings.HasPrefix(mode, "quiet boundary")) && err == nil {
+					t.Fatal("late change was not revalidated")
+				}
 				if mode == "changed source" || mode == "wrong Seerr server" || mode == "temporary requester error" || (mode == "deleted first requester" && i == 0) {
 					if err == nil {
 						t.Fatal("source failure ignored")
 					}
-				} else if err != nil {
+				} else if err != nil && !strings.HasPrefix(mode, "late ") && !strings.HasPrefix(mode, "quiet boundary") {
 					t.Fatal(err)
 				}
 			}
@@ -194,6 +239,22 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 			}
 			if posts != want {
 				t.Fatalf("posts=%d want=%d (grants=%d)", posts, want, len(s.grants))
+			}
+			if mode == "late source error" {
+				var attempts int
+				var next int64
+				var code string
+				if err := s.Store.DB.QueryRow(`SELECT attempts,next_attempt,last_error FROM channel_reminders`).Scan(&attempts, &next, &code); err != nil || attempts != 1 || code != "source_unavailable" || next <= time.Now().UnixMilli() {
+					t.Fatal("transient validation failure was not scheduled for retry", attempts, next, code, err)
+				}
+				changed, changeDuringLookup = false, false
+				// Align the persisted retry with this fixture's midday clock.
+				if _, err := s.Store.DB.Exec(`UPDATE channel_reminders SET next_attempt=?`, now.Add(time.Minute).UnixMilli()); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.deliverChannelReminders(context.Background(), now.Add(2*time.Minute)); err != nil || posts != 1 {
+					t.Fatal("recovered source did not deliver once", posts, err)
+				}
 			}
 			if mode == "quiet hours" && reads != 0 {
 				t.Fatal("sources queried during quiet hours")
