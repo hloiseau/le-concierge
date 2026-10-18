@@ -29,6 +29,8 @@ La réponse contient `source`, `version`, `stage`, `summary`, `evidence[{stage,m
 
 `/diagnostic demande:7` utilise le même service. La commande est enregistrée avec la permission Discord administrateur et reste contrôlée côté API. Sa réponse est éphémère, bornée à 2000 caractères ; elle n’est pas publiée dans un salon ni envoyée périodiquement.
 
+Dans le Hub, un administrateur peut ouvrir **Mes demandes → Détail du suivi → Vérifier cette demande**. Le bouton transmet directement l’identifiant Seerr déjà affiché : aucune copie n’est nécessaire. Il présente les mêmes observations, leur date, les limites de file/historique et le guide officiel lorsqu’il existe. La lecture reste déclenchée par un clic ; fermer le détail, changer de compte ou perdre les droits efface son résultat et ignore toute réponse encore en cours. L’observation porte sur l’instant indiqué ; le bouton d’actualisation permet de vérifier un changement.
+
 ## Lectures et corrélation
 
 | Source | GET | Contrôle |

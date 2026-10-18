@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -132,14 +133,15 @@ func (d *Discord) SendChannelValidated(ctx context.Context, guildID, channelID, 
 			seen[id] = true
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	var channel struct {
 		ID      string `json:"id"`
 		GuildID string `json:"guild_id"`
 		Type    int    `json:"type"`
 	}
-	if err := d.request(ctx, http.MethodGet, "/channels/"+channelID, nil, &channel); err != nil {
+	lookupCtx, lookupCancel := context.WithTimeout(ctx, 5*time.Second)
+	err := d.request(lookupCtx, http.MethodGet, "/channels/"+channelID, nil, &channel)
+	lookupCancel()
+	if err != nil {
 		return err
 	}
 	if channel.ID != channelID || channel.GuildID != guildID || (channel.Type != 0 && channel.Type != 5) {
@@ -147,8 +149,15 @@ func (d *Discord) SendChannelValidated(ctx context.Context, guildID, channelID, 
 	}
 	if beforeSend != nil {
 		if err := beforeSend(); err != nil {
+			var failure *DeliveryError
+			if errors.As(err, &failure) {
+				return failure
+			}
 			return &DeliveryError{Code: "authorization_changed", Permanent: true}
 		}
+	}
+	if ctx.Err() != nil {
+		return &DeliveryError{Code: "transport_unavailable"}
 	}
 	body := "Le Concierge — rappel avant retrait\n"
 	for _, id := range mentions {
@@ -169,7 +178,11 @@ func (d *Discord) SendChannelValidated(ctx context.Context, guildID, channelID, 
 		ID        string `json:"id"`
 		ChannelID string `json:"channel_id"`
 	}
-	if err := d.post(ctx, "/channels/"+channelID+"/messages", map[string]any{"content": body, "nonce": nonce, "enforce_nonce": true, "allowed_mentions": map[string]any{"parse": []string{}, "users": mentions}, "flags": 4}, &message); err != nil {
+	// Source revalidation has its own caller deadline; it must not consume the
+	// five seconds reserved for the Discord POST.
+	sendCtx, sendCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer sendCancel()
+	if err := d.post(sendCtx, "/channels/"+channelID+"/messages", map[string]any{"content": body, "nonce": nonce, "enforce_nonce": true, "allowed_mentions": map[string]any{"parse": []string{}, "users": mentions}, "flags": 4}, &message); err != nil {
 		return err
 	}
 	if !snowflake(message.ID) || message.ChannelID != channelID {
