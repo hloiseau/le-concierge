@@ -165,15 +165,18 @@ func (s *Server) deliverChannelReminders(ctx context.Context, now time.Time) err
 			deferredErr = err
 			continue
 		}
+		description := "vous avez demandé ce contenu sur Seerr. Départ estimé le " + removal.EstimatedAt.In(loc).Format("02/01 à 15:04") + " (Maintainerr)."
 		if season != nil {
-			title += fmt.Sprintf(" — saison %d", *season)
+			scope := fmt.Sprintf("saison %d", *season)
 			if removal.Kind == "episode" {
 				if metadata.Index != nil {
-					title += fmt.Sprintf(", épisode %d", *metadata.Index)
+					scope += fmt.Sprintf(", épisode %d", *metadata.Index)
 				} else {
-					title += ", un épisode (numéro indisponible)"
+					scope += ", un épisode (numéro indisponible)"
 				}
 			}
+			// Keep the removal scope outside the independently truncated title.
+			description = scope + " : " + description
 		}
 		nonce, claimed, err := s.Store.ClaimChannelReminder(ctx, channel, key, *removal.EstimatedAt, now)
 		if err != nil {
@@ -183,7 +186,7 @@ func (s *Server) deliverChannelReminders(ctx context.Context, now time.Time) err
 			continue
 		}
 		link := "https://app.plex.tv/desktop/#!/server/" + url.PathEscape(s.Config.PlexServerID) + "/details?key=" + url.QueryEscape("/library/metadata/"+removal.MediaID)
-		err = s.Discord.SendChannelValidated(ctx, s.Config.DiscordGuildID, channel, nonce, notifications.Message{Title: title, URL: link, Description: "vous avez demandé ce contenu sur Seerr. Départ estimé le " + removal.EstimatedAt.In(loc).Format("02/01 à 15:04") + " (Maintainerr)."}, recipients, func() error {
+		err = s.Discord.SendChannelValidated(ctx, s.Config.DiscordGuildID, channel, nonce, notifications.Message{Title: title, URL: link, Description: description}, recipients, func() error {
 			if time.Now().After(*removal.EstimatedAt) || time.Since(snapshot.UpdatedAt) > time.Minute || ctx.Err() != nil {
 				return upstream.ErrDenied
 			}

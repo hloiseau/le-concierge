@@ -12,7 +12,7 @@ import (
 )
 
 func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
-	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "season", "episode", "episode missing index", "episode zero index", "episode other season"} {
+	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "season", "season long title", "episode", "episode long title", "episode missing index", "episode zero index", "episode other season"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fixture(t)
 			s.Config.DiscordNotificationChannelID = "456"
@@ -22,10 +22,13 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 			s.Config.SeerrAPIKey = "fixture-key"
 			s.Config.PlexServerID = "server-a"
 			kind, requestedKind, requestedKey, title := "movie", "movie", "42", "Film demandé"
-			if mode == "season" || strings.HasPrefix(mode, "episode") {
+			if strings.HasPrefix(mode, "season") || strings.HasPrefix(mode, "episode") {
 				s.Config.TautulliURL = "https://tautulli.example"
 				s.Config.TautulliAPIKey = "fixture-key"
 				kind, requestedKind, requestedKey, title = "season", "tv", "38", "Série demandée — saison 3"
+				if strings.HasSuffix(mode, "long title") {
+					title = " — saison 3"
+				}
 				if strings.HasPrefix(mode, "episode") {
 					kind = "episode"
 					title += ", épisode 2"
@@ -119,6 +122,9 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					body = `{"title":"Film demandé @everyone"}`
 				case "/api/v1/tv/99":
 					body = `{"name":"Série demandée"}`
+					if strings.HasSuffix(mode, "long title") {
+						body = fmt.Sprintf(`{"name":%q}`, strings.Repeat("é", 240))
+					}
 				case "/api/v2":
 					data := ""
 					switch r.URL.Query().Get("cmd") {
@@ -164,7 +170,10 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 				if len(body.Mentions.Users) != 1 || body.Mentions.Users[0] != "789" || len(body.Mentions.Parse) != 0 || strings.Contains(body.Content, "@everyone") || !strings.Contains(body.Content, title) {
 					t.Fatalf("incorrect channel reminder: %+v", body)
 				}
-				if mode == "season" && strings.Contains(body.Content, "épisode") {
+				if strings.HasSuffix(mode, "long title") && !strings.Contains(body.Content, strings.Repeat("é", 200)) {
+					t.Fatal("long title was lost", body.Content)
+				}
+				if strings.HasPrefix(mode, "season") && strings.Contains(body.Content, "épisode") {
 					t.Fatal("season reminder narrowed to an episode", body.Content)
 				}
 				return response(200, `{"id":"111","channel_id":"456"}`), nil
@@ -180,7 +189,7 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 				}
 			}
 			want := 0
-			if mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" || mode == "season" || mode == "episode" || mode == "episode missing index" || mode == "episode zero index" {
+			if mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" || strings.HasPrefix(mode, "season") || mode == "episode" || mode == "episode long title" || mode == "episode missing index" || mode == "episode zero index" {
 				want = 1
 			}
 			if posts != want {
