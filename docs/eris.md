@@ -14,6 +14,7 @@ Le bot conserve son compte, ses identifiants, ses commandes, les liaisons Plex/D
 
 ## Chat privé
 
+- `/eris` : afficher comment lui parler.
 - `/eris message:Salut Eris` : démarrer ou poursuivre une conversation.
 - `/eris oublier:true` : effacer la conversation sans appeler le modèle.
 - `/eris message:On recommence oublier:true` : effacer puis envoyer un nouveau message.

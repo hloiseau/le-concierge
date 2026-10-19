@@ -11,6 +11,11 @@ import (
 )
 
 func (b *Bot) handleEris(w http.ResponseWriter, i Interaction) {
+	options, _ := CommandOptions(i)
+	if options.ChatMessage == "" && !options.Forget {
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Je suis Eris. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer notre conversation.")})
+		return
+	}
 	// Separate capacity keeps a slow model from occupying the media workers.
 	if !b.reserveEris() {
 		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Je termine une conversation. Réessaie dans un instant.")})
@@ -26,7 +31,6 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction) {
 		if !b.acknowledge(ctx, i) {
 			return
 		}
-		options, _ := CommandOptions(i)
 		reply, err := b.Eris.Reply(ctx, i.GuildID+":"+i.Member.User.ID, options.ChatMessage, options.Forget)
 		if errors.Is(err, eris.ErrBusy) {
 			reply = "Je termine une conversation. Réessaie dans quelques secondes."

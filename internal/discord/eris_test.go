@@ -54,7 +54,7 @@ func TestErisOptionsCannotRequestPublicReplyOrImpersonation(t *testing.T) {
 		{`[{"name":"message","type":3,"value":"Salut"}]`, true},
 		{`[{"name":"oublier","type":5,"value":true}]`, true},
 		{`[{"name":"message","type":3,"value":"Salut"},{"name":"oublier","type":5,"value":true}]`, true},
-		{`[]`, false}, {`[{"name":"oublier","type":5,"value":false}]`, false},
+		{`[]`, true}, {`[{"name":"oublier","type":5,"value":false}]`, true},
 		{`[{"name":"message","type":3,"value":null}]`, false},
 		{`[{"name":"message","type":3,"value":" "}]`, false},
 		{`[{"name":"message","type":3,"value":"Salut"},{"name":"public","type":5,"value":true}]`, false},
@@ -65,6 +65,19 @@ func TestErisOptionsCannotRequestPublicReplyOrImpersonation(t *testing.T) {
 		if _, err := CommandOptions(interaction); (err == nil) != tc.valid {
 			t.Fatalf("wrong option validation: %s %v", tc.options, err)
 		}
+	}
+}
+
+func TestErisUsageWorksWithoutTheModelOrMediaAPI(t *testing.T) {
+	b, r := signedCommand(t, "eris")
+	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
+		t.Error("Eris usage must work without a remote service")
+		return botResponse(500, `{}`), nil
+	})
+	w := httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"flags":64`) || !strings.Contains(w.Body.String(), "/eris message:") {
+		t.Fatalf("missing private usage: %d %s", w.Code, w.Body)
 	}
 }
 

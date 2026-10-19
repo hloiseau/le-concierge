@@ -157,9 +157,6 @@ func CommandOptions(i Interaction) (Options, error) {
 	if i.Data.Name == "diagnostic" && options.RequestID == 0 {
 		return Options{}, invalid
 	}
-	if i.Data.Name == "eris" && options.ChatMessage == "" && !options.Forget {
-		return Options{}, invalid
-	}
 	return options, nil
 }
 
