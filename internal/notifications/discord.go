@@ -165,7 +165,7 @@ func (d *Discord) SendChannelValidated(ctx context.Context, guildID, channelID, 
 	if ctx.Err() != nil {
 		return &DeliveryError{Code: "transport_unavailable"}
 	}
-	body := "Le Concierge — rappel avant retrait\n"
+	body := "Eris — rappel avant retrait\n"
 	for _, id := range mentions {
 		body += "<@" + id + "> "
 	}
@@ -297,7 +297,7 @@ func snowflake(s string) bool {
 }
 
 func digest(items []Message) string {
-	body := "Le Concierge — vos notifications privées\n"
+	body := "Eris — vos notifications privées\n"
 	for i, item := range items {
 		line := "\n• " + plain(item.Title, 200)
 		if item.Description != "" {

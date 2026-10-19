@@ -23,6 +23,7 @@ type Service struct {
 	Category    string `json:"category"`
 }
 type Config struct {
+	DiscordBotName, ErisAPIURL, ErisAPIKey, ErisModel                                       string
 	DownloadarrURL, DownloadarrRevision                                                     string
 	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
 	CommunityFeedFile, CommunitySyncManifest                                                string
@@ -85,6 +86,15 @@ func Load() (Config, error) {
 	c.DiscordNotificationChannelID = os.Getenv("DISCORD_NOTIFICATION_CHANNEL_ID")
 	c.RadarrURL = strings.TrimRight(os.Getenv("RADARR_URL"), "/")
 	c.SonarrURL = strings.TrimRight(os.Getenv("SONARR_URL"), "/")
+	c.DiscordBotName = fallback("DISCORD_BOT_NAME", "Eris")
+	if c.DiscordBotName == "disabled" {
+		c.DiscordBotName = ""
+	}
+	c.ErisAPIURL = strings.TrimRight(os.Getenv("ERIS_API_URL"), "/")
+	c.ErisModel = fallback("ERIS_MODEL", "eris-lfm2.5-v1")
+	if c.DiscordBotName != "" && !regexp.MustCompile(`^[\p{L}\p{N} _-]{2,32}$`).MatchString(c.DiscordBotName) {
+		return c, errors.New("DISCORD_BOT_NAME requires 2-32 letters, numbers, spaces, underscores or hyphens")
+	}
 	c.CommunityFeedFile = os.Getenv("COMMUNITY_FEED_FILE")
 	c.CommunitySyncManifest = os.Getenv("COMMUNITY_SYNC_MANIFEST")
 	for _, entry := range []struct {
@@ -111,12 +121,15 @@ func Load() (Config, error) {
 	for _, p := range []struct {
 		name string
 		dest *string
-	}{{"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}, {"RADARR_API_KEY", &c.RadarrAPIKey}, {"SONARR_API_KEY", &c.SonarrAPIKey}} {
+	}{{"ERIS_API_KEY", &c.ErisAPIKey}, {"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}, {"RADARR_API_KEY", &c.RadarrAPIKey}, {"SONARR_API_KEY", &c.SonarrAPIKey}} {
 		v, e := secret(p.name)
 		if e != nil {
 			return c, e
 		}
 		*p.dest = v
+	}
+	if c.ErisAPIURL != "" && (!ValidURL(c.ErisAPIURL, false) || c.ErisModel == "" || len(c.ErisModel) > 128 || len(c.ErisAPIKey) < 32) {
+		return c, errors.New("ERIS_API_URL requires an absolute API URL, ERIS_MODEL and an ERIS_API_KEY of at least 32 characters")
 	}
 	if err := c.loadDiscordInterests(); err != nil {
 		return c, err

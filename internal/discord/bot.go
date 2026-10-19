@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/hloiseau/le-concierge/internal/config"
+	"github.com/hloiseau/le-concierge/internal/eris"
 	"github.com/hloiseau/le-concierge/internal/upstream"
 	"io"
 	"log/slog"
@@ -17,18 +18,20 @@ import (
 )
 
 type Bot struct {
+	Eris            *eris.Chat
 	Config          config.Config
 	Client          *http.Client
 	mu              sync.Mutex
 	seen            map[string]time.Time
 	interestBusy    map[string]bool
+	erisWorkers     int
 	interestRetryAt time.Time
 	slots           chan struct{}
 	workers         sync.WaitGroup
 }
 
 func NewBot(c config.Config) *Bot {
-	return &Bot{Config: c, Client: upstream.New().HTTP, seen: map[string]time.Time{}, interestBusy: map[string]bool{}, slots: make(chan struct{}, 8)}
+	return &Bot{Config: c, Eris: eris.New(c.ErisAPIURL, c.ErisAPIKey, c.ErisModel), Client: upstream.New().HTTP, seen: map[string]time.Time{}, interestBusy: map[string]bool{}, slots: make(chan struct{}, 8)}
 }
 func (b *Bot) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -85,6 +88,10 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		b.handleInterests(w, i)
 		return
 	}
+	if command == "eris" {
+		b.handleEris(w, i)
+		return
+	}
 	// Static help must work even when the API is unavailable.
 	if command == "aide" {
 		help := Help(b.Config.PublicOrigin, b.Config.Services)
@@ -97,7 +104,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 	select {
 	case b.slots <- struct{}{}:
 	default:
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Le Concierge est occupé. Réessayez dans un instant.")})
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Eris est occupée. Réessayez dans un instant.")})
 		return
 	}
 	// Discord supports an empty 202 when the callback is sent separately.
@@ -245,6 +252,10 @@ func (b *Bot) Register(ctx context.Context) error {
 		return errors.New("DISCORD_BOT_TOKEN is required to register commands")
 	}
 	commands := []map[string]any{
+		{"name": "eris", "description": "Discuter en privé avec Eris", "type": 1, "options": []map[string]any{
+			{"name": "message", "description": "Votre message pour Eris", "type": 3, "min_length": 1, "max_length": 500},
+			{"name": "oublier", "description": "Effacer votre conversation avant de reprendre", "type": 5},
+		}},
 		{"name": "aide", "description": "Guides, services et liaison des comptes", "type": 1},
 		{"name": "mes-demandes", "description": "Consulter vos demandes Seerr", "type": 1, "options": []map[string]any{
 			{"name": "etat", "description": "Filtrer toutes vos demandes par état", "type": 3, "choices": []map[string]any{
