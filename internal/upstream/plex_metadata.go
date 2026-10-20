@@ -33,65 +33,106 @@ func (c *Client) PlexIdentity(ctx context.Context, base, serverID string) error 
 	return nil
 }
 
+type plexMetadata struct {
+	ID               tautulliID `json:"ratingKey"`
+	ParentID         tautulliID `json:"parentRatingKey"`
+	GrandparentID    tautulliID `json:"grandparentRatingKey"`
+	LibraryID        tautulliID `json:"librarySectionID"`
+	Title            string     `json:"title"`
+	ParentTitle      string     `json:"parentTitle"`
+	GrandparentTitle string     `json:"grandparentTitle"`
+	Kind             string     `json:"type"`
+	GUID             string     `json:"guid"`
+	Thumb            string     `json:"thumb"`
+	// Plex also sends Guid (external IDs); capture it to avoid Go's case-insensitive matching.
+	ExternalGUIDs []struct {
+		ID string `json:"id"`
+	} `json:"Guid"`
+	Index      *int            `json:"index"`
+	Edition    string          `json:"editionTitle"`
+	ViewCount  int64           `json:"viewCount"`
+	ViewOffset int64           `json:"viewOffset"`
+	AddedAt    int64           `json:"addedAt"`
+	Media      json.RawMessage `json:"Media"`
+}
+
 // Use the user's server token. skipRefresh avoids an implicit agent refresh.
 func (c *Client) PlexMetadata(ctx context.Context, base, id string, g Grant) (PlexItem, error) {
-	n, err := strconv.ParseInt(id, 10, 64)
-	if err != nil || n <= 0 || strconv.FormatInt(n, 10) != id || g.ServerToken == "" {
-		return PlexItem{}, ErrDenied
-	}
-	type metadata struct {
-		ID               tautulliID `json:"ratingKey"`
-		ParentID         tautulliID `json:"parentRatingKey"`
-		GrandparentID    tautulliID `json:"grandparentRatingKey"`
-		LibraryID        tautulliID `json:"librarySectionID"`
-		Title            string     `json:"title"`
-		ParentTitle      string     `json:"parentTitle"`
-		GrandparentTitle string     `json:"grandparentTitle"`
-		Kind             string     `json:"type"`
-		GUID             string     `json:"guid"`
-		Thumb            string     `json:"thumb"`
-		// Plex also sends Guid (external IDs); capture it to avoid Go's case-insensitive matching.
-		ExternalGUIDs []struct {
-			ID string `json:"id"`
-		} `json:"Guid"`
-		Index      *int            `json:"index"`
-		Edition    string          `json:"editionTitle"`
-		ViewCount  int64           `json:"viewCount"`
-		ViewOffset int64           `json:"viewOffset"`
-		AddedAt    int64           `json:"addedAt"`
-		Media      json.RawMessage `json:"Media"`
-	}
-	var result struct {
-		Container struct {
-			metadata
-			Size     *int       `json:"size"`
-			Metadata []metadata `json:"Metadata"`
-		} `json:"MediaContainer"`
-	}
-	if err := c.JSON(ctx, "GET", base+"/library/metadata/"+id+"?skipRefresh=1&includeGuids=1&checkFiles=1&checkFileAvailability=1", plexHeaders(g.ClientID, g.ServerToken), "", &result); err != nil {
+	items, err := c.PlexMetadataBatch(ctx, base, []string{id}, g)
+	if err != nil {
 		return PlexItem{}, err
 	}
-	if result.Container.Size == nil || *result.Container.Size != 1 || len(result.Container.Metadata) != 1 {
+	item, ok := items[id]
+	if !ok {
 		return PlexItem{}, ErrIncomplete
 	}
-	m := result.Container.Metadata[0]
-	if string(m.ID) != id || m.Title == "" || m.GUID == "" || m.ViewCount < 0 || m.ViewOffset < 0 {
+	return item, nil
+}
+
+// Plex accepts comma-separated keys. Small batches avoid one round trip per
+// episode while retaining exactly the same per-user metadata validation.
+func (c *Client) PlexMetadataBatch(ctx context.Context, base string, ids []string, g Grant) (map[string]PlexItem, error) {
+	if len(ids) == 0 || len(ids) > 50 || g.ServerToken == "" {
+		return nil, ErrDenied
+	}
+	wanted := map[string]bool{}
+	for _, id := range ids {
+		n, err := strconv.ParseInt(id, 10, 64)
+		if err != nil || n <= 0 || strconv.FormatInt(n, 10) != id || wanted[id] {
+			return nil, ErrDenied
+		}
+		wanted[id] = true
+	}
+
+	var result struct {
+		Container struct {
+			plexMetadata
+			Size     *int           `json:"size"`
+			Metadata []plexMetadata `json:"Metadata"`
+		} `json:"MediaContainer"`
+	}
+	if err := c.JSON(ctx, "GET", base+"/library/metadata/"+strings.Join(ids, ",")+"?skipRefresh=1&includeGuids=1&checkFiles=1&checkFileAvailability=1", plexHeaders(g.ClientID, g.ServerToken), "", &result); err != nil {
+		return nil, err
+	}
+	if result.Container.Size == nil || *result.Container.Size != len(result.Container.Metadata) || len(result.Container.Metadata) > len(ids) {
+		return nil, ErrIncomplete
+	}
+	out := map[string]PlexItem{}
+	for _, m := range result.Container.Metadata {
+		if !wanted[string(m.ID)] {
+			return nil, ErrIncomplete
+		}
+		if _, exists := out[string(m.ID)]; exists {
+			return nil, ErrIncomplete
+		}
+		item, err := validatedPlexMetadata(m, result.Container.plexMetadata)
+		if err != nil {
+			return nil, err
+		}
+		out[item.ID] = item
+	}
+	return out, nil
+}
+
+func validatedPlexMetadata(m, container plexMetadata) (PlexItem, error) {
+	if m.Title == "" || m.GUID == "" || m.ViewCount < 0 || m.ViewOffset < 0 {
 		return PlexItem{}, ErrIncomplete
 	}
+
 	if m.LibraryID == "" {
-		m.LibraryID = result.Container.LibraryID
+		m.LibraryID = container.LibraryID
 	}
 	if m.ParentID == "" {
-		m.ParentID = result.Container.ParentID
+		m.ParentID = container.ParentID
 	}
 	if m.GrandparentID == "" {
-		m.GrandparentID = result.Container.GrandparentID
+		m.GrandparentID = container.GrandparentID
 	}
 	if m.ParentTitle == "" {
-		m.ParentTitle = result.Container.ParentTitle
+		m.ParentTitle = container.ParentTitle
 	}
 	if m.GrandparentTitle == "" {
-		m.GrandparentTitle = result.Container.GrandparentTitle
+		m.GrandparentTitle = container.GrandparentTitle
 	}
 	if m.LibraryID == "" || (m.Kind == "season" && m.ParentID == "") || (m.Kind == "episode" && (m.ParentID == "" || m.GrandparentID == "")) {
 		return PlexItem{}, ErrIncomplete
