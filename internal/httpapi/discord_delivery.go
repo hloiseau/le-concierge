@@ -96,7 +96,7 @@ func (s *Server) deliverDiscordReminders(ctx context.Context, u store.User) erro
 		now := time.Now().UTC()
 		current, ok := s.grants[u.ID]
 		owner, err := s.Store.User(ctx, u.ID)
-		if err != nil || !ok || owner.PlexID != u.PlexID || owner.DiscordID != d.DiscordID || !owner.Notifications || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !now.Before(current.ExpiresAt) {
+		if err != nil || !ok || owner.PlexID != u.PlexID || owner.DiscordID != d.DiscordID || !owner.Notifications || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !current.Active(now) {
 			return upstream.ErrDenied
 		}
 		prefs, err := s.Store.GetReminderPreferences(ctx, u.ID)

@@ -41,7 +41,7 @@ type recentMetadata struct {
 }
 
 func (c *Client) RecentPage(ctx context.Context, base, serverID string, g Grant, offset, limit int) (RecentResult, error) {
-	if g.ServerToken == "" || serverID == "" || (!g.ExpiresAt.IsZero() && !time.Now().Before(g.ExpiresAt)) || offset < 0 || offset > 10000 || limit < 1 || limit > recentPageSize {
+	if g.ServerToken == "" || serverID == "" || (!g.ExpiresAt.IsZero() && !g.Active(time.Now())) || offset < 0 || offset > 10000 || limit < 1 || limit > recentPageSize {
 		return RecentResult{}, ErrDenied
 	}
 	// Verify the configured server before sending it any user credential, even on a cache hit.

@@ -23,7 +23,7 @@ func (s *Server) currentShelfmarkGrant(userID string) (shelfmarkGrant, bool) {
 	defer s.mu.Unlock()
 	g, ok := s.shelfmarkGrants[userID]
 	plex, plexOK := s.grants[userID]
-	if !ok || !plexOK || plex.AccountToken != g.PlexToken || !time.Now().Before(g.ExpiresAt) || !time.Now().Before(plex.ExpiresAt) {
+	if !ok || !plexOK || plex.AccountToken != g.PlexToken || !time.Now().Before(g.ExpiresAt) || !plex.Active(time.Now()) {
 		s.clearShelfmarkGrantLocked(userID)
 		return shelfmarkGrant{}, false
 	}
@@ -117,7 +117,7 @@ func (s *Server) shelfmarkLink(w http.ResponseWriter, r *http.Request) {
 	plex, plexOK := s.grants[user.ID]
 	sess, sessionOK := s.sessions[key]
 	now := time.Now()
-	if !currentOK || current.Revision != pending.Revision || !plexOK || plex.AccountToken != pending.PlexToken || !now.Before(plex.ExpiresAt) || !sessionOK || sess.UserID != user.ID || !now.Before(sess.Expires) {
+	if !currentOK || current.Revision != pending.Revision || !plexOK || plex.AccountToken != pending.PlexToken || !plex.Active(now) || !sessionOK || sess.UserID != user.ID || !now.Before(sess.Expires) {
 		s.mu.Unlock()
 		problem(w, 409, "link_changed", "L’association a changé. Réessayez depuis votre compte.")
 		return

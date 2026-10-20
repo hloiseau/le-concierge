@@ -23,6 +23,7 @@ type Service struct {
 	Category    string `json:"category"`
 }
 type Config struct {
+	PlexGrantKey                                                                            string
 	DownloadarrURL, DownloadarrRevision                                                     string
 	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
 	CommunityFeedFile, CommunitySyncManifest                                                string
@@ -111,12 +112,18 @@ func Load() (Config, error) {
 	for _, p := range []struct {
 		name string
 		dest *string
-	}{{"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}, {"RADARR_API_KEY", &c.RadarrAPIKey}, {"SONARR_API_KEY", &c.SonarrAPIKey}} {
+	}{{"PLEX_GRANT_KEY", &c.PlexGrantKey}, {"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}, {"RADARR_API_KEY", &c.RadarrAPIKey}, {"SONARR_API_KEY", &c.SonarrAPIKey}} {
 		v, e := secret(p.name)
 		if e != nil {
 			return c, e
 		}
 		*p.dest = v
+	}
+	if c.PlexGrantKey != "" {
+		key, err := hex.DecodeString(c.PlexGrantKey)
+		if err != nil || len(key) != 32 {
+			return c, errors.New("PLEX_GRANT_KEY must be a 32-byte hex key")
+		}
 	}
 	if err := c.loadDiscordInterests(); err != nil {
 		return c, err

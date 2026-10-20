@@ -54,7 +54,7 @@ func (s *Server) currentDownloadarrGrant(key, userID string) (downloadarrGrant, 
 	p, plexOK := s.grants[userID]
 	sess, sessionOK := s.sessions[key]
 	now := time.Now()
-	if !plexOK || p.AccountToken != g.PlexToken || !now.Before(p.ExpiresAt) || !now.Before(g.ExpiresAt) || !sessionOK || sess.UserID != userID || !now.Before(sess.Expires) || g.Context.Err() != nil {
+	if !plexOK || p.AccountToken != g.PlexToken || !p.Active(now) || !now.Before(g.ExpiresAt) || !sessionOK || sess.UserID != userID || !now.Before(sess.Expires) || g.Context.Err() != nil {
 		s.clearDownloadarrGrantLocked(userID)
 		return downloadarrGrant{}, false
 	}

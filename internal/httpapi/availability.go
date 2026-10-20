@@ -14,7 +14,7 @@ import (
 )
 
 // RunAvailability visits at most ten old checks per active owner per cycle.
-// Tokens stay in memory: after restart, polling resumes on the next Plex login.
+// Restored authorizations are verified with Plex before polling resumes.
 func (s *Server) RunAvailability(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -34,7 +34,7 @@ func (s *Server) RunAvailability(ctx context.Context) {
 		s.mu.Lock()
 		ids := []string{}
 		for id, g := range s.grants {
-			if time.Now().Before(g.ExpiresAt) {
+			if g.Active(time.Now()) {
 				ids = append(ids, id)
 			}
 		}
@@ -69,7 +69,7 @@ func (s *Server) RunAvailability(ctx context.Context) {
 func (s *Server) availabilityOwner(ctx context.Context, u store.User, g upstream.Grant) error {
 	current, exists := s.grants[u.ID]
 	owner, err := s.Store.User(ctx, u.ID)
-	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !time.Now().Before(current.ExpiresAt) {
+	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !current.Active(time.Now()) {
 		return upstream.ErrDenied
 	}
 	return nil

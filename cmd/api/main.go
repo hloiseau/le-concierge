@@ -45,6 +45,9 @@ func run() error {
 	}
 	defer db.Close()
 	api := httpapi.New(c, db)
+	if err := api.RestorePlexAuthorizations(context.Background()); err != nil {
+		return err
+	}
 	server := &http.Server{Addr: c.Listen, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

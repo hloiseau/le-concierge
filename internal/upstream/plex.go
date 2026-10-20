@@ -16,6 +16,8 @@ type Pin struct {
 	AuthToken string `json:"authToken"`
 }
 type Grant struct {
+	// Persistent authorization outlives browser sessions, until explicit revocation.
+	Persistent   bool
 	Name         string
 	PlexID       string
 	AccountToken string
@@ -24,6 +26,11 @@ type Grant struct {
 	VerifiedAt   time.Time
 	ExpiresAt    time.Time
 }
+
+func (g Grant) Active(now time.Time) bool {
+	return g.Persistent || now.Before(g.ExpiresAt)
+}
+
 type Media struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
