@@ -136,8 +136,10 @@ func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, f
 		if missing[id] {
 			return upstream.PlexItem{}, upstream.ErrNotFound
 		}
-		if len(metadata)+len(missing) >= 100 {
-			return upstream.PlexItem{}, upstream.ErrIncomplete
+		// A single threatened series can contain hundreds of episodes. Keep a
+		// bounded cache while the request deadline also bounds the source work.
+		if len(metadata)+len(missing) >= 5000 {
+			return upstream.PlexItem{}, fmt.Errorf("departure metadata limit: %w", upstream.ErrIncomplete)
 		}
 		m, err := s.client.PlexMetadata(ctx, c.PlexURL, id, g)
 		if errors.Is(err, upstream.ErrNotFound) {
@@ -147,7 +149,52 @@ func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, f
 		if err == nil {
 			metadata[id] = m
 		}
-		return m, err
+		if err != nil {
+			return m, fmt.Errorf("departure Plex metadata: %w", err)
+		}
+		return m, nil
+	}
+	prefetch := func(ids []string) error {
+		pending := []string{}
+		for _, id := range ids {
+			if _, ok := metadata[id]; !ok && !missing[id] {
+				pending = append(pending, id)
+			}
+		}
+		if len(metadata)+len(missing)+len(pending) > 5000 {
+			return fmt.Errorf("departure metadata limit: %w", upstream.ErrIncomplete)
+		}
+		for start := 0; start < len(pending); start += 50 {
+			batch := pending[start:min(start+50, len(pending))]
+			items, err := s.client.PlexMetadataBatch(ctx, c.PlexURL, batch, g)
+			if errors.Is(err, upstream.ErrNotFound) {
+				continue // Resolve missing keys individually to preserve access checks.
+			}
+			if err != nil {
+				return fmt.Errorf("departure Plex metadata batch: %w", err)
+			}
+			for id, item := range items {
+				metadata[id] = item
+			}
+		}
+		return nil
+	}
+	rootIDs := []string{}
+	rootSeen := map[string]bool{}
+	for _, r := range snapshot.Items {
+		rule, ok := rules[r.CollectionID]
+		if rootSeen[r.MediaID] || (!interest[r.Kind+":"+r.MediaID] && len(targets) == 0 && !allUnwatched) ||
+			r.EstimatedAt == nil || !r.EstimatedAt.After(now) || r.EstimatedAt.After(now.Add(30*24*time.Hour)) ||
+			r.RuleEvaluationFailed || !ok || !rule.Active {
+			continue
+		}
+		rootSeen[r.MediaID] = true
+		rootIDs = append(rootIDs, r.MediaID)
+	}
+	if len(rootIDs) > 1 {
+		if err := prefetch(rootIDs); err != nil {
+			return Page{}, err
+		}
 	}
 	items := map[string]Item{}
 	for _, r := range snapshot.Items {
@@ -168,16 +215,41 @@ func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, f
 			return Page{}, err
 		}
 		if m.Kind != r.Kind || m.LibraryID != r.LibraryID {
-			return Page{}, upstream.ErrIncomplete
+			return Page{}, fmt.Errorf("departure collection metadata mismatch: %w", upstream.ErrIncomplete)
 		}
 		if rule.Excludes(m) {
 			continue
 		}
 		candidates := []upstream.PlexItem{m}
 		if (len(targets) > 0 || allUnwatched) && (m.Kind == "show" || m.Kind == "season") {
+			root := m
+			if m.Kind == "season" {
+				root, err = get(m.ParentID)
+				if err != nil {
+					return Page{}, err
+				}
+				if root.Kind != "show" || root.LibraryID != m.LibraryID {
+					return Page{}, upstream.ErrIncomplete
+				}
+			}
+			relevant := allUnwatched || interest[m.Kind+":"+m.ID]
+			for _, target := range targets {
+				if target.Type == "tv" && target.TMDBID == root.TMDBID && root.TMDBID > 0 &&
+					(target.Following || (target.Requested && slices.Contains(target.PlexKeys, root.ID))) &&
+					(m.Kind != "season" || target.Season == nil || (m.Index != nil && *m.Index == *target.Season)) {
+					relevant = true
+				}
+			}
+			if !relevant {
+				continue
+			}
 			ids, e := s.client.PlexEpisodeIDs(ctx, c.PlexURL, g, m)
 			if e != nil {
-				return Page{}, e
+				return Page{}, fmt.Errorf("departure episode enumeration: %w", e)
+			}
+			ids = slices.DeleteFunc(ids, func(id string) bool { return unwatched[id] == "" && !interest["episode:"+id] })
+			if err := prefetch(ids); err != nil {
+				return Page{}, err
 			}
 			candidates = nil
 			for _, id := range ids {
@@ -189,7 +261,7 @@ func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, f
 					return Page{}, e
 				}
 				if child.Kind != "episode" || child.LibraryID != m.LibraryID || (m.Kind == "show" && child.GrandparentID != m.ID) || (m.Kind == "season" && child.ParentID != m.ID) {
-					return Page{}, upstream.ErrIncomplete
+					return Page{}, fmt.Errorf("departure episode parent mismatch: %w", upstream.ErrIncomplete)
 				}
 				if !rule.Excludes(child) {
 					candidates = append(candidates, child)
@@ -199,7 +271,7 @@ func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, f
 		for _, m := range candidates {
 			requested, following, e := matchInterest(m, targets, get)
 			if e != nil {
-				return Page{}, e
+				return Page{}, fmt.Errorf("departure interest matching: %w", e)
 			}
 			watch := Watch(m, plays[m.ID])
 			if watch == "unknown" && unwatched[m.ID] == m.GUID && m.GUID != "" {
@@ -224,7 +296,7 @@ func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, f
 		}
 	}
 	if ctx.Err() != nil || !time.Now().Before(page.ExpiresAt) {
-		return Page{}, upstream.ErrIncomplete
+		return Page{}, fmt.Errorf("departure snapshot expired: %w", upstream.ErrIncomplete)
 	}
 	for _, item := range items {
 		page.Items = append(page.Items, item)
