@@ -13,7 +13,7 @@ import (
 )
 
 func TestChannelRemindersOnlyMentionVerifiedUnwatchedRequesters(t *testing.T) {
-	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "quiet boundary source", "quiet boundary channel", "season", "season long title", "episode", "episode long title", "episode missing index", "episode zero index", "episode other season", "late exclusion", "late inactive rule", "late postponed", "late removed", "late non-destructive action", "late source error", "late request cancelled", "late recipient changed", "late local identity removed", "late title changed", "completed", "history completed", "unknown watch", "no Plex session", "expired Plex session", "late completed", "late logout", "two requesters", "metadata completed"} {
+	for _, mode := range []string{"persistent after restart", "seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "quiet boundary source", "quiet boundary channel", "season", "season long title", "episode", "episode long title", "episode missing index", "episode zero index", "episode other season", "late exclusion", "late inactive rule", "late postponed", "late removed", "late non-destructive action", "late source error", "late request cancelled", "late recipient changed", "late local identity removed", "late title changed", "completed", "history completed", "unknown watch", "no Plex session", "expired Plex session", "late completed", "late logout", "two requesters", "metadata completed"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fixture(t)
 			s.Config.DiscordNotificationChannelID = "456"
@@ -33,6 +33,18 @@ func TestChannelRemindersOnlyMentionVerifiedUnwatchedRequesters(t *testing.T) {
 					expires = time.Now().Add(-time.Second)
 				}
 				s.grants[user.ID] = upstream.Grant{PlexID: "777", AccountToken: "personal-account", ServerToken: "personal-server", VerifiedAt: time.Now(), ExpiresAt: expires}
+			}
+			if mode == "persistent after restart" {
+				s.Config.PlexGrantKey = strings.Repeat("ab", 32)
+				g := s.grants[user.ID]
+				g.ClientID = "fixture-client"
+				if err := s.savePlexAuthorization(context.Background(), user, &g); err != nil {
+					t.Fatal(err)
+				}
+				s = New(s.Config, s.Store)
+				if err := s.RestorePlexAuthorizations(context.Background()); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if mode == "two requesters" {
 				second, err := s.Store.LoginPlex(context.Background(), "888", "Second")
@@ -96,6 +108,10 @@ func TestChannelRemindersOnlyMentionVerifiedUnwatchedRequesters(t *testing.T) {
 				}
 				body := ""
 				switch r.URL.Path {
+				case "/api/v2/user":
+					return response(200, `{"id":777,"username":"Fixture"}`), nil
+				case "/api/v2/resources":
+					return response(200, `[{"clientIdentifier":"server-a","provides":"server","accessToken":"personal-server"}]`), nil
 				case "/identity":
 					body = `{"MediaContainer":{"machineIdentifier":"server-a"}}`
 				case "/library/all":
@@ -308,7 +324,7 @@ func TestChannelRemindersOnlyMentionVerifiedUnwatchedRequesters(t *testing.T) {
 				}
 			}
 			want := 0
-			if mode == "two requesters" || mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" || strings.HasPrefix(mode, "season") || mode == "episode" || mode == "episode long title" || mode == "episode missing index" || mode == "episode zero index" {
+			if mode == "persistent after restart" || mode == "two requesters" || mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" || strings.HasPrefix(mode, "season") || mode == "episode" || mode == "episode long title" || mode == "episode missing index" || mode == "episode zero index" {
 				want = 1
 			}
 			if posts != want {

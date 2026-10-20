@@ -22,7 +22,7 @@ SQLite enregistre atomiquement le récapitulatif du Hub et le travail Discord. U
 
 Les erreurs temporaires suivent un délai de reprise de 1, 2, 4 puis 8 minutes, avec au plus cinq réservations, y compris celles interrompues par un arrêt. Les reprises sont limitées au jour initial du récapitulatif, dans le fuseau Europe/Paris : un travail non livré expire à minuit pour éviter son cumul avec celui du lendemain. Les réponses 429 reportent la reprise d'au moins le `retry_after` / `Retry-After` annoncé, accepté entre 1 seconde et 24 heures. Un délai malformé ou supérieur à cette borne arrête le transport jusqu'au redémarrage. Un jeton refusé (401) arrête également les appels jusqu'au redémarrage ; un refus de DM (403 ou code Discord 50007) termine seulement le travail concerné. Les erreurs enregistrées sont des codes fixes sans contenu privé.
 
-La file et le nonce survivent aux redémarrages. Les jetons Plex restent en mémoire : après un redémarrage, la reprise exige donc une nouvelle connexion Plex de l'utilisateur. Une désactivation ou une modification des préférences invalide les travaux en attente ; délier ou supprimer le compte les invalide aussi. Les traces de livraison sont conservées au maximum 90 jours après le récapitulatif.
+La file et le nonce survivent aux redémarrages. Avec la [conservation chiffrée des autorisations Plex](persistent-plex-authorization.md), la reprise vérifie l’accès auprès de Plex sans nouvelle connexion au Hub. Sans clé de chiffrement, l’autorisation reste temporaire. Une désactivation ou une modification des préférences invalide les travaux en attente ; délier ou supprimer le compte les invalide aussi. Les traces de livraison sont conservées au maximum 90 jours après le récapitulatif.
 
 ## Limite de déduplication
 

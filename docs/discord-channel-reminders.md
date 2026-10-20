@@ -1,6 +1,6 @@
 # Rappels dans le salon notifications
 
-Le Concierge mentionne les **demandeurs originaux de Seerr qui ont encore le contenu à voir** quand Maintainerr prévoit son retrait. Les membres n'ont pas besoin de créer un suivi ni d'activer les messages privés. Une connexion Plex active au Hub est nécessaire pour vérifier le visionnage de chaque demandeur ; après expiration, déconnexion ou redémarrage de l'API, ses mentions sont suspendues jusqu'à une nouvelle connexion.
+Le Concierge mentionne les **demandeurs originaux de Seerr qui ont encore le contenu à voir** quand Maintainerr prévoit son retrait. Les membres n'ont pas besoin de créer un suivi ni d'activer les messages privés. Une autorisation Plex personnelle est nécessaire pour vérifier le visionnage de chaque demandeur. Avec la [conservation chiffrée](persistent-plex-authorization.md), elle survit à l’expiration de la session web et au redémarrage de l’API. La déconnexion explicite, la suppression du compte ou une révocation Plex suspend ses mentions jusqu’à une nouvelle connexion.
 
 Dans l'environnement du service **API**, renseigner :
 

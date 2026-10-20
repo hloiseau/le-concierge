@@ -86,7 +86,7 @@ func (s *Service) ListInterested(ctx context.Context, c config.Config, g upstrea
 func (s *Service) list(ctx context.Context, c config.Config, g upstream.Grant, fresh bool, targets []upstream.InterestTarget, allUnwatched bool) (Page, error) {
 	ctx, cancel := context.WithTimeout(ctx, 18*time.Second)
 	defer cancel()
-	if g.PlexID == "" || g.ServerToken == "" || !time.Now().Before(g.ExpiresAt) {
+	if g.PlexID == "" || g.ServerToken == "" || !g.Active(time.Now()) {
 		return Page{}, upstream.ErrDenied
 	}
 	if err := s.client.PlexIdentity(ctx, c.PlexURL, c.PlexServerID); err != nil {

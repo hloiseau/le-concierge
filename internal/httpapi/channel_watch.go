@@ -26,7 +26,7 @@ func (s *Server) channelRequesterUnwatched(ctx context.Context, owner upstream.S
 	s.mu.Lock()
 	userID := ""
 	for id, grant := range s.grants {
-		if grant.PlexID == owner.PlexID && time.Now().Before(grant.ExpiresAt) {
+		if grant.PlexID == owner.PlexID && grant.Active(time.Now()) {
 			userID = id
 			break
 		}
@@ -114,7 +114,7 @@ func (s *Server) channelRequesterUnwatched(ctx context.Context, owner upstream.S
 		} else if item.TMDBID != request.TMDBID {
 			return false, upstream.ErrIncomplete
 		}
-		if ctx.Err() != nil || !time.Now().Before(grant.ExpiresAt) || time.Since(state.readAt) >= time.Minute {
+		if ctx.Err() != nil || !grant.Active(time.Now()) || time.Since(state.readAt) >= time.Minute {
 			return false, upstream.ErrUnavailable
 		}
 		s.mu.Lock()

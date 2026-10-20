@@ -86,7 +86,7 @@ func (s *Server) putReminderPreferences(w http.ResponseWriter, r *http.Request) 
 	sess, sessionExists := s.sessions[key]
 	g, grantExists := s.grants[u.ID]
 	owner, err := s.Store.User(r.Context(), u.ID)
-	if err != nil || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || !grantExists || !now.Before(g.ExpiresAt) || g.PlexID != u.PlexID || owner.PlexID != u.PlexID || (p.DiscordDM && owner.DiscordID != u.DiscordID) {
+	if err != nil || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || !grantExists || !g.Active(now) || g.PlexID != u.PlexID || owner.PlexID != u.PlexID || (p.DiscordDM && owner.DiscordID != u.DiscordID) {
 		problem(w, 403, "authorization_changed", "Votre accès a changé. Reconnectez-vous avant de modifier vos préférences.")
 		return
 	}
@@ -229,7 +229,7 @@ func (s *Server) refreshReminders(ctx context.Context, u store.User) (personalRe
 	}
 	current, exists := s.grants[u.ID]
 	owner, err := s.Store.User(ctx, u.ID)
-	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !now.Before(current.ExpiresAt) || !now.Before(page.ExpiresAt) {
+	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !current.Active(now) || !now.Before(page.ExpiresAt) {
 		return personalReminderPage{}, upstream.ErrDenied
 	}
 	if err = s.Store.CancelObsoleteReminders(ctx, u.ID, keys); err == nil {
@@ -241,8 +241,8 @@ func (s *Server) refreshReminders(ctx context.Context, u store.User) (personalRe
 	return page, err
 }
 
-// RunReminders only processes current Plex grants. Tokens remain in memory; after
-// a restart the durable queue resumes following the user's next Plex login.
+// RunReminders processes live and restored Plex authorizations. Every restored
+// authorization is verified with Plex before reading personal data.
 func (s *Server) RunReminders(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -270,7 +270,7 @@ func (s *Server) RunReminders(ctx context.Context) {
 		s.mu.Lock()
 		ids := make([]string, 0, len(s.grants))
 		for id, grant := range s.grants {
-			if time.Now().Before(grant.ExpiresAt) {
+			if grant.Active(time.Now()) {
 				ids = append(ids, id)
 			}
 		}

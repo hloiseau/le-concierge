@@ -7,6 +7,32 @@ import (
 	"testing"
 )
 
+func TestPlexGrantEncryptionKey(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	t.Setenv("PLEX_GRANT_KEY_FILE", "")
+	for _, invalid := range []string{"short-secret", strings.Repeat("xx", 32), strings.Repeat("ab", 31)} {
+		t.Setenv("PLEX_GRANT_KEY", invalid)
+		if _, err := Load(); err == nil || strings.Contains(err.Error(), invalid) {
+			t.Fatal("invalid key accepted or disclosed")
+		}
+	}
+	key := strings.Repeat("ab", 32)
+	path := filepath.Join(t.TempDir(), "plex-key")
+	if err := os.WriteFile(path, []byte(key+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PLEX_GRANT_KEY", "")
+	t.Setenv("PLEX_GRANT_KEY_FILE", path)
+	if c, err := Load(); err != nil || c.PlexGrantKey != key {
+		t.Fatal("file key rejected", err)
+	}
+	t.Setenv("PLEX_GRANT_KEY", key)
+	if _, err := Load(); err == nil || strings.Contains(err.Error(), key) {
+		t.Fatal("ambiguous key accepted or disclosed")
+	}
+}
+
 func TestDiscordDMRequiresExplicitServerEnable(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")

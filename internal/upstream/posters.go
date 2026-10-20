@@ -12,7 +12,7 @@ import (
 var plexPosterPath = regexp.MustCompile(`^/library/metadata/[1-9][0-9]*/thumb(/[0-9]+)?$`)
 
 func (c *Client) PlexPoster(ctx context.Context, base, serverID, id string, g Grant) ([]byte, string, error) {
-	if !validPlexLibraryID(id) || g.ServerToken == "" || (!g.ExpiresAt.IsZero() && !time.Now().Before(g.ExpiresAt)) {
+	if !validPlexLibraryID(id) || g.ServerToken == "" || (!g.ExpiresAt.IsZero() && !g.Active(time.Now())) {
 		return nil, "", ErrDenied
 	}
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
