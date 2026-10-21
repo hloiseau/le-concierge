@@ -56,6 +56,22 @@ func TestDiscordDMRequiresExplicitServerEnable(t *testing.T) {
 	}
 }
 
+func TestDiscordMessageContentRequiresExplicitEnable(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	for _, value := range []string{"", "true", "false", "maybe"} {
+		t.Setenv("DISCORD_MESSAGE_CONTENT", value)
+		c, err := Load()
+		if value == "maybe" {
+			if err == nil || err.Error() != "DISCORD_MESSAGE_CONTENT requires a boolean" {
+				t.Fatal(err)
+			}
+		} else if err != nil || c.DiscordMessageContent != (value == "true") {
+			t.Fatal(value, err)
+		}
+	}
+}
+
 func TestOptionalBooksAndMonitoringConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("PUBLIC_ORIGIN", "https://hub.example")

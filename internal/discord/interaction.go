@@ -164,7 +164,7 @@ func CommandOptions(i Interaction) (Options, error) {
 // signed caller, whose current access is checked again by the API.
 func Command(i Interaction) (string, int, error) {
 	if i.Type == 3 && strings.HasPrefix(i.Data.CustomID, "eris:") {
-		if !ValidErisButton(i.Data.CustomID) || i.Data.ComponentType != 2 || i.Message.Flags&64 == 0 || len(i.Data.Options) != 0 || len(i.Data.Values) != 0 {
+		if !ValidErisButton(i.Data.CustomID) || i.Data.ComponentType != 2 || (i.Message.Flags&64 == 0 && !strings.HasPrefix(i.Data.CustomID, "eris:open:")) || len(i.Data.Options) != 0 || len(i.Data.Values) != 0 {
 			return "", 0, errors.New("invalid Eris confirmation")
 		}
 		return "eris", 0, nil
@@ -179,7 +179,7 @@ func Command(i Interaction) (string, int, error) {
 
 func ValidErisButton(id string) bool {
 	parts := strings.Split(id, ":")
-	if len(parts) != 3 || parts[0] != "eris" || (parts[1] != "choose" && parts[1] != "confirm" && parts[1] != "cancel") || len(parts[2]) != 64 {
+	if len(parts) != 3 || parts[0] != "eris" || (parts[1] != "choose" && parts[1] != "confirm" && parts[1] != "cancel" && parts[1] != "open") || len(parts[2]) != 64 {
 		return false
 	}
 	_, err := hex.DecodeString(parts[2])
@@ -293,7 +293,7 @@ func Message(content string) map[string]any {
 }
 
 func Help(origin string, services []config.Service) string {
-	text := "**Eris**\n@Eris + votre message — Discuter dans ce salon\n/eris message:… — Discuter en privé ; oublier:true pour repartir de zéro\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/a-voir — Vos contenus avant leur départ estimé de Plex (privé)\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
+	text := "**Eris**\n@Eris + votre message, puis Répondre — Discuter dans ce salon\n/eris message:… — Discuter en privé ; oublier:true pour repartir de zéro\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/a-voir — Vos contenus avant leur départ estimé de Plex (privé)\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
 	text += "Ajoutez etat à /mes-demandes pour filtrer toutes vos demandes Seerr (par exemple Disponible ou En cours).\n\n"
 	// Encode Markdown delimiters without changing the configured public destination.
 	link := func(label, target string) string {

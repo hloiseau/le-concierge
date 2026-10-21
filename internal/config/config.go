@@ -38,6 +38,7 @@ type Config struct {
 	MonitoringEnabled                                                                       bool
 	AdminIDs                                                                                []string
 	DiscordDMsEnabled                                                                       bool
+	DiscordMessageContent                                                                   bool
 	DiscordNotificationChannelID                                                            string
 	DiscordInterests                                                                        []DiscordInterest
 	DiscordInterestsChannelID                                                               string
@@ -145,6 +146,10 @@ func Load() (Config, error) {
 		return c, errors.New("APP_ENV must be production or development")
 	}
 	var err error
+	c.DiscordMessageContent, err = strconv.ParseBool(fallback("DISCORD_MESSAGE_CONTENT", "false"))
+	if err != nil {
+		return c, errors.New("DISCORD_MESSAGE_CONTENT requires a boolean")
+	}
 	if len(c.CommunityForumIDs) > 0 && !community.ValidForumID(c.DiscordGuildID) {
 		return c, errors.New("community forums require DISCORD_GUILD_ID")
 	}

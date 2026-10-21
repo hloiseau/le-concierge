@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/hloiseau/le-concierge/internal/eris"
 	"github.com/hloiseau/le-concierge/internal/upstream"
 )
@@ -103,7 +104,7 @@ func TestErisSignedIdentityAndRevocation(t *testing.T) {
 }
 
 func TestErisPublicPersonalActionsNeverReadMedia(t *testing.T) {
-	for _, plan := range []eris.Plan{{Action: "status"}, {Action: "prepare", Query: "Arrival", Kind: "movie"}, {Action: "recommend", Unwatched: true}} {
+	for _, plan := range []eris.Plan{{Action: "status"}, {Action: "recommend", Unwatched: true}} {
 		s := fixture(t)
 		s.Config.BotAPISecret = strings.Repeat("s", 32)
 		s.Config.DiscordBotToken = "fixture"
@@ -134,6 +135,93 @@ func TestErisMissingSeasonAsksBeforeReadingOrCreatingRequest(t *testing.T) {
 	reply := s.runErisTool(context.Background(), u, s.grants[u.ID], u.DiscordID, eris.Plan{Action: "prepare", Query: "Severance", Kind: "show"}, true)
 	if !strings.Contains(reply.Content, "Quelle saison") || len(reply.Buttons) > 0 {
 		t.Fatal("invented season")
+	}
+}
+
+func TestErisPublicRequestContinuesPrivatelyWithoutLosingTitle(t *testing.T) {
+	s := fixture(t)
+	s.Config.BotAPISecret = strings.Repeat("s", 32)
+	seed(t, s, "11111", true)
+	seed(t, s, "22222", true)
+	u, _ := s.Store.User(context.Background(), "11111")
+	reads := 0
+	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		reads++
+		if r.Method != "GET" {
+			t.Fatal("request created before confirmation")
+		}
+		switch r.URL.Path {
+		case "/api/v1/user":
+			return response(200, `{"pageInfo":{"results":1},"results":[{"id":2,"plexId":11111}]}`), nil
+		case "/api/v1/auth/me":
+			return response(200, `{"id":2}`), nil
+		case "/api/v1/search":
+			if r.URL.Query().Get("query") != "Hot Fuzz" {
+				t.Error("lost conversation title")
+			}
+			return response(200, `{"results":[{"id":4638,"mediaType":"movie","title":"Hot Fuzz","releaseDate":"2007-02-14"}]}`), nil
+		default:
+			t.Errorf("unexpected route %s", r.URL.Path)
+			return response(500, `{}`), nil
+		}
+	})
+	reply := s.runErisTool(context.Background(), u, s.grants[u.ID], "11111", eris.Plan{Action: "prepare", Query: "Hot Fuzz", Kind: "movie"}, false)
+	if reads != 0 || len(reply.Buttons) != 1 || !strings.HasPrefix(reply.Buttons[0].ID, "eris:open:") {
+		t.Fatalf("public request did not offer private handoff: %+v reads=%d", reply, reads)
+	}
+	button := reply.Buttons[0].ID
+	for index, owner := range []string{"22222", "11111", "11111"} {
+		body := fmt.Sprintf(`{"id":"%d","application_id":"12345","guild_id":"23456","type":3,"member":{"user":{"id":"%s"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":%q,"component_type":2}}`, 99990+index, owner, button)
+		w := callErisTool(s, signedErisTool(t, s, eris.Plan{}, body))
+		if owner == "22222" {
+			if reads != 0 || strings.Contains(w.Body.String(), "Hot Fuzz") {
+				t.Fatal("another member obtained private choices")
+			}
+			continue
+		}
+		if index == 1 {
+			if reads != 3 || !strings.Contains(w.Body.String(), "Hot Fuzz") || !strings.Contains(w.Body.String(), "eris:choose:") {
+				t.Fatalf("private search failed %d %s", w.Code, w.Body)
+			}
+		} else if reads != 3 || strings.Contains(w.Body.String(), "Hot Fuzz") {
+			t.Fatal("handoff replay read media again")
+		}
+	}
+}
+
+func TestErisAPIRevalidatesReplyTargetFromDiscord(t *testing.T) {
+	for _, state := range []string{"valid", "other author", "other channel", "missing reference", "hidden content"} {
+		s := fixture(t)
+		s.Config.DiscordBotToken = "fixture"
+		s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method != "GET" || r.URL.Host != "discord.com" {
+				t.Fatal("unexpected upstream")
+			}
+			if r.URL.Path == "/api/v10/channels/33333" {
+				return response(200, `{"id":"33333","guild_id":"23456"}`), nil
+			}
+			m := discordgo.Message{ID: "99999", ChannelID: "33333", Timestamp: time.Now(), Type: discordgo.MessageTypeReply, Content: "Tu peux le demander ?", Author: &discordgo.User{ID: "11111"}, MessageReference: &discordgo.MessageReference{MessageID: "88888", ChannelID: "33333", GuildID: "23456"}, ReferencedMessage: &discordgo.Message{ID: "88888", ChannelID: "33333", Author: &discordgo.User{ID: "12345", Bot: true}}}
+			switch state {
+			case "other author":
+				m.ReferencedMessage.Author.ID = "77777"
+			case "other channel":
+				m.ReferencedMessage.ChannelID = "44444"
+			case "missing reference":
+				m.ReferencedMessage = nil
+			case "hidden content":
+				m.Content = ""
+			}
+			raw, _ := json.Marshal(m)
+			return response(200, string(raw)), nil
+		})
+		id, private, _, err := s.erisCaller(context.Background(), eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
+		if state == "valid" {
+			if err != nil || private || id != "11111" {
+				t.Fatal(id, private, err)
+			}
+		} else if err == nil {
+			t.Fatalf("accepted %s", state)
+		}
 	}
 }
 
