@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func TestConversationIsolationAndForget(t *testing.T) {
@@ -22,14 +23,17 @@ func TestConversationIsolationAndForget(t *testing.T) {
 			Messages []Message
 			Stream   bool
 		}
-		if json.NewDecoder(r.Body).Decode(&body) != nil || body.Model != "eris-lfm2.5-v1" || body.Stream {
+		if json.NewDecoder(r.Body).Decode(&body) != nil || body.Model != "eris-qwen3-4b-v1" || body.Stream {
 			t.Error("invalid completion request")
+		}
+		if len(body.Messages) == 0 || body.Messages[0].Role != "system" || utf8.RuneCountInString(body.Messages[0].Content) > 2000 {
+			t.Error("persona exceeds the inference protocol limit")
 		}
 		prompts = append(prompts, body.Messages)
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"Je veille sur les lieux."}}]}`))
 	}))
 	defer server.Close()
-	c := New(server.URL+"/v1", "private-key", "eris-lfm2.5-v1")
+	c := New(server.URL+"/v1", "private-key", "eris-qwen3-4b-v1")
 	for _, request := range []struct {
 		owner, question string
 		forget          bool

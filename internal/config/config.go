@@ -92,7 +92,7 @@ func Load() (Config, error) {
 		c.DiscordBotName = ""
 	}
 	c.ErisAPIURL = strings.TrimRight(os.Getenv("ERIS_API_URL"), "/")
-	c.ErisModel = fallback("ERIS_MODEL", "eris-lfm2.5-v1")
+	c.ErisModel = fallback("ERIS_MODEL", "eris-qwen3-4b-v1")
 	if c.DiscordBotName != "" && !regexp.MustCompile(`^[\p{L}\p{N} _-]{2,32}$`).MatchString(c.DiscordBotName) {
 		return c, errors.New("DISCORD_BOT_NAME requires 2-32 letters, numbers, spaces, underscores or hyphens")
 	}

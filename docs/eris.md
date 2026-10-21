@@ -32,23 +32,23 @@ Renseigner **dans le conteneur bot** :
 ```yaml
 DISCORD_BOT_NAME: Eris
 ERIS_API_URL: http://eris-runtime:8090/v1
-ERIS_MODEL: eris-lfm2.5-v1
+ERIS_MODEL: eris-qwen3-4b-v1
 ERIS_API_KEY_FILE: /run/secrets/eris_api_key
 ```
 
 Monter le fichier secret en lecture seule dans le bot et dans le moteur. Générer sa valeur avec `openssl rand -hex 32`. Ne pas conserver également `ERIS_API_KEY` si `_FILE` est renseigné. L’URL contient `/v1` ; le bot ajoute `/chat/completions`. HTTP convient au réseau Docker privé ; utiliser HTTPS si le moteur est sur une autre machine.
 
-Le service d’inférence et ses instructions d’installation sont dans le dépôt privé d’Eris, dossier `server/`. Il charge le **checkpoint fusionné BF16** produit par le pipeline existant ; l’adaptateur LoRA seul et l’export ONNX destiné au navigateur ne conviennent pas à ce service. Le code, les poids, les assets et les souvenirs privés ne sont pas recopiés dans ce dépôt public.
+Le service d’inférence et ses instructions d’installation sont dans le dépôt privé d’Eris, dossier `server/`. Il charge **Qwen3 4B Instruct en GGUF Q5_K_M**, avec une révision et une empreinte épinglées. La personnalité d’Eris est fournie par le bot ; les poids Qwen ne sont pas réentraînés. Les deux candidats LFM ont échoué à la recette Discord. Le navigateur Eris conserve son moteur actuel, et les poids et souvenirs privés ne sont pas recopiés dans ce dépôt public.
 
-Les deux conteneurs doivent partager un réseau Docker pour résoudre `eris-runtime`. Le Compose du moteur accepte le nom du réseau existant via `ERIS_NETWORK` ; aucun port d’inférence n’est publié. Le service CPU dispose d’un budget initial de quatre cœurs et 8 Go de RAM, à mesurer sur le NAS. Le bot limite chaque appel à 50 secondes et n’effectue aucun repli vers un fournisseur externe.
+Les deux conteneurs doivent partager un réseau Docker pour résoudre `eris-runtime`. Le Compose du moteur accepte le nom du réseau existant via `ERIS_NETWORK` ; aucun port d’inférence n’est publié. Le service dispose de quatre CPU et 6 Go de RAM, sans accès au GPU de transcodage. Le bot limite chaque appel à 50 secondes et n’effectue aucun repli vers un fournisseur externe. Le moteur refuse les générations incomplètes qui dépassent ses 160 tokens ou sa limite souple de 42 secondes.
 
 L’URL vide désactive seulement la génération. `/eris` explique alors que le moteur n’est pas connecté, `/eris oublier:true` fonctionne et toutes les commandes média restent disponibles. Ne renseigner l’URL qu’une fois le moteur prêt ; un échec de génération ne remplace pas une réponse par un résultat inventé.
 
 ## Vérifier la mise en service
 
-1. Démarrer le moteur avec le checkpoint entraîné et vérifier son état de santé.
-2. Vérifier l’identité et le français avec les prompts du guide privé ; la qualité du modèle anglais spécialisé doit être mesurée avant de l’ouvrir aux membres.
+1. Démarrer le moteur avec le fichier GGUF vérifié et vérifier son état de santé.
+2. Vérifier l’identité, les commandes, la mémoire et le français avec les scénarios du guide privé sur le CPU du NAS.
 3. Recréer le bot avec les paramètres ci-dessus et l’image de la branche validée, puis vérifier son nom et `/aide`.
 4. Tester deux membres : leur historique doit rester séparé ; tester l’effacement et les commandes média pendant une génération.
 
-Les tests automatisés couvrent le protocole HTTP, les signatures, les réponses privées, l’isolation des conversations, l’effacement, les limites, les erreurs et l’identité Discord. Ils n’attestent pas la qualité du checkpoint : les poids entraînés et l’accès au serveur Discord restent nécessaires pour ce dernier contrôle.
+Les tests automatisés couvrent le protocole HTTP, les signatures, les réponses privées, l’isolation des conversations, l’effacement, les limites, les erreurs et l’identité Discord. Ils ne remplacent pas la lecture des réponses du modèle réel, ni la recette finale dans Discord.
