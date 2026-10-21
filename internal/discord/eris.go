@@ -1,18 +1,21 @@
 package discord
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hloiseau/le-concierge/internal/eris"
 )
 
-func (b *Bot) handleEris(w http.ResponseWriter, i Interaction) {
+func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRequest) {
 	options, _ := CommandOptions(i)
-	if options.ChatMessage == "" && !options.Forget {
+	if i.Type != 3 && options.ChatMessage == "" && !options.Forget {
 		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Mentionne @Eris avec ton message pour discuter dans le salon. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer ma mémoire de nos conversations.")})
 		return
 	}
@@ -31,20 +34,70 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction) {
 		if !b.acknowledge(ctx, i) {
 			return
 		}
-		reply := b.erisReply(ctx, i.GuildID+":"+i.Member.User.ID, options.ChatMessage, options.Forget)
-		b.webhook(ctx, i, "PATCH", "/messages/@original", Message(reply))
+		var result eris.ToolReply
+		if i.Type == 3 {
+			result = b.erisTool(ctx, proof)
+		} else {
+			result = b.erisMediaReply(ctx, i.GuildID+":"+i.Member.User.ID, options.ChatMessage, options.Forget, proof)
+		}
+		reply := Message(result.Content)
+		if len(result.Buttons) > 0 {
+			buttons := []map[string]any{}
+			for _, button := range result.Buttons {
+				buttons = append(buttons, map[string]any{"type": 2, "style": 2, "label": button.Label, "custom_id": button.ID})
+			}
+			reply["components"] = []map[string]any{{"type": 1, "components": buttons}}
+		}
+		b.webhook(ctx, i, "PATCH", "/messages/@original", reply)
 	}()
 }
 
-func (b *Bot) erisReply(ctx context.Context, owner, message string, forget bool) string {
-	reply, err := b.Eris.Reply(ctx, owner, message, forget)
+func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest) eris.ToolReply {
+	var result eris.ToolReply
+	text, err := b.Eris.ReplyWithTools(ctx, owner, message, forget, func(ctx context.Context, plan eris.Plan) (string, error) {
+		proof.Plan = plan
+		result = b.erisTool(ctx, proof)
+		return result.Content, nil
+	})
 	if errors.Is(err, eris.ErrBusy) {
-		return "Je termine une conversation. Réessaie dans quelques secondes."
+		return eris.ToolReply{Content: "Je termine une conversation. Réessaie dans quelques secondes."}
 	}
 	if err != nil {
-		return "Mon moteur de conversation ne répond pas pour le moment. Mes commandes restent disponibles avec /aide."
+		return eris.ToolReply{Content: "Mon moteur de conversation ne répond pas pour le moment. Mes commandes restent disponibles avec /aide."}
 	}
-	return reply
+	result.Content = text
+	return result
+}
+
+func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolReply {
+	failure := eris.ToolReply{Content: "Je ne peux pas vérifier les données du Hub pour le moment. Réessaie plus tard."}
+	body, _ := json.Marshal(input)
+	req, err := http.NewRequestWithContext(ctx, "POST", b.Config.BotAPIURL+"/internal/eris", bytes.NewReader(body))
+	if err != nil {
+		return failure
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+b.Config.BotAPISecret)
+	client := *b.Client
+	client.Timeout = 22 * time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		return failure
+	}
+	defer resp.Body.Close()
+	var result eris.ToolReply
+	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 16*1024)).Decode(&result) != nil || result.Content == "" || !utf8.ValidString(result.Content) || utf8.RuneCountInString(result.Content) > 1500 || len(result.Buttons) > 3 {
+		return failure
+	}
+	for _, button := range result.Buttons {
+		if !ValidErisButton(button.ID) || button.Label == "" || utf8.RuneCountInString(button.Label) > 80 {
+			return failure
+		}
+	}
+	if input.MessageID != "" {
+		result.Buttons = nil
+	}
+	return result
 }
 
 func (b *Bot) reserveEris() bool {

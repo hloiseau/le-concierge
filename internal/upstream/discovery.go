@@ -20,12 +20,18 @@ const discoveryPlaybackReads = 20
 
 type discoveryMetadata struct {
 	recentMetadata
-	CanonicalGUID string          `json:"guid"`
-	ExternalGUIDs json.RawMessage `json:"Guid"`
-	ViewCount     *int64          `json:"viewCount"`
-	DeletedAt     int64           `json:"deletedAt"`
-	LeafCount     *int            `json:"leafCount"`
-	Media         json.RawMessage `json:"Media"`
+	CanonicalGUID   string          `json:"guid"`
+	ExternalGUIDs   json.RawMessage `json:"Guid"`
+	ViewCount       *int64          `json:"viewCount"`
+	DeletedAt       int64           `json:"deletedAt"`
+	LeafCount       *int            `json:"leafCount"`
+	Media           json.RawMessage `json:"Media"`
+	Summary         string          `json:"summary"`
+	Duration        int64           `json:"duration"`
+	ViewedLeafCount int             `json:"viewedLeafCount"`
+	Genres          []struct {
+		Tag string `json:"tag"`
+	} `json:"Genre"`
 }
 
 type RecapResult struct {

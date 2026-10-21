@@ -10,6 +10,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/hloiseau/le-concierge/internal/config"
+	"github.com/hloiseau/le-concierge/internal/eris"
 )
 
 // RunMentions adds the Gateway alongside HTTP interactions. Discord supplies
@@ -108,7 +109,7 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		} else if question != "" {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
-			reply = b.erisReply(ctx, owner, question, false)
+			reply = b.erisMediaReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}).Content
 		}
 		_, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
 			Content: reply, Reference: event.Reference(),

@@ -163,12 +163,27 @@ func CommandOptions(i Interaction) (Options, error) {
 // Command never takes an identity from a button: its owner must match the
 // signed caller, whose current access is checked again by the API.
 func Command(i Interaction) (string, int, error) {
+	if i.Type == 3 && strings.HasPrefix(i.Data.CustomID, "eris:") {
+		if !ValidErisButton(i.Data.CustomID) || i.Data.ComponentType != 2 || i.Message.Flags&64 == 0 || len(i.Data.Options) != 0 || len(i.Data.Values) != 0 {
+			return "", 0, errors.New("invalid Eris confirmation")
+		}
+		return "eris", 0, nil
+	}
 	if i.Type == 2 {
 		_, err := CommandOptions(i)
 		return i.Data.Name, 0, err
 	}
 	command, offset, _, err := paginationCommand(i)
 	return command, offset, err
+}
+
+func ValidErisButton(id string) bool {
+	parts := strings.Split(id, ":")
+	if len(parts) != 3 || parts[0] != "eris" || (parts[1] != "choose" && parts[1] != "confirm" && parts[1] != "cancel") || len(parts[2]) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(parts[2])
+	return err == nil
 }
 
 func paginationCommand(i Interaction) (string, int, string, error) {
