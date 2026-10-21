@@ -127,3 +127,32 @@ func TestRequestSearchDiscardsOtherPeoplesRequests(t *testing.T) {
 		t.Fatal("requester leaked")
 	}
 }
+
+func TestRequestSearchPercentEncodesSpacesAndPreservesReservedCharacters(t *testing.T) {
+	for _, title := range []string{"Hot Fuzz", "Mission: Impossible", "C++ & Friends", "L'été à Paris"} {
+		t.Run(title, func(t *testing.T) {
+			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "GET" || r.Header.Get("X-Api-User") != "2" {
+					t.Error("wrong member or method")
+				}
+				if r.URL.Path == "/api/v1/auth/me" {
+					_, _ = w.Write([]byte(`{"id":2}`))
+					return
+				}
+				if strings.Contains(r.URL.RawQuery, "+") {
+					http.Error(w, "query must be URL encoded", 400)
+					return
+				}
+				if r.URL.Query().Get("query") != title {
+					t.Error("title changed during encoding")
+				}
+				_, _ = w.Write([]byte(`{"results":[{"id":4638,"mediaType":"movie","title":"Hot Fuzz","releaseDate":"2007-02-14"}]}`))
+			}))
+			defer s.Close()
+			items, err := New().SearchRequestCandidates(context.Background(), s.URL, "secret", 2, title, "movie")
+			if err != nil || len(items) != 1 {
+				t.Fatalf("search rejected title %q: %v", title, err)
+			}
+		})
+	}
+}

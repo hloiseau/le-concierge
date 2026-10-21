@@ -42,6 +42,28 @@ func (p Plan) WithQuestionConstraints(question string) Plan {
 	return p
 }
 
+// A request title must come from this conversation, never a system-prompt example.
+func requestTitleMentioned(title string, messages []Message) bool {
+	normalize := func(s string) string {
+		return " " + strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+			if unicode.IsLetter(r) || unicode.IsNumber(r) {
+				return unicode.ToLower(r)
+			}
+			return ' '
+		}, s)), " ") + " "
+	}
+	title = normalize(title)
+	if strings.TrimSpace(title) == "" {
+		return false
+	}
+	for _, m := range messages {
+		if m.Role != "system" && strings.Contains(normalize(m.Content), title) {
+			return true
+		}
+	}
+	return false
+}
+
 func ParsePlan(raw string) (Plan, error) {
 	var p Plan
 	d := json.NewDecoder(strings.NewReader(raw))
