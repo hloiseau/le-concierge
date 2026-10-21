@@ -108,7 +108,7 @@ Conserver aussi une copie hors du dataset de l'application et noter les tags pr�
 | Erreur 403 lors d'une action Hub | Ouvrir le domaine HTTPS configuré, pas une IP ou un alias |
 | Demandes Seerr en attente de liaison | Se connecter à Seerr avec le même Plex puis actualiser l’association ; vérifier la clé API serveur |
 | `/aide` sans réponse / `Discord reply rejected` 404 | Mettre à jour API et bot ; `/aide` répond désormais directement. Les erreurs différées indiquent `discord_code` sans exposer le token |
-| Bot hors ligne dans la liste Discord | Normal pour cette version HTTP sans Gateway ; tester `/aide` |
+| Bot hors ligne dans la liste Discord | Tester `/aide` ; si Eris est configurée, vérifier la connexion Gateway et le journal « Discord mentions ready » |
 | Image refusée au téléchargement | Vérifier le nom/tag exact ; les deux images listées ont été vérifiées accessibles sans connexion |
 
 Les rappels Maintainerr/Tautulli, le catalogue livres et le monitoring sont implémentés et testés avec des sources simulées. Leur configuration et leur validation sur le NAS restent nécessaires ; les fonctions optionnelles sont désactivées dans les YAML fournis. Une page ou une capacité annoncée ne prouve pas qu’un envoi ou une collecte est déjà actif.

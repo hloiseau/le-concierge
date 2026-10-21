@@ -12,16 +12,19 @@ Le bot conserve son compte, ses identifiants, ses commandes, les liaisons Plex/D
 
 `DISCORD_BOT_NAME=disabled` désactive cette synchronisation. Le nom de l’application affiché dans OAuth2 se règle séparément dans Discord Developer Portal → General Information. Le code ne modifie pas l’avatar.
 
-## Chat privé
+## Discuter avec Eris
 
+- `@Eris Salut` : mentionner le compte Eris et recevoir une réponse dans le même salon ou fil.
 - `/eris` : afficher comment lui parler.
 - `/eris message:Salut Eris` : démarrer ou poursuivre une conversation.
 - `/eris oublier:true` : effacer la conversation sans appeler le modèle.
 - `/eris message:On recommence oublier:true` : effacer puis envoyer un nouveau message.
 
-Les réponses sont éphémères, visibles uniquement par leur auteur. Le bot ne lit pas les messages des salons ; aucun Gateway ni intent Message Content n’est nécessaire. L’identité vient de l’interaction Discord signée et du serveur configuré. Il n’est pas nécessaire de lier Plex pour discuter.
+Les réponses à `/eris` sont éphémères, visibles uniquement par leur auteur. Les réponses aux mentions sont publiques dans le salon concerné, en réponse au message d’origine et sans notification de masse. Il faut sélectionner le compte Eris dans la mention : écrire son nom seul, mentionner un rôle ou répondre sans la mentionner explicitement ne déclenche pas le chat. Les messages des bots, webhooks, autres serveurs et messages privés sont ignorés. Il n’est pas nécessaire de lier Plex pour discuter.
 
-La mémoire contient au plus deux échanges précédents par membre et par serveur, expire après 30 minutes d’inactivité et disparaît au redémarrage. Le bot conserve au plus 256 conversations et accepte deux traitements de chat simultanés, séparés des traitements média. Un membre doit attendre dix secondes entre deux générations ordinaires. Aucun historique n’est écrit dans SQLite ni dans les journaux.
+Quand le moteur et le token Discord sont configurés, le bot ouvre une connexion Gateway avec le seul intent `GUILD_MESSAGES`. L’intent privilégié `MESSAGE_CONTENT` n’est pas nécessaire : [Discord transmet le contenu des messages qui mentionnent le bot](https://docs.discord.com/developers/events/gateway#message-content-intent). Accorder **Voir le salon**, **Envoyer des messages**, **Lire l’historique des messages** (réponses au message d’origine) et, pour les fils, **Envoyer des messages dans les fils** dans les salons où Eris doit répondre. La connexion se rétablit après une coupure ; un échec ne bloque pas les commandes HTTP.
+
+La mémoire contient au plus deux échanges précédents, expire après 30 minutes d’inactivité et disparaît au redémarrage. Le chat privé est séparé des conversations publiques, elles-mêmes séparées par membre et par salon ou fil. `/eris oublier:true` efface toutes ces mémoires pour le membre sur ce serveur, sans supprimer les messages déjà publiés dans Discord. Le bot conserve au plus 256 conversations et accepte deux traitements de chat simultanés, séparés des traitements média. Une conversation doit attendre dix secondes entre deux générations ordinaires. Les messages sont limités à 500 caractères. Aucun historique n’est écrit dans SQLite ni dans les journaux.
 
 Eris conserve une voix calme, brève, sarcastique et faussement innocente, adaptée à Discord. Elle répond dans la langue du message. Son texte généré ne déclenche aucune action et ne reçoit ni secrets Discord, ni historique Plex, ni métriques, ni résultats Seerr. Les commandes existantes restent la source des informations en temps réel.
 

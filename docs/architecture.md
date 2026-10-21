@@ -26,7 +26,7 @@ flowchart TD
     API --> Ops["Métriques · diagnostics · conversions"]
 ```
 
-Le bot utilise les interactions HTTP signées Discord : Caddy expose son endpoint /interactions. L’API commune revérifie la signature originale et le secret de service. Il n’y a pas de connexion Gateway dans cette version. Les routes HTTP et cookies sont décrits dans le guide de déploiement.
+Le bot utilise les interactions HTTP signées Discord : Caddy expose son endpoint /interactions. L’API commune revérifie la signature originale et le secret de service. Une connexion Gateway complémentaire reçoit les mentions explicites d’Eris pour le chat public, sans intent privilégié Message Content. Les routes HTTP et cookies sont décrits dans le guide de déploiement.
 
 ## Identité et droits
 

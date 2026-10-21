@@ -109,3 +109,21 @@ func TestInferenceDoesNotFollowRedirects(t *testing.T) {
 		t.Fatal("inference followed redirect with private conversation")
 	}
 }
+
+func TestForgetClearsPrivateAndChannelMemoryOnlyForThisMember(t *testing.T) {
+	c := New("", "", "")
+	for _, key := range []string{"guild:alice", "guild:alice:channel1", "guild:alice:channel2", "guild:alice2:channel1", "guild:bob:channel1"} {
+		c.sessions[key] = &conversation{expires: time.Now().Add(time.Hour)}
+	}
+	c.sessions["guild:alice:channel1"].busy = true
+	if _, err := c.Reply(context.Background(), "guild:alice", "", true); !errors.Is(err, ErrBusy) || len(c.sessions) != 5 {
+		t.Fatal("active channel conversation was forgotten or partial deletion occurred")
+	}
+	c.sessions["guild:alice:channel1"].busy = false
+	if _, err := c.Reply(context.Background(), "guild:alice", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if len(c.sessions) != 2 || c.sessions["guild:bob:channel1"] == nil || c.sessions["guild:alice2:channel1"] == nil {
+		t.Fatal("wrong forgetting boundary")
+	}
+}
