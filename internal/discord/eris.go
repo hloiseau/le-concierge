@@ -36,13 +36,21 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 			return
 		}
 		var result eris.ToolReply
+		owner := i.GuildID + ":" + i.Member.User.ID
+		public := i.Type == 3 && i.Message.Flags&64 == 0
+		if public {
+			owner += ":" + i.ChannelID
+		}
 		if i.Type == 3 {
 			result = b.erisTool(ctx, proof)
-			b.Eris.RememberRequest(i.GuildID+":"+i.Member.User.ID, result)
+			b.Eris.RememberRequest(owner, result)
 		} else {
-			result = b.erisMediaReply(ctx, i.GuildID+":"+i.Member.User.ID, options.ChatMessage, options.Forget, proof)
+			result = b.erisMediaReply(ctx, owner, options.ChatMessage, options.Forget, proof)
 		}
 		reply := Message(result.Content)
+		if public {
+			delete(reply, "flags")
+		}
 		if len(result.Buttons) > 0 {
 			buttons := []map[string]any{}
 			for _, button := range result.Buttons {
@@ -100,15 +108,6 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 		if !ValidErisButton(button.ID) || button.Label == "" || utf8.RuneCountInString(button.Label) > 80 {
 			return failure
 		}
-	}
-	if input.MessageID != "" {
-		public := []eris.Button{}
-		for _, button := range result.Buttons {
-			if strings.HasPrefix(button.ID, "eris:open:") {
-				public = append(public, button)
-			}
-		}
-		result.Buttons = public
 	}
 	return result
 }

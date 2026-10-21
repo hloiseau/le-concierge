@@ -95,7 +95,7 @@ func TestReplyTargetMustBeErisInTheSameChannel(t *testing.T) {
 	}
 }
 
-func TestReplyToErisOffersOnlyPrivateHandoffButton(t *testing.T) {
+func TestReplyToErisOffersSeerrChoicesInChannel(t *testing.T) {
 	b, _ := signedCommand(t, "eris")
 	b.Eris.URL = "http://model.test/v1"
 	b.Config.BotAPIURL = "http://api.test"
@@ -116,7 +116,7 @@ func TestReplyToErisOffersOnlyPrivateHandoffButton(t *testing.T) {
 		if in.MessageID != "99999" || in.ChannelID != "33333" || in.Plan.Query != "Hot Fuzz" {
 			t.Error("reply proof or title lost")
 		}
-		return botResponse(200, `{"content":"On continue en privé.","buttons":[{"id":"eris:open:`+strings.Repeat("a", 64)+`","label":"Préparer en privé"},{"id":"eris:confirm:`+strings.Repeat("b", 64)+`","label":"Must stay private"}]}`), nil
+		return botResponse(200, `{"content":"Choisis Hot Fuzz.","buttons":[{"id":"eris:choose:`+strings.Repeat("a", 64)+`","label":"Choisir 1"}]}`), nil
 	})
 	s, _ := discordgo.New("Bot fixture")
 	replies := 0
@@ -127,8 +127,8 @@ func TestReplyToErisOffersOnlyPrivateHandoffButton(t *testing.T) {
 		var payload map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&payload)
 		raw, _ := json.Marshal(payload)
-		if !strings.Contains(string(raw), "eris:open:") || strings.Contains(string(raw), "eris:confirm:") {
-			t.Error("missing handoff or public confirmation")
+		if !strings.Contains(string(raw), "eris:choose:") || strings.Contains(string(raw), "eris:open:") {
+			t.Error("missing public Seerr choices")
 		}
 		replies++
 		return botResponse(200, `{"id":"88888"}`), nil

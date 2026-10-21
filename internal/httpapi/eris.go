@@ -25,7 +25,7 @@ type erisPending struct {
 	SeerrID                                   int64
 	Candidate                                 upstream.RequestCandidate
 	Seasons                                   []int
-	Plan                                      eris.Plan
+	Private                                   bool
 	Expires                                   time.Time
 }
 
@@ -74,7 +74,7 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	}
 	var reply eris.ToolReply
 	if component != "" {
-		reply = s.erisConfirmation(ctx, u, userID, component)
+		reply = s.erisConfirmation(ctx, u, userID, component, private)
 	} else {
 		reply = s.runErisTool(ctx, u, grant, userID, input.Plan, private)
 	}
@@ -117,7 +117,7 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (string, b
 		if !s.erisEvent("eris:" + i.ID) {
 			return "", false, "", upstream.ErrDenied
 		}
-		return i.Member.User.ID, true, component, nil
+		return i.Member.User.ID, i.Type != 3 || i.Message.Flags&64 != 0, component, nil
 	}
 	if in.Timestamp != "" || in.Signature != "" || !config.Snowflake(in.ChannelID) || !config.Snowflake(in.MessageID) || s.Config.DiscordBotToken == "" {
 		return "", false, "", upstream.ErrDenied
@@ -239,13 +239,6 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 			}
 		}
 	case "prepare":
-		if !private {
-			key := s.saveErisPending(erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: discordID, GuildID: s.Config.DiscordGuildID, Plan: p, Stage: "open", Expires: time.Now().Add(10 * time.Minute)})
-			if key == "" {
-				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
-			}
-			return eris.ToolReply{Content: "On continue en privé avec le bouton ci-dessous. Tu pourras choisir le titre et confirmer avant tout envoi à Seerr.", Buttons: []eris.Button{{ID: "eris:open:" + key, Label: "Préparer en privé"}}}
-		}
 		if p.Kind == "show" && len(p.Seasons) == 0 {
 			reply.Content = "Quelle saison souhaites-tu demander ? Précise le titre et le numéro de saison."
 			return reply
@@ -258,7 +251,7 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 		if err != nil {
 			return reply
 		}
-		reply.Content = "Quel titre veux-tu demander ? Rien ne sera lancé avant ta confirmation."
+		reply.Content = "J’ai trouvé ça dans Seerr. Choisis le bon titre :"
 		if len(items) == 0 {
 			reply.Content = "Aucun titre trouvé dans le catalogue de demandes. Précise le titre ou l’année."
 		}
@@ -266,7 +259,7 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 			if m.Kind == "tv" && len(p.Seasons) == 0 {
 				continue
 			}
-			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: discordID, GuildID: s.Config.DiscordGuildID, SeerrID: id, Candidate: m, Seasons: p.Seasons, Stage: "choose", Expires: time.Now().Add(10 * time.Minute)}
+			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: discordID, GuildID: s.Config.DiscordGuildID, SeerrID: id, Candidate: m, Seasons: p.Seasons, Private: private, Stage: "choose", Expires: time.Now().Add(10 * time.Minute)}
 			key := s.saveErisPending(pending)
 			if key == "" {
 				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
@@ -313,7 +306,7 @@ func (s *Server) saveErisPending(p erisPending) string {
 	return key
 }
 
-func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, customID string) eris.ToolReply {
+func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, customID string, private bool) eris.ToolReply {
 	parts := strings.Split(customID, ":")
 	invalid := eris.ToolReply{Content: "Ce choix a expiré ou a déjà été utilisé. Relance ta demande avec /eris."}
 	if len(parts) != 3 {
@@ -321,7 +314,7 @@ func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, 
 	}
 	s.mu.Lock()
 	p, ok := s.erisPending[parts[2]]
-	if !ok || time.Now().After(p.Expires) || p.UserID != u.ID || p.PlexID != u.PlexID || p.DiscordID != discordID || p.GuildID != s.Config.DiscordGuildID || (parts[1] != "cancel" && parts[1] != p.Stage) {
+	if !ok || time.Now().After(p.Expires) || p.UserID != u.ID || p.PlexID != u.PlexID || p.DiscordID != discordID || p.GuildID != s.Config.DiscordGuildID || p.Private != private || (parts[1] != "cancel" && parts[1] != p.Stage) {
 		s.mu.Unlock()
 		return invalid
 	}
@@ -331,20 +324,13 @@ func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, 
 	if parts[1] == "cancel" {
 		return eris.ToolReply{Content: "Demande annulée. Rien n’a été envoyé."}
 	}
-	if parts[1] == "open" {
-		g, err := s.grant(ctx, u)
-		if err != nil {
-			return invalid
-		}
-		return s.runErisTool(ctx, u, g, discordID, p.Plan, true)
-	}
 	if parts[1] == "choose" {
 		p.Stage = "confirm"
 		key := s.saveErisPending(p)
 		if key == "" {
 			return invalid
 		}
-		return eris.ToolReply{Content: "Confirmer la demande de **" + candidateLabel(p.Candidate, p.Seasons) + "** ?\nQualité standard, avec les droits et quotas de ton compte Seerr. Le téléchargement peut démarrer si la demande est approuvée.", Buttons: []eris.Button{{ID: "eris:confirm:" + key, Label: "Confirmer la demande"}, {ID: "eris:cancel:" + key, Label: "Annuler"}}}
+		return eris.ToolReply{Content: "Confirmer la demande de **" + candidateLabel(p.Candidate, p.Seasons) + "** ?\nQualité standard. Si Seerr l’approuve, le téléchargement pourra démarrer.", Buttons: []eris.Button{{ID: "eris:confirm:" + key, Label: "Confirmer la demande"}, {ID: "eris:cancel:" + key, Label: "Annuler"}}}
 	}
 	id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
 	current, e := s.Store.UserByDiscord(ctx, discordID)

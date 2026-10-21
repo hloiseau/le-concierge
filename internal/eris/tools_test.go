@@ -38,8 +38,14 @@ func TestPlansRejectArbitraryToolsIdentityAndBadFilters(t *testing.T) {
 func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 	var prompts [][]Message
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct{ Messages []Message }
+		var body struct {
+			Messages       []Message
+			ResponseFormat map[string]string `json:"response_format"`
+		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.ResponseFormat["type"] != "json_object" {
+			t.Error("tool conversations must request constrained JSON")
+		}
 		prompts = append(prompts, body.Messages)
 		answer := `{"action":"search","query":"Arrival","kind":"movie"}`
 		if len(prompts) == 2 {
@@ -87,13 +93,13 @@ func TestTextCannotConfirmCancelOrRepeatPendingRequest(t *testing.T) {
 	}
 }
 
-func TestPrivateHandoffRemembersOnlyItsOwnResult(t *testing.T) {
+func TestButtonResultRemembersOnlyItsOwnConversation(t *testing.T) {
 	c := New("http://must-not-call.test", "", "model")
 	c.sessions["guild:alice:channel"] = &conversation{messages: []Message{{Role: "user", Content: "public history"}}, expires: time.Now().Add(time.Minute)}
 	c.RememberRequest("guild:alice", ToolReply{Content: "Choisis Hot Fuzz (2007).", Buttons: []Button{{ID: "private-token", Label: "Choisir"}}})
 	s := c.sessions["guild:alice"]
 	if s == nil || !s.pending || len(s.messages) != 2 || strings.Contains(s.messages[1].Content, "private-token") || strings.Contains(s.messages[1].Content, "public history") {
-		t.Fatal("private handoff lost or mixed context")
+		t.Fatal("button result lost or mixed context")
 	}
 	text, err := c.ReplyWithTools(context.Background(), "guild:alice", "oui", false, func(context.Context, Plan) (ToolReply, error) {
 		t.Fatal("text confirmed request")

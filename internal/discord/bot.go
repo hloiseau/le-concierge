@@ -224,8 +224,12 @@ func (b *Bot) acknowledge(ctx context.Context, i Interaction) bool {
 	defer cancel()
 	target := "https://discord.com/api/v10/interactions/" + i.ID + "/" + url.PathEscape(i.Token) + "/callback"
 	callback := `{"type":5,"data":{"flags":64}}`
-	if i.Type == 3 && i.Data.CustomID != "interests:open" && !strings.HasPrefix(i.Data.CustomID, "eris:open:") {
+	if i.Type == 3 && i.Data.CustomID != "interests:open" {
 		callback = `{"type":6}`
+	}
+	if i.Type == 3 && strings.HasPrefix(i.Data.CustomID, "eris:") && i.Message.Flags&64 == 0 {
+		// A click gets its own public reply; another member cannot overwrite the original.
+		callback = `{"type":5}`
 	}
 	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(callback))
 	if err != nil {
