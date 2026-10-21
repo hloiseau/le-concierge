@@ -1,6 +1,6 @@
 # Brancher Le Concierge à Discord
 
-Une application Discord dédiée sert à la liaison facultative du compte Discord et aux commandes du bot. La connexion au Hub se fait avec Plex. Le bot reçoit des interactions HTTP : aucun Gateway ni privileged intent n'est nécessaire.
+Une application Discord dédiée sert à la liaison facultative du compte Discord et aux commandes du bot. La connexion au Hub se fait avec Plex. Les commandes utilisent des interactions HTTP. Le chat par mention d’Eris utilise aussi une connexion Gateway, sans intent privilégié.
 
 ## 1. Créer l'application et récupérer les valeurs
 
@@ -76,7 +76,7 @@ L’option facultative `etat` de `/mes-demandes` propose neuf choix : **Tous les
 
 Taper `/aide` dans un salon autorisé. La réponse doit être visible uniquement par toi. Ensuite ouvrir le Hub, se connecter avec Plex puis ouvrir **Mon compte → Lier Discord** : le compte Seerr est associé automatiquement avec cette identité. Si nécessaire, se connecter une première fois à Seerr avec le même Plex puis actualiser l’association dans le Hub. Tester `/mes-demandes` et `/nouveautes`.
 
-Le bot peut apparaître **hors ligne** dans la liste des membres : il n'ouvre pas de connexion Gateway pour afficher une présence. Ce sont les commandes qui vérifient son fonctionnement. Les réponses personnelles sont éphémères dans le salon. Les messages privés des [suivis](subscriptions.md) et des [rappels](removal-reminders.md) exigent une configuration et un consentement explicites.
+Sans moteur Eris configuré, le bot peut apparaître **hors ligne** : les commandes HTTP continuent de fonctionner. Avec Eris, le journal « Discord mentions ready » confirme la connexion Gateway ; `@Eris Salut` permet de tester le chat public. Les réponses personnelles sont éphémères dans le salon. Les messages privés des [suivis](subscriptions.md) et des [rappels](removal-reminders.md) exigent une configuration et un consentement explicites.
 
 Pour partager un résultat, tester `/nouveautes public:true`, `/surprise public:true` ou `/recap public:true`. Le résultat paraît dans le salon sans lien Plex personnel, mention ni bouton ; la confirmation reste privée. Sans `public:true`, rien n’est partagé. Les erreurs restent privées, tout comme les commandes personnelles et administrateur. Voir [le partage des résultats](discord-discovery.md#partager-dans-le-salon).
 

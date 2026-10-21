@@ -80,6 +80,9 @@ func run() error {
 	defer stop()
 	go registerOnStart(ctx, bot)
 	go syncIdentityOnStart(ctx, bot)
+	mentionsDone := make(chan struct{})
+	go func() { defer close(mentionsDone); bot.RunMentions(ctx) }()
+	defer func() { stop(); <-mentionsDone; bot.Wait() }()
 	done := make(chan error, 1)
 	go func() {
 		slog.Info("Discord interactions listening", "address", c.BotListen)
@@ -96,7 +99,6 @@ func run() error {
 		if e = srv.Shutdown(shutdown); e != nil {
 			return e
 		}
-		bot.Wait()
 	}
 	return nil
 }

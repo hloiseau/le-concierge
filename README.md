@@ -50,4 +50,4 @@ Les tableaux GitHub Projects et milestones ne sont pas configurés à ce stade. 
 
 ## Eris sur Discord
 
-Le Concierge devient Eris : les commandes média sont conservées, avec `/eris message:…` pour discuter en privé et `/eris oublier:true` pour effacer la conversation. Le bot synchronise son nom et son surnom Discord au démarrage. Le chat se connecte uniquement au moteur explicitement configuré ; voir [installation Eris](docs/eris.md). Les chemins de données, le dépôt et les images `le-concierge` restent compatibles.
+Le Concierge devient Eris : les commandes média sont conservées, avec `@Eris` pour discuter dans un salon, `/eris message:…` pour discuter en privé et `/eris oublier:true` pour effacer la conversation. Le bot synchronise son nom et son surnom Discord au démarrage. Le chat se connecte uniquement au moteur explicitement configuré ; voir [installation Eris](docs/eris.md). Les chemins de données, le dépôt et les images `le-concierge` restent compatibles.

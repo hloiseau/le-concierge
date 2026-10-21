@@ -66,21 +66,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported interaction", 403)
 		return
 	}
-	b.mu.Lock()
-	now := time.Now()
-	for k, v := range b.seen {
-		if now.After(v) {
-			delete(b.seen, k)
-		}
-	}
-	_, duplicate := b.seen[i.ID]
-	if !duplicate && len(b.seen) < 10000 {
-		b.seen[i.ID] = now.Add(5 * time.Minute)
-	} else if len(b.seen) >= 10000 {
-		duplicate = true
-	}
-	b.mu.Unlock()
-	if duplicate {
+	if !b.rememberEvent(i.ID) {
 		http.Error(w, "duplicate interaction", 409)
 		return
 	}
@@ -174,6 +160,22 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		}
 		b.webhook(ctx, i, "PATCH", "/messages/@original", Message(confirmation))
 	}()
+}
+
+func (b *Bot) rememberEvent(id string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := time.Now()
+	for key, expires := range b.seen {
+		if now.After(expires) {
+			delete(b.seen, key)
+		}
+	}
+	if _, duplicate := b.seen[id]; duplicate || len(b.seen) >= 10000 {
+		return false
+	}
+	b.seen[id] = now.Add(5 * time.Minute)
+	return true
 }
 
 func (b *Bot) webhook(ctx context.Context, i Interaction, method, path string, message map[string]any) bool {

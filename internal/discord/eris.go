@@ -13,7 +13,7 @@ import (
 func (b *Bot) handleEris(w http.ResponseWriter, i Interaction) {
 	options, _ := CommandOptions(i)
 	if options.ChatMessage == "" && !options.Forget {
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Je suis Eris. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer notre conversation.")})
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Mentionne @Eris avec ton message pour discuter dans le salon. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer ma mémoire de nos conversations.")})
 		return
 	}
 	// Separate capacity keeps a slow model from occupying the media workers.
@@ -31,14 +31,20 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction) {
 		if !b.acknowledge(ctx, i) {
 			return
 		}
-		reply, err := b.Eris.Reply(ctx, i.GuildID+":"+i.Member.User.ID, options.ChatMessage, options.Forget)
-		if errors.Is(err, eris.ErrBusy) {
-			reply = "Je termine une conversation. Réessaie dans quelques secondes."
-		} else if err != nil {
-			reply = "Mon moteur de conversation ne répond pas pour le moment. Mes commandes restent disponibles avec /aide."
-		}
+		reply := b.erisReply(ctx, i.GuildID+":"+i.Member.User.ID, options.ChatMessage, options.Forget)
 		b.webhook(ctx, i, "PATCH", "/messages/@original", Message(reply))
 	}()
+}
+
+func (b *Bot) erisReply(ctx context.Context, owner, message string, forget bool) string {
+	reply, err := b.Eris.Reply(ctx, owner, message, forget)
+	if errors.Is(err, eris.ErrBusy) {
+		return "Je termine une conversation. Réessaie dans quelques secondes."
+	}
+	if err != nil {
+		return "Mon moteur de conversation ne répond pas pour le moment. Mes commandes restent disponibles avec /aide."
+	}
+	return reply
 }
 
 func (b *Bot) reserveEris() bool {
