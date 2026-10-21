@@ -51,14 +51,16 @@ type InteractionOption struct {
 }
 
 type Options struct {
-	Public    bool
-	Query     string
-	RequestID int
-	Kind      string
-	TMDBID    int
-	Season    *int
-	Page      int
-	Status    string
+	ChatMessage string
+	Forget      bool
+	Public      bool
+	Query       string
+	RequestID   int
+	Kind        string
+	TMDBID      int
+	Season      *int
+	Page        int
+	Status      string
 }
 
 func PublicCommand(command string) bool {
@@ -84,6 +86,14 @@ func CommandOptions(i Interaction) (Options, error) {
 		}
 		seen[option.Name] = true
 		switch option.Name {
+		case "message":
+			if i.Data.Name != "eris" || option.Type != 3 || string(option.Value) == "null" || json.Unmarshal(option.Value, &options.ChatMessage) != nil || strings.TrimSpace(options.ChatMessage) == "" || utf8.RuneCountInString(options.ChatMessage) > 500 || strings.ContainsFunc(options.ChatMessage, unicode.IsControl) {
+				return Options{}, invalid
+			}
+		case "oublier":
+			if i.Data.Name != "eris" || option.Type != 5 || string(option.Value) == "null" || json.Unmarshal(option.Value, &options.Forget) != nil {
+				return Options{}, invalid
+			}
 		case "etat":
 			if i.Data.Name != "mes-demandes" || option.Type != 3 || json.Unmarshal(option.Value, &options.Status) != nil || (options.Status != "all" && !upstream.ValidRequestStatus(options.Status)) {
 				return Options{}, invalid
@@ -268,7 +278,7 @@ func Message(content string) map[string]any {
 }
 
 func Help(origin string, services []config.Service) string {
-	text := "**Le Concierge**\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/a-voir — Vos contenus avant leur départ estimé de Plex (privé)\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
+	text := "**Eris**\n/eris message:… — Discuter en privé ; oublier:true pour repartir de zéro\n/mes-demandes — Vos demandes Seerr et leurs notifications dans le Hub\n/a-voir — Vos contenus avant leur départ estimé de Plex (privé)\n/nouveautes — Les derniers ajouts Plex\n/surprise — Un film ou une série de votre catalogue\n/recap — Les ajouts des sept jours terminés (Europe/Paris)\n/livres — Votre catalogue Grimmory (association OPDS dans Le Hub)\n/demander-livre — Choisir et confirmer une édition dans Shelfmark\n/diagnostic — Diagnostic d’une demande Seerr (administrateur)\n\nAjoutez public:true à /nouveautes, /surprise ou /recap pour partager le résultat dans ce salon. Les réponses sont privées par défaut.\n\n"
 	text += "Ajoutez etat à /mes-demandes pour filtrer toutes vos demandes Seerr (par exemple Disponible ou En cours).\n\n"
 	// Encode Markdown delimiters without changing the configured public destination.
 	link := func(label, target string) string {

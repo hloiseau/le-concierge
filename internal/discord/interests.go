@@ -76,7 +76,7 @@ func (b *Bot) handleInterests(w http.ResponseWriter, i Interaction) {
 	case b.slots <- struct{}{}:
 	default:
 		release()
-		inline("Le Concierge est occupé. Réessayez dans un instant.")
+		inline("Eris est occupée. Réessayez dans un instant.")
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)

@@ -36,6 +36,7 @@ func run() error {
 		return nil
 	}
 	register := flag.Bool("register", false, "register this app's guild commands, then exit")
+	syncIdentity := flag.Bool("sync-identity", false, "update this bot's username and guild nickname, then exit")
 	publishInterests := flag.Bool("publish-interests", false, "publish the configured interest panel, then exit")
 	messageID := flag.String("message-id", "", "update this bot's existing interest panel message instead of creating one")
 	flag.Parse()
@@ -45,14 +46,19 @@ func run() error {
 			messageIDSet = true
 		}
 	})
-	if (*register && *publishInterests) || (messageIDSet && (!*publishInterests || *messageID == "")) {
-		return errors.New("--register and --publish-interests are exclusive; --message-id requires --publish-interests")
+	if (*syncIdentity && (*register || *publishInterests || messageIDSet)) || (*register && *publishInterests) || (messageIDSet && (!*publishInterests || *messageID == "")) {
+		return errors.New("--register, --sync-identity and --publish-interests are exclusive; --message-id requires --publish-interests")
 	}
 	c, e := config.Load()
 	if e != nil {
 		return e
 	}
 	bot := discord.NewBot(c)
+	if *syncIdentity {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		return bot.SyncIdentity(ctx)
+	}
 	if *publishInterests {
 		id, err := bot.PublishInterests(context.Background(), *messageID)
 		if err != nil {
@@ -73,6 +79,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go registerOnStart(ctx, bot)
+	go syncIdentityOnStart(ctx, bot)
 	done := make(chan error, 1)
 	go func() {
 		slog.Info("Discord interactions listening", "address", c.BotListen)
@@ -92,6 +99,19 @@ func run() error {
 		bot.Wait()
 	}
 	return nil
+}
+
+func syncIdentityOnStart(ctx context.Context, bot *discord.Bot) {
+	if bot.Config.DiscordBotToken == "" || bot.Config.DiscordBotName == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	if err := bot.SyncIdentity(ctx); err != nil {
+		slog.Warn("Discord identity sync failed; commands remain available; retry with --sync-identity")
+		return
+	}
+	slog.Info("Discord bot identity synchronized")
 }
 
 func registerOnStart(ctx context.Context, bot *discord.Bot) {
