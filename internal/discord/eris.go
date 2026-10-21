@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -37,6 +38,7 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 		var result eris.ToolReply
 		if i.Type == 3 {
 			result = b.erisTool(ctx, proof)
+			b.Eris.RememberRequest(i.GuildID+":"+i.Member.User.ID, result)
 		} else {
 			result = b.erisMediaReply(ctx, i.GuildID+":"+i.Member.User.ID, options.ChatMessage, options.Forget, proof)
 		}
@@ -54,10 +56,10 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 
 func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest) eris.ToolReply {
 	var result eris.ToolReply
-	text, err := b.Eris.ReplyWithTools(ctx, owner, message, forget, func(ctx context.Context, plan eris.Plan) (string, error) {
+	text, err := b.Eris.ReplyWithTools(ctx, owner, message, forget, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
 		proof.Plan = plan
 		result = b.erisTool(ctx, proof)
-		return result.Content, nil
+		return result, nil
 	})
 	if errors.Is(err, eris.ErrBusy) {
 		return eris.ToolReply{Content: "Je termine une conversation. Réessaie dans quelques secondes."}
@@ -71,6 +73,10 @@ func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget 
 
 func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolReply {
 	failure := eris.ToolReply{Content: "Je ne peux pas vérifier les données du Hub pour le moment. Réessaie plus tard."}
+	var interaction Interaction
+	if json.Unmarshal(input.Interaction, &interaction) == nil && strings.HasPrefix(interaction.Data.CustomID, "eris:confirm:") {
+		failure.Content = "Je ne peux pas confirmer l’enregistrement. Vérifie /mes-demandes ou Seerr avant de réessayer ; je ne renvoie pas automatiquement la demande."
+	}
 	body, _ := json.Marshal(input)
 	req, err := http.NewRequestWithContext(ctx, "POST", b.Config.BotAPIURL+"/internal/eris", bytes.NewReader(body))
 	if err != nil {
@@ -80,6 +86,7 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 	req.Header.Set("Authorization", "Bearer "+b.Config.BotAPISecret)
 	client := *b.Client
 	client.Timeout = 22 * time.Second
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)
 	if err != nil {
 		return failure

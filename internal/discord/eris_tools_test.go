@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -52,6 +53,17 @@ func TestErisToolForwardsSignedProofAndDisplaysPrivateChoices(t *testing.T) {
 	b.Wait()
 	if w.Code != 202 || strings.Join(stages, ",") != "ack,model,api,reply" {
 		t.Fatal(w.Code, stages)
+	}
+}
+
+func TestErisConfirmationTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
+	b, _ := signedCommand(t, "eris")
+	b.Config.BotAPIURL = "http://api.test"
+	calls := 0
+	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { calls++; return botResponse(502, `{}`), nil })
+	result := b.erisTool(context.Background(), eris.ToolRequest{Interaction: json.RawMessage(`{"data":{"custom_id":"eris:confirm:` + strings.Repeat("a", 64) + `"}}`)})
+	if calls != 1 || !strings.Contains(result.Content, "Vérifie /mes-demandes") || len(result.Buttons) > 0 {
+		t.Fatal("unsafe retry after an ambiguous confirmation")
 	}
 }
 

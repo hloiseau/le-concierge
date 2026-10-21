@@ -50,12 +50,12 @@ func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 	defer server.Close()
 	c := New(server.URL, "", "model")
 	calls := 0
-	run := func(_ context.Context, p Plan) (string, error) {
+	run := func(_ context.Context, p Plan) (ToolReply, error) {
 		calls++
 		if calls == 2 && p.Action != "prepare" {
 			t.Error("followup not routed")
 		}
-		return "Arrival (2016) : disponibilité vérifiée.", nil
+		return ToolReply{Content: "Arrival (2016) : disponibilité vérifiée."}, nil
 	}
 	for _, question := range []string{"Tu as Arrival ?", "Demande-le"} {
 		text, err := c.ReplyWithTools(context.Background(), "guild:alice", question, false, run)
@@ -66,5 +66,36 @@ func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 	}
 	if calls != 2 || len(prompts) != 2 || !strings.Contains(prompts[1][2].Content, "2016") {
 		t.Fatal("tool context missing or extra model roundtrip")
+	}
+}
+
+func TestTextCannotConfirmCancelOrRepeatPendingRequest(t *testing.T) {
+	c := New("http://must-not-call.test", "", "model")
+	c.sessions["guild:alice"] = &conversation{pending: true, expires: time.Now().Add(time.Minute)}
+	for _, message := range []string{"Oui", "ok !", "je confirme", "annule", "non"} {
+		text, err := c.ReplyWithTools(context.Background(), "guild:alice", message, false, func(context.Context, Plan) (ToolReply, error) {
+			t.Fatal("text executed a tool")
+			return ToolReply{}, nil
+		})
+		if err != nil || !strings.Contains(text, "boutons") {
+			t.Fatalf("text confirmation: %q %v", text, err)
+		}
+	}
+	c.RememberRequest("guild:alice", ToolReply{Content: "Demande #9 créée : Arrival."})
+	if c.sessions["guild:alice"].pending || !strings.Contains(c.sessions["guild:alice"].messages[1].Content, "Arrival") {
+		t.Fatal("button result not remembered")
+	}
+}
+
+func TestExplicitUnwatchedConstraintCannotBeDropped(t *testing.T) {
+	for _, text := range []string{"Un film que je n’ai pas vu", "Des films non-vus", "Jamais regardés", "jamais regardé", "unwatched movies", "movies I haven't seen"} {
+		if p := (Plan{Action: "recommend"}).WithQuestionConstraints(text); !p.Unwatched {
+			t.Errorf("dropped constraint: %s", text)
+		}
+	}
+	for _, text := range []string{"Un thriller", "Des films déjà vus", "Pas une comédie"} {
+		if p := (Plan{Action: "recommend"}).WithQuestionConstraints(text); p.Unwatched {
+			t.Errorf("invented constraint: %s", text)
+		}
 	}
 }

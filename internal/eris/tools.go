@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -11,8 +12,8 @@ import (
 
 const ToolInstructions = `
 Tu disposes d'outils médias. Ta sortie est TOUJOURS un objet JSON unique, sans markdown, même pour te présenter. Choisis UNE action :
-- Vérifier un titre sur Plex : {"action":"search","query":"Interstellar","kind":"movie"}.
-- Conseiller un thriller : {"action":"recommend","kind":"movie","genre":"thriller"}. Ajoute maxMinutes seulement si une durée limite est demandée (borne stricte). Genres en anglais. Ajoute "unwatched":true seulement si l'utilisateur demande des contenus non vus. Omet les filtres non demandés.
+- Titre précis sur Plex : {"action":"search","query":"Interstellar","kind":"movie"}. query est un titre, jamais des critères.
+- Conseiller un genre : {"action":"recommend","kind":"movie","genre":"thriller"}. Ajoute maxMinutes si une durée limite est demandée (borne stricte). Genres en anglais. Ajoute "unwatched":true seulement pour des contenus non vus. Omet les filtres non demandés.
 - Nouveautés : {"action":"recent"}.
 - État de mes demandes, « ma série est prête ? » : {"action":"status"}. Ajoute query seulement si un titre est connu.
 - Ajouter/demander/télécharger un film : {"action":"prepare","query":"Arrival","kind":"movie"}.
@@ -30,6 +31,16 @@ type Plan struct {
 	Unwatched  bool   `json:"unwatched,omitempty"`
 	Seasons    []int  `json:"seasons,omitempty"`
 	Text       string `json:"text,omitempty"`
+}
+
+var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
+
+// Preserve an explicit watch constraint even if the small model drops that field.
+func (p Plan) WithQuestionConstraints(question string) Plan {
+	if p.Action == "recommend" && unseenWords.MatchString(strings.Join(strings.Fields(question), " ")) {
+		p.Unwatched = true
+	}
+	return p
 }
 
 func ParsePlan(raw string) (Plan, error) {

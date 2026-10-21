@@ -32,6 +32,7 @@ type conversation struct {
 	expires  time.Time
 	next     time.Time
 	busy     bool
+	pending  bool
 }
 
 type Chat struct {
@@ -52,7 +53,7 @@ func (c *Chat) Reply(ctx context.Context, owner, question string, forget bool) (
 	return c.ReplyWithTools(ctx, owner, question, forget, nil)
 }
 
-func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forget bool, run func(context.Context, Plan) (string, error)) (string, error) {
+func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forget bool, run func(context.Context, Plan) (ToolReply, error)) (string, error) {
 	question = strings.TrimSpace(question)
 	if utf8.RuneCountInString(question) > 500 || (question == "" && !forget) {
 		return "", ErrUnavailable
@@ -87,6 +88,10 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 	if question == "" {
 		c.mu.Unlock()
 		return "Conversation oubliée. On reprend depuis le début.", nil
+	}
+	if run != nil && s != nil && s.pending && confirmationText(question) {
+		c.mu.Unlock()
+		return "Utilise les boutons de ma réponse précédente pour choisir, confirmer ou annuler. Aucun envoi ne se fait avec une simple réponse dans le chat.", nil
 	}
 	if c.URL == "" {
 		c.mu.Unlock()
@@ -163,15 +168,19 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 	if reply == "" || !utf8.ValidString(reply) || utf8.RuneCountInString(reply) > 1500 {
 		return "", ErrUnavailable
 	}
+	pending := false
 	if run != nil {
 		plan, err := ParsePlan(reply)
 		if err != nil {
 			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
 		}
+		plan = plan.WithQuestionConstraints(question)
 		if plan.Action == "chat" {
 			reply = plan.Text
 		} else {
-			reply, err = run(ctx, plan)
+			var result ToolReply
+			result, err = run(ctx, plan)
+			reply, pending = result.Content, len(result.Buttons) > 0
 			if err != nil {
 				return "", ErrUnavailable
 			}
@@ -181,10 +190,32 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 		}
 	}
 	c.mu.Lock()
+	s.pending = pending
 	s.messages = append(s.messages, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply})
 	if len(s.messages) > 4 {
 		s.messages = append([]Message(nil), s.messages[len(s.messages)-4:]...)
 	}
 	c.mu.Unlock()
 	return reply, nil
+}
+
+func confirmationText(text string) bool {
+	switch strings.ToLower(strings.Trim(strings.TrimSpace(text), ".! ?")) {
+	case "oui", "ok", "oui vas-y", "vas-y", "confirme", "je confirme", "yes", "confirm", "annule", "annuler", "cancel", "non":
+		return true
+	}
+	return false
+}
+
+// Remember button results in the private chat, without retaining their tokens.
+func (c *Chat) RememberRequest(owner string, result ToolReply) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if s := c.sessions[owner]; s != nil && !s.busy && time.Now().Before(s.expires) {
+		s.pending = len(result.Buttons) > 0
+		s.messages = append(s.messages, Message{Role: "user", Content: "J’ai utilisé un bouton de demande."}, Message{Role: "assistant", Content: result.Content})
+		if len(s.messages) > 4 {
+			s.messages = append([]Message(nil), s.messages[len(s.messages)-4:]...)
+		}
+	}
 }
