@@ -22,7 +22,7 @@ func mentionFixture() *discordgo.MessageCreate {
 	}}
 }
 
-func TestMentionRequiresExplicitHumanMentionInConfiguredGuild(t *testing.T) {
+func TestMentionAcceptsHumanMentionsAndRepliesInConfiguredGuild(t *testing.T) {
 	b, _ := signedCommand(t, "eris")
 	for _, tc := range []struct {
 		name     string
@@ -33,6 +33,12 @@ func TestMentionRequiresExplicitHumanMentionInConfiguredGuild(t *testing.T) {
 		{"nickname", func(m *discordgo.MessageCreate) { m.Content = "Bonjour <@!12345>" }, true},
 		{"bare mention", func(m *discordgo.MessageCreate) { m.Content = "<@12345>" }, true},
 		{"reply with explicit mention", func(m *discordgo.MessageCreate) { m.Type = discordgo.MessageTypeReply }, true},
+		{"reply to Eris without inline mention", func(m *discordgo.MessageCreate) {
+			m.Type = discordgo.MessageTypeReply
+			m.Content = "Tu peux le demander pour moi dans seerr ?"
+			m.MessageReference = &discordgo.MessageReference{MessageID: "88888", ChannelID: m.ChannelID, GuildID: m.GuildID}
+			m.ReferencedMessage = &discordgo.Message{ID: "88888", ChannelID: m.ChannelID, Author: &discordgo.User{ID: "12345", Bot: true}}
+		}, true},
 		{"plain name", func(m *discordgo.MessageCreate) { m.Content = "Eris bonjour" }, false},
 		{"other guild", func(m *discordgo.MessageCreate) { m.GuildID = "34567" }, false},
 		{"DM", func(m *discordgo.MessageCreate) { m.GuildID = "" }, false},
@@ -54,6 +60,89 @@ func TestMentionRequiresExplicitHumanMentionInConfiguredGuild(t *testing.T) {
 				t.Fatalf("question=%q accepted=%v", question, ok)
 			}
 		})
+	}
+}
+
+func TestReplyTargetMustBeErisInTheSameChannel(t *testing.T) {
+	b, _ := signedCommand(t, "eris")
+	for _, state := range []string{"valid", "no ping", "another author", "webhook", "other channel", "other guild", "wrong reference", "deleted", "forward"} {
+		m := mentionFixture()
+		m.Type = discordgo.MessageTypeReply
+		m.Content = "Tu peux le demander pour moi dans seerr ?"
+		m.MessageReference = &discordgo.MessageReference{MessageID: "88888", ChannelID: m.ChannelID, GuildID: m.GuildID}
+		m.ReferencedMessage = &discordgo.Message{ID: "88888", ChannelID: m.ChannelID, Author: &discordgo.User{ID: "12345", Bot: true}}
+		switch state {
+		case "no ping":
+			m.Mentions = nil
+		case "another author":
+			m.ReferencedMessage.Author.ID = "22222"
+		case "webhook":
+			m.ReferencedMessage.WebhookID = "77777"
+		case "other channel":
+			m.ReferencedMessage.ChannelID = "44444"
+		case "other guild":
+			m.MessageReference.GuildID = "34567"
+		case "wrong reference":
+			m.MessageReference.MessageID = "77777"
+		case "deleted":
+			m.ReferencedMessage = nil
+		case "forward":
+			m.Type = discordgo.MessageTypeDefault
+		}
+		if question, ok := b.mentionQuestion(m); ok != (state == "valid" || state == "no ping") || (ok && question != m.Content) {
+			t.Fatalf("%s: question=%q accepted=%v", state, question, ok)
+		}
+	}
+}
+
+func TestReplyToErisOffersOnlyPrivateHandoffButton(t *testing.T) {
+	b, _ := signedCommand(t, "eris")
+	b.Eris.URL = "http://model.test/v1"
+	b.Config.BotAPIURL = "http://api.test"
+	questions := []string{}
+	b.Eris.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		var body struct{ Messages []eris.Message }
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		for _, message := range body.Messages {
+			if message.Role == "user" {
+				questions = append(questions, message.Content)
+			}
+		}
+		return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"prepare\",\"query\":\"Hot Fuzz\",\"kind\":\"movie\"}"}}]}`), nil
+	})
+	b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		var in eris.ToolRequest
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		if in.MessageID != "99999" || in.ChannelID != "33333" || in.Plan.Query != "Hot Fuzz" {
+			t.Error("reply proof or title lost")
+		}
+		return botResponse(200, `{"content":"On continue en privé.","buttons":[{"id":"eris:open:`+strings.Repeat("a", 64)+`","label":"Préparer en privé"},{"id":"eris:confirm:`+strings.Repeat("b", 64)+`","label":"Must stay private"}]}`), nil
+	})
+	s, _ := discordgo.New("Bot fixture")
+	replies := 0
+	s.Client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/typing") {
+			return botResponse(204, ""), nil
+		}
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		raw, _ := json.Marshal(payload)
+		if !strings.Contains(string(raw), "eris:open:") || strings.Contains(string(raw), "eris:confirm:") {
+			t.Error("missing handoff or public confirmation")
+		}
+		replies++
+		return botResponse(200, `{"id":"88888"}`), nil
+	})}
+	m := mentionFixture()
+	m.Content = "Tu peux le demander pour moi dans seerr ?"
+	m.Mentions = nil
+	m.Type = discordgo.MessageTypeReply
+	m.MessageReference = &discordgo.MessageReference{MessageID: "88888", ChannelID: m.ChannelID, GuildID: m.GuildID}
+	m.ReferencedMessage = &discordgo.Message{ID: "88888", ChannelID: m.ChannelID, Author: &discordgo.User{ID: "12345", Bot: true}}
+	b.handleMention(context.Background(), s, m)
+	b.Wait()
+	if replies != 1 || len(questions) != 1 || questions[0] != m.Content {
+		t.Fatal("reply was ignored", replies, questions)
 	}
 }
 
@@ -117,6 +206,7 @@ func TestMentionsGatewayReceivesResumesAndStops(t *testing.T) {
 	b, _ := signedCommand(t, "eris")
 	b.Config.DiscordBotToken = "fixture-token"
 	b.Config.ErisAPIURL = "http://model.test"
+	b.Config.DiscordMessageContent = true
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	disconnect := make(chan struct{})
@@ -144,7 +234,7 @@ func TestMentionsGatewayReceivesResumesAndStops(t *testing.T) {
 			return
 		}
 		if number == 1 {
-			if packet.Op != 2 || packet.Data.Intents != 512 || packet.Data.Token != "Bot fixture-token" {
+			if packet.Op != 2 || packet.Data.Intents != 512|32768 || packet.Data.Token != "Bot fixture-token" {
 				t.Errorf("wrong identify: op=%d intents=%d", packet.Op, packet.Data.Intents)
 			}
 			_ = conn.WriteJSON(map[string]any{"op": 0, "s": 1, "t": "READY", "d": map[string]any{"session_id": "test-session", "user": map[string]any{"id": "12345", "bot": true}}})

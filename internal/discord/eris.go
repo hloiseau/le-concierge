@@ -17,7 +17,7 @@ import (
 func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRequest) {
 	options, _ := CommandOptions(i)
 	if i.Type != 3 && options.ChatMessage == "" && !options.Forget {
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Mentionne @Eris avec ton message pour discuter dans le salon. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer ma mémoire de nos conversations.")})
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Mentionne @Eris, puis utilise Répondre sur mes messages pour continuer dans le salon. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer ma mémoire de nos conversations.")})
 		return
 	}
 	// Separate capacity keeps a slow model from occupying the media workers.
@@ -102,7 +102,13 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 		}
 	}
 	if input.MessageID != "" {
-		result.Buttons = nil
+		public := []eris.Button{}
+		for _, button := range result.Buttons {
+			if strings.HasPrefix(button.ID, "eris:open:") {
+				public = append(public, button)
+			}
+		}
+		result.Buttons = public
 	}
 	return result
 }

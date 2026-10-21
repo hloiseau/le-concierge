@@ -224,7 +224,7 @@ func (b *Bot) acknowledge(ctx context.Context, i Interaction) bool {
 	defer cancel()
 	target := "https://discord.com/api/v10/interactions/" + i.ID + "/" + url.PathEscape(i.Token) + "/callback"
 	callback := `{"type":5,"data":{"flags":64}}`
-	if i.Type == 3 && i.Data.CustomID != "interests:open" {
+	if i.Type == 3 && i.Data.CustomID != "interests:open" && !strings.HasPrefix(i.Data.CustomID, "eris:open:") {
 		callback = `{"type":6}`
 	}
 	req, err := http.NewRequestWithContext(ctx, "POST", target, strings.NewReader(callback))

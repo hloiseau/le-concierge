@@ -67,6 +67,38 @@ func TestErisConfirmationTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
 	}
 }
 
+func TestErisPublicHandoffCreatesNewEphemeralReply(t *testing.T) {
+	body := `{"id":"99999","application_id":"12345","guild_id":"23456","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:open:` + strings.Repeat("a", 64) + `","component_type":2}}`
+	b, r := signedInteraction(t, body)
+	b.Config.BotAPIURL = "http://api.test"
+	calls := 0
+	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
+		calls++
+		raw, _ := io.ReadAll(req.Body)
+		switch {
+		case strings.HasSuffix(req.URL.Path, "/callback"):
+			if string(raw) != `{"type":5,"data":{"flags":64}}` {
+				t.Error("handoff would edit public message", string(raw))
+			}
+		case req.URL.Host == "api.test":
+			return botResponse(200, `{"content":"Choisis Hot Fuzz.","buttons":[{"id":"eris:choose:`+strings.Repeat("b", 64)+`","label":"Choisir"}]}`), nil
+		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
+			if !strings.Contains(string(raw), `"flags":64`) || !strings.Contains(string(raw), "eris:choose:") {
+				t.Error("private choices missing")
+			}
+		default:
+			t.Error("unexpected model or message call", req.URL.Path)
+		}
+		return botResponse(204, ""), nil
+	})
+	w := httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, r)
+	b.Wait()
+	if w.Code != 202 || calls != 3 {
+		t.Fatal(w.Code, calls)
+	}
+}
+
 func TestErisConfirmationBypassesModelAndRejectsPublicButtons(t *testing.T) {
 	for _, private := range []bool{true, false} {
 		flags := 0

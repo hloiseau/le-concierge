@@ -87,6 +87,23 @@ func TestTextCannotConfirmCancelOrRepeatPendingRequest(t *testing.T) {
 	}
 }
 
+func TestPrivateHandoffRemembersOnlyItsOwnResult(t *testing.T) {
+	c := New("http://must-not-call.test", "", "model")
+	c.sessions["guild:alice:channel"] = &conversation{messages: []Message{{Role: "user", Content: "public history"}}, expires: time.Now().Add(time.Minute)}
+	c.RememberRequest("guild:alice", ToolReply{Content: "Choisis Hot Fuzz (2007).", Buttons: []Button{{ID: "private-token", Label: "Choisir"}}})
+	s := c.sessions["guild:alice"]
+	if s == nil || !s.pending || len(s.messages) != 2 || strings.Contains(s.messages[1].Content, "private-token") || strings.Contains(s.messages[1].Content, "public history") {
+		t.Fatal("private handoff lost or mixed context")
+	}
+	text, err := c.ReplyWithTools(context.Background(), "guild:alice", "oui", false, func(context.Context, Plan) (ToolReply, error) {
+		t.Fatal("text confirmed request")
+		return ToolReply{}, nil
+	})
+	if err != nil || !strings.Contains(text, "boutons") {
+		t.Fatal(text, err)
+	}
+}
+
 func TestExplicitUnwatchedConstraintCannotBeDropped(t *testing.T) {
 	for _, text := range []string{"Un film que je n’ai pas vu", "Des films non-vus", "Jamais regardés", "jamais regardé", "unwatched movies", "movies I haven't seen"} {
 		if p := (Plan{Action: "recommend"}).WithQuestionConstraints(text); !p.Unwatched {

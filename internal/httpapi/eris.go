@@ -25,6 +25,7 @@ type erisPending struct {
 	SeerrID                                   int64
 	Candidate                                 upstream.RequestCandidate
 	Seasons                                   []int
+	Plan                                      eris.Plan
 	Expires                                   time.Time
 }
 
@@ -54,7 +55,7 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	write := func(reply eris.ToolReply) { jsonOut(w, 200, reply) }
 	message := func(text string) { write(eris.ToolReply{Content: text}) }
 	// No private requests or watch filters are read for public replies.
-	if !private && (input.Plan.Action == "status" || input.Plan.Action == "prepare" || input.Plan.Unwatched) {
+	if !private && (input.Plan.Action == "status" || input.Plan.Unwatched) {
 		message("Pour tes demandes ou tes contenus non vus, parle-moi en privé avec /eris message:… ; ces informations restent personnelles.")
 		return
 	}
@@ -135,11 +136,8 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (string, b
 	if m.ID != in.MessageID || m.ChannelID != in.ChannelID || m.Author == nil || m.Author.Bot || !config.Snowflake(m.Author.ID) || m.WebhookID != "" || (m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply) || time.Since(m.Timestamp) > 5*time.Minute || time.Until(m.Timestamp) > 30*time.Second {
 		return "", false, "", upstream.ErrDenied
 	}
-	mentioned := false
-	for _, user := range m.Mentions {
-		mentioned = mentioned || (user != nil && user.ID == s.Config.DiscordClientID)
-	}
-	if !mentioned || (!strings.Contains(m.Content, "<@"+s.Config.DiscordClientID+">") && !strings.Contains(m.Content, "<@!"+s.Config.DiscordClientID+">")) || !s.erisEvent("eris:mention:"+m.ID) {
+	m.GuildID = channel.GuildID
+	if question, addressed := discord.ErisQuestion(&m, s.Config.DiscordClientID); !addressed || strings.TrimSpace(question) == "" || !s.erisEvent("eris:mention:"+m.ID) {
 		return "", false, "", upstream.ErrDenied
 	}
 	return m.Author.ID, false, "", nil
@@ -241,6 +239,13 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 			}
 		}
 	case "prepare":
+		if !private {
+			key := s.saveErisPending(erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: discordID, GuildID: s.Config.DiscordGuildID, Plan: p, Stage: "open", Expires: time.Now().Add(10 * time.Minute)})
+			if key == "" {
+				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
+			}
+			return eris.ToolReply{Content: "On continue en privé avec le bouton ci-dessous. Tu pourras choisir le titre et confirmer avant tout envoi à Seerr.", Buttons: []eris.Button{{ID: "eris:open:" + key, Label: "Préparer en privé"}}}
+		}
 		if p.Kind == "show" && len(p.Seasons) == 0 {
 			reply.Content = "Quelle saison souhaites-tu demander ? Précise le titre et le numéro de saison."
 			return reply
@@ -325,6 +330,13 @@ func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, 
 	s.mu.Unlock()
 	if parts[1] == "cancel" {
 		return eris.ToolReply{Content: "Demande annulée. Rien n’a été envoyé."}
+	}
+	if parts[1] == "open" {
+		g, err := s.grant(ctx, u)
+		if err != nil {
+			return invalid
+		}
+		return s.runErisTool(ctx, u, g, discordID, p.Plan, true)
 	}
 	if parts[1] == "choose" {
 		p.Stage = "confirm"

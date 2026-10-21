@@ -25,6 +25,9 @@ func (b *Bot) RunMentions(ctx context.Context) {
 		return
 	}
 	s.Identify.Intents = discordgo.IntentsGuildMessages
+	if b.Config.DiscordMessageContent {
+		s.Identify.Intents |= discordgo.IntentsMessageContent
+	}
 	s.StateEnabled = false
 	s.SyncEvents = true
 	// Library diagnostics can include payloads; log only our own fixed messages.
@@ -77,15 +80,25 @@ func (b *Bot) mentionQuestion(event *discordgo.MessageCreate) (string, bool) {
 		(m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply) {
 		return "", false
 	}
+	return ErisQuestion(m, b.Config.DiscordClientID)
+}
+
+// ErisQuestion is shared with the API's independent Discord message verification.
+func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
 	mentioned := false
 	for _, user := range m.Mentions {
-		if user != nil && user.ID == b.Config.DiscordClientID {
+		if user != nil && user.ID == botID {
 			mentioned = true
 		}
 	}
-	normal, nickname := "<@"+b.Config.DiscordClientID+">", "<@!"+b.Config.DiscordClientID+">"
-	// Reply notifications and role/everyone mentions alone are not an invitation.
-	if !mentioned || (!strings.Contains(m.Content, normal) && !strings.Contains(m.Content, nickname)) {
+	normal, nickname := "<@"+botID+">", "<@!"+botID+">"
+	explicit := mentioned && (strings.Contains(m.Content, normal) || strings.Contains(m.Content, nickname))
+	r, ref := m.ReferencedMessage, m.MessageReference
+	reply := m.Type == discordgo.MessageTypeReply && r != nil && ref != nil &&
+		config.Snowflake(ref.MessageID) && ref.MessageID == r.ID && ref.ChannelID == m.ChannelID &&
+		(ref.GuildID == "" || ref.GuildID == m.GuildID) && r.ChannelID == m.ChannelID &&
+		r.Author != nil && r.Author.Bot && r.Author.ID == botID && r.WebhookID == ""
+	if !explicit && !reply {
 		return "", false
 	}
 	question := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(m.Content, normal, ""), nickname, ""))
@@ -104,15 +117,20 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 		defer cancel()
 		reply := "Oui ? Mentionne-moi avec ton message pour discuter ici, ou utilise /eris pour une conversation privée."
+		var components []discordgo.MessageComponent
 		if utf8.RuneCountInString(question) > 500 {
 			reply = "Fais un peu plus court : 500 caractères maximum par message."
 		} else if question != "" {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
-			reply = b.erisMediaReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}).Content
+			result := b.erisMediaReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID})
+			reply = result.Content
+			for _, button := range result.Buttons {
+				components = append(components, discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Style: discordgo.SecondaryButton, Label: button.Label, CustomID: button.ID}}})
+			}
 		}
 		_, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
-			Content: reply, Reference: event.Reference(),
+			Content: reply, Reference: event.Reference(), Components: components,
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}, discordgo.WithContext(ctx))
 		if err != nil {

@@ -211,7 +211,16 @@ func confirmationText(text string) bool {
 func (c *Chat) RememberRequest(owner string, result ToolReply) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if s := c.sessions[owner]; s != nil && !s.busy && time.Now().Before(s.expires) {
+	now := time.Now()
+	for key, s := range c.sessions {
+		if !s.busy && now.After(s.expires) {
+			delete(c.sessions, key)
+		}
+	}
+	if c.sessions[owner] == nil && len(c.sessions) < 256 {
+		c.sessions[owner] = &conversation{expires: now.Add(30 * time.Minute)}
+	}
+	if s := c.sessions[owner]; s != nil && !s.busy && now.Before(s.expires) {
 		s.pending = len(result.Buttons) > 0
 		s.messages = append(s.messages, Message{Role: "user", Content: "J’ai utilisé un bouton de demande."}, Message{Role: "assistant", Content: result.Content})
 		if len(s.messages) > 4 {
