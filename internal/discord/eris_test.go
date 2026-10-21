@@ -24,7 +24,7 @@ func TestErisSignedChatStaysPrivateAndDoesNotReadMediaAPI(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer private-key" {
 				t.Error("wrong model credential")
 			}
-			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"Bonjour @everyone."}}]}`), nil
+			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Bonjour @everyone.\"}"}}]}`), nil
 		case strings.HasSuffix(r.URL.Path, "/messages/@original"):
 			stages = append(stages, "reply")
 			raw, _ := io.ReadAll(r.Body)

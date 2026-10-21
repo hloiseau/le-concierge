@@ -65,6 +65,7 @@ type Server struct {
 	limits            map[string]bucket
 	seen              map[string]time.Time
 	reminderGate      chan struct{}
+	erisPending       map[string]erisPending
 }
 
 func New(c config.Config, db *store.Store) *Server {
@@ -303,6 +304,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/preferences", s.getPreferences)
 	m.HandleFunc("PUT /api/v1/preferences", s.putPreferences)
 	m.HandleFunc("POST /internal/discord", s.interaction)
+	m.HandleFunc("POST /internal/eris", s.erisTool)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { problem(w, 404, "not_found", "Route inconnue.") })
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := token()[:16]

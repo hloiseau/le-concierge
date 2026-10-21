@@ -26,7 +26,28 @@ Quand le moteur et le token Discord sont configurés, le bot ouvre une connexion
 
 La mémoire contient au plus deux échanges précédents, expire après 30 minutes d’inactivité et disparaît au redémarrage. Le chat privé est séparé des conversations publiques, elles-mêmes séparées par membre et par salon ou fil. `/eris oublier:true` efface toutes ces mémoires pour le membre sur ce serveur, sans supprimer les messages déjà publiés dans Discord. Le bot conserve au plus 256 conversations et accepte deux traitements de chat simultanés, séparés des traitements média. Une conversation doit attendre dix secondes entre deux générations ordinaires. Les messages sont limités à 500 caractères. Aucun historique n’est écrit dans SQLite ni dans les journaux.
 
-Eris conserve une voix calme, brève, sarcastique et faussement innocente, adaptée à Discord. Elle répond dans la langue du message. Son texte généré ne déclenche aucune action et ne reçoit ni secrets Discord, ni historique Plex, ni métriques, ni résultats Seerr. Les commandes existantes restent la source des informations en temps réel.
+Eris se présente comme Eris, le bot lui-même. Elle répond brièvement dans la langue du message, avec parfois un humour sec.
+
+## Chercher et demander des médias
+
+Lier Discord dans **Mon compte** du Hub après une connexion Plex permet de demander naturellement :
+
+- `@Eris Tu as Arrival sur Plex ?` : titres lisibles, synopsis, genre et durée.
+- `@Eris Un thriller de moins de deux heures pour ce soir` : jusqu’à trois titres vérifiés dans le catalogue accessible au membre.
+- `@Eris Quoi de neuf ?` : derniers ajouts Plex.
+- `/eris message:Un film de science-fiction que je n’ai pas vu` : filtre les contenus non marqués vus sur ce compte Plex ; cela ne prouve pas qu’ils n’ont jamais été vus ailleurs.
+- `/eris message:Ma demande de Dune est prête ?` : demandes du compte Seerr associé à l’identité Plex, avec leur état.
+- `/eris message:Demande Arrival` : choisir le titre et son année, puis **Confirmer la demande** ou **Annuler**. Pour une série, préciser les saisons, par exemple « demande la saison 2 de Severance ».
+
+Les demandes, les filtres de visionnage et les confirmations restent privés dans `/eris`. Une mention publique qui demande ces informations invite à continuer en privé. Les recherches publiques n’exposent ni historiques, ni demandes, ni liens personnels Plex. Les droits Plex du membre sont utilisés pour vérifier la lecture ; l’état global Seerr ne prouve pas sa disponibilité personnelle.
+
+Le modèle produit une intention JSON limitée aux outils autorisés. Le code valide les filtres, appelle l’API puis affiche les résultats sans les faire réécrire par le modèle. Aucun jeton, URL interne ou identité technique n’est fourni au modèle. Le texte des résultats rejoint seulement la mémoire courte de la conversation concernée, pour comprendre « le deuxième » ou une préférence corrigée. Une sortie invalide demande une précision plutôt que d’exécuter une action.
+
+`POST /internal/eris` exige le secret bot/API et une preuve Discord. Pour `/eris` et les boutons, l’API revérifie l’interaction signée. Pour une mention, elle relit le message et son salon auprès de Discord et vérifie auteur humain, serveur, mention explicite et fraîcheur. L’association Discord/Plex et l’accès courant sont revérifiés avant publication. Les appels sont bornés à 20 secondes et limités par compte.
+
+La préparation d’une demande est en lecture seule. Les choix expirent après dix minutes et au redémarrage, restent liés au compte et sont consommés avant tout envoi. Seul le bouton de confirmation déclenche le POST Seerr, sous l’identité Seerr du membre (`X-Api-User`, vérifiée via `/auth/me`), sans contourner droits, quotas ou approbations. Qualité standard ; aucune sélection de serveur, dossier ou profil par le modèle. Un double clic ne renvoie pas la demande. Après une erreur ambiguë, Eris demande de vérifier Seerr avant de réessayer. Un simple « oui » dans le chat ne vaut pas confirmation.
+
+Limites : recherche de trois titres au maximum par réponse ; recommandations sur un catalogue complet de 5 000 titres maximum, sinon refus de conclure ; recherche personnelle par titre bornée à 1 000 demandes. Les saisons doivent être explicites, les épisodes individuels et demandes 4K ne sont pas proposés par ce parcours. Les résultats factuels sont rendus en français ; certaines recommandations formulées en anglais restent mal reconnues et demandent une précision. Les commandes média existantes restent disponibles.
 
 ## Connecter le moteur local
 

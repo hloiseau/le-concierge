@@ -65,7 +65,7 @@ func TestMentionReplyUsesPublicHistoryWithoutPrivateContextOrPings(t *testing.T)
 		var body struct{ Messages []eris.Message }
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		prompts = append(prompts, body.Messages)
-		return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"Bonjour @everyone <@22222>."}}]}`), nil
+		return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Bonjour @everyone <@22222>.\"}"}}]}`), nil
 	})
 	if _, err := b.Eris.Reply(context.Background(), "23456:11111", "secret privé", false); err != nil {
 		t.Fatal(err)

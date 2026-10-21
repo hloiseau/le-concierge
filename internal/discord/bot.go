@@ -75,7 +75,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if command == "eris" {
-		b.handleEris(w, i)
+		b.handleEris(w, i, eris.ToolRequest{Interaction: body, Timestamp: timestamp, Signature: signature})
 		return
 	}
 	// Static help must work even when the API is unavailable.
