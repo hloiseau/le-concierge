@@ -200,7 +200,6 @@ func TestMentionsGatewayReceivesResumesAndStops(t *testing.T) {
 		case <-ctx.Done():
 			t.Error("gateway reply timed out")
 		}
-		b.Wait()
 		if expected == "99999" {
 			close(disconnect)
 		}
