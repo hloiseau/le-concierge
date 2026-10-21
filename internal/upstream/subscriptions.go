@@ -22,7 +22,7 @@ type SubscriptionMedia struct {
 // CheckSubscription uses Seerr's user context for catalogue access and the user's
 // Plex token for availability. A global Seerr status never proves playback access.
 func (c *Client) CheckSubscription(ctx context.Context, seerrURL, key string, user int64, plexURL, serverID string, grant Grant, kind string, tmdbID int64, season *int) (SubscriptionMedia, error) {
-	if user <= 0 || tmdbID <= 0 || (kind != "movie" && kind != "tv") || (season != nil && (kind != "tv" || *season < 0 || *season > 10000)) || grant.ServerToken == "" || (!grant.ExpiresAt.IsZero() && !time.Now().Before(grant.ExpiresAt)) {
+	if user <= 0 || tmdbID <= 0 || (kind != "movie" && kind != "tv") || (season != nil && (kind != "tv" || *season < 0 || *season > 10000)) || grant.ServerToken == "" || (!grant.ExpiresAt.IsZero() && !grant.Active(time.Now())) {
 		return SubscriptionMedia{}, ErrDenied
 	}
 	var detail struct {

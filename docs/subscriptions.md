@@ -28,7 +28,7 @@ Pour une série ou une saison, « disponible » signifie qu’au moins un épiso
 - `PATCH /api/v1/subscriptions/{id}` : corps `{"channel":"hub"}` ou `{"channel":"discord"}` pour changer son canal ; réponse `{"ok":true}`. Discord exige le consentement global, un compte Discord lié et un serveur configuré pour les messages privés.
 - `GET /api/v1/subscriptions/notifications` : les vingt dernières notifications personnelles, avec liens Plex vérifiés, date de disponibilité et date du récapitulatif. La réponse expire après une minute. Une indisponibilité amont ne restitue pas de contenu ancien non revérifié.
 
-Les mutations du Hub exigent son origine configurée. Aucun paramètre ne permet de choisir un autre propriétaire. La suppression du compte efface les suivis, leurs observations et leurs notifications. SQLite v5 conserve les suivis et la file d’envoi après un redémarrage, mais une nouvelle connexion Plex reste nécessaire pour vérifier les accès et reprendre les envois. Sauvegarder la base avant la migration ; les observations antérieures à v5 ne créent pas rétroactivement d’alertes.
+Les mutations du Hub exigent son origine configurée. Aucun paramètre ne permet de choisir un autre propriétaire. La suppression du compte efface les suivis, leurs observations et leurs notifications. La file survit au redémarrage ; la [conservation chiffrée de l’autorisation Plex](persistent-plex-authorization.md) permet aussi de reprendre les vérifications et envois sans nouvelle connexion.
 
 ## Configuration et limites
 

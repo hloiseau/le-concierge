@@ -95,7 +95,7 @@ func (s *Server) postExtensionRequest(w http.ResponseWriter, r *http.Request) {
 	current, exists := s.grants[u.ID]
 	sess, sessionExists := s.sessions[key]
 	owner, err := s.Store.User(r.Context(), u.ID)
-	if err != nil || !exists || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !now.Before(current.ExpiresAt) || !now.Before(page.ExpiresAt) || !now.Before(request.EstimatedAt) {
+	if err != nil || !exists || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !current.Active(now) || !now.Before(page.ExpiresAt) || !now.Before(request.EstimatedAt) {
 		s.mu.Unlock()
 		problem(w, 403, "plex_required", "Reconnectez-vous avec Plex.")
 		return
@@ -139,7 +139,7 @@ func (s *Server) cancelExtensionRequest(w http.ResponseWriter, r *http.Request) 
 	current, exists := s.grants[u.ID]
 	sess, sessionExists := s.sessions[key]
 	owner, err := s.Store.User(r.Context(), u.ID)
-	if err != nil || !exists || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || owner.PlexID != u.PlexID || current.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !now.Before(current.ExpiresAt) {
+	if err != nil || !exists || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || owner.PlexID != u.PlexID || current.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !current.Active(now) {
 		s.mu.Unlock()
 		problem(w, 403, "plex_required", "Votre accès a changé. Reconnectez-vous avec Plex.")
 		return
@@ -218,7 +218,7 @@ func (s *Server) reviewExtensionRequest(w http.ResponseWriter, r *http.Request) 
 	sess, sessionExists := s.sessions[key]
 	owner, err := s.Store.User(r.Context(), u.ID)
 	now := time.Now().UTC()
-	if err != nil || !exists || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || !now.Before(current.ExpiresAt) || owner.PlexID != u.PlexID || !s.Config.Admin(owner.DiscordID) {
+	if err != nil || !exists || !sessionExists || sess.UserID != u.ID || !now.Before(sess.Expires) || !current.Active(now) || owner.PlexID != u.PlexID || !s.Config.Admin(owner.DiscordID) {
 		s.mu.Unlock()
 		problem(w, 403, "admin_required", "Accès administrateur requis.")
 		return

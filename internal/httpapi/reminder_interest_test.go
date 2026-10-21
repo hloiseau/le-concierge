@@ -173,6 +173,8 @@ func TestSeasonReminderOnlyContainsUnwatchedEpisodesOfFollowedSeason(t *testing.
 			}
 		case "/library/all":
 			body = map[string]any{"MediaContainer": map[string]any{"size": 2, "totalSize": 2, "Metadata": []any{map[string]any{"ratingKey": "402", "type": "episode", "title": "one", "addedAt": 1, "guid": "plex://402"}, map[string]any{"ratingKey": "412", "type": "episode", "title": "two", "addedAt": 1, "guid": "plex://412"}}}}
+		case "/library/metadata/402,412":
+			body = map[string]any{"MediaContainer": map[string]any{"size": 2, "Metadata": []any{metadata["402"], metadata["412"]}}}
 		case "/library/metadata/400/grandchildren":
 			body = map[string]any{"MediaContainer": map[string]any{"size": 3, "totalSize": 3, "Metadata": []any{metadata["402"], metadata["403"], metadata["412"]}}}
 		default:

@@ -57,7 +57,7 @@ func libraryTitle(value string) string {
 
 // Plex performs the title filter; each call reads only one bounded page with the member's token.
 func (c *Client) DownloadLibrary(ctx context.Context, base, serverID string, g Grant, query, parent string, offset int) (DownloadLibraryPage, error) {
-	if !ValidDownloadLibraryQuery(query, parent, offset) || g.ServerToken == "" || serverID == "" || (!g.ExpiresAt.IsZero() && !time.Now().Before(g.ExpiresAt)) {
+	if !ValidDownloadLibraryQuery(query, parent, offset) || g.ServerToken == "" || serverID == "" || (!g.ExpiresAt.IsZero() && !g.Active(time.Now())) {
 		return DownloadLibraryPage{}, ErrDenied
 	}
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
@@ -119,7 +119,7 @@ func (c *Client) DownloadLibrary(ctx context.Context, base, serverID string, g G
 	}
 	now := time.Now().UTC()
 	page := DownloadLibraryPage{Items: []DownloadLibraryItem{}, CheckedAt: now, ExpiresAt: now.Add(30 * time.Second)}
-	if !g.ExpiresAt.IsZero() && g.ExpiresAt.Before(page.ExpiresAt) {
+	if !g.Persistent && !g.ExpiresAt.IsZero() && g.ExpiresAt.Before(page.ExpiresAt) {
 		page.ExpiresAt = g.ExpiresAt.UTC()
 	}
 	if !now.Before(page.ExpiresAt) {

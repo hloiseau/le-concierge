@@ -44,6 +44,8 @@ services:
       # Connexion obligatoire au Hub : renseigner URL + identifiant du serveur.
       PLEX_URL: ''
       PLEX_SERVER_ID: ''
+      # Cle stable de 32 octets en hexadecimal ; preferer _FILE (voir deployment.md).
+      PLEX_GRANT_KEY: ''
       SEERR_URL: ''
       SEERR_API_KEY: ''
       # Facultatif : departs personnels et rappels, sources en lecture seule.

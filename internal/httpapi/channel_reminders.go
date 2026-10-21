@@ -14,8 +14,8 @@ import (
 	"github.com/hloiseau/le-concierge/internal/upstream"
 )
 
-// Channel reminders concern the original Seerr requesters. They run without
-// individual Hub sessions and never reuse private watch history or DM consent.
+// Channel reminders mention only original requesters with verified unfinished
+// content. Their personal Plex access is required, independently of DM consent.
 func (s *Server) deliverChannelReminders(ctx context.Context, now time.Time) error {
 	channel := s.Config.DiscordNotificationChannelID
 	if channel == "" || s.Discord == nil {
@@ -49,6 +49,7 @@ func (s *Server) deliverChannelReminders(ctx context.Context, now time.Time) err
 	}
 	owners := map[int64]upstream.SeerrRequester{}
 	ownerFailures := map[int64]error{}
+	watchStates := map[string]*channelWatchState{}
 	var deferredErr error
 	sort.Slice(snapshot.Items, func(i, j int) bool {
 		a, b := snapshot.Items[i].EstimatedAt, snapshot.Items[j].EstimatedAt
@@ -82,7 +83,7 @@ func (s *Server) deliverChannelReminders(ctx context.Context, now time.Time) err
 			seen[removal.MediaID] = true
 			continue
 		}
-		message, recipients, err := s.channelReminderMessage(ctx, removal, rule, requests, owners, ownerFailures, loc)
+		message, recipients, err := s.channelReminderMessage(ctx, removal, rule, requests, owners, ownerFailures, watchStates, loc)
 		if err != nil {
 			deferredErr = err
 		}
@@ -130,7 +131,7 @@ func (s *Server) deliverChannelReminders(ctx context.Context, now time.Time) err
 
 // The same preparation runs initially and again after Discord's channel lookup.
 // Empty recipients mean the current rule/request no longer permits an announcement.
-func (s *Server) channelReminderMessage(ctx context.Context, removal upstream.Removal, rule upstream.RemovalRule, requests []upstream.SeerrRequestedMedia, owners map[int64]upstream.SeerrRequester, ownerFailures map[int64]error, loc *time.Location) (notifications.Message, []string, error) {
+func (s *Server) channelReminderMessage(ctx context.Context, removal upstream.Removal, rule upstream.RemovalRule, requests []upstream.SeerrRequestedMedia, owners map[int64]upstream.SeerrRequester, ownerFailures map[int64]error, watchStates map[string]*channelWatchState, loc *time.Location) (notifications.Message, []string, error) {
 	if !rule.Active || removal.EstimatedAt == nil || removal.RuleEvaluationFailed {
 		return notifications.Message{}, nil, nil
 	}
@@ -201,6 +202,13 @@ func (s *Server) channelReminderMessage(ctx context.Context, removal upstream.Re
 			}
 			owners[request.UserID] = owner
 		}
+		unwatched, err := s.channelRequesterUnwatched(ctx, owner, request, removal, rule, watchStates)
+		if err != nil {
+			return notifications.Message{}, nil, err
+		}
+		if !unwatched {
+			continue
+		}
 		for _, id := range owner.DiscordIDs {
 			if !slices.Contains(recipients, id) {
 				recipients = append(recipients, id)
@@ -217,7 +225,7 @@ func (s *Server) channelReminderMessage(ctx context.Context, removal upstream.Re
 	if err != nil {
 		return notifications.Message{}, nil, err
 	}
-	description := "vous avez demandé ce contenu sur Seerr. Départ estimé le " + removal.EstimatedAt.In(loc).Format("02/01 à 15:04") + " (Maintainerr)."
+	description := "ce contenu demandé sur Seerr reste à voir. Retrait prévu le " + removal.EstimatedAt.In(loc).Format("02/01 à 15:04") + "."
 	if season != nil {
 		scope := fmt.Sprintf("saison %d", *season)
 		if removal.Kind == "episode" {
@@ -260,7 +268,7 @@ func (s *Server) revalidateChannelReminder(ctx context.Context, original upstrea
 		if err != nil {
 			return unavailable
 		}
-		fresh, freshRecipients, err := s.channelReminderMessage(ctx, current, rules[current.CollectionID], requests, map[int64]upstream.SeerrRequester{}, map[int64]error{}, loc)
+		fresh, freshRecipients, err := s.channelReminderMessage(ctx, current, rules[current.CollectionID], requests, map[int64]upstream.SeerrRequester{}, map[int64]error{}, map[string]*channelWatchState{}, loc)
 		if err != nil && !errors.Is(err, upstream.ErrNotFound) {
 			return unavailable
 		}

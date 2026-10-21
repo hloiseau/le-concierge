@@ -24,6 +24,7 @@ type Service struct {
 }
 type Config struct {
 	DiscordBotName, ErisAPIURL, ErisAPIKey, ErisModel                                       string
+	PlexGrantKey                                                                            string
 	DownloadarrURL, DownloadarrRevision                                                     string
 	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
 	CommunityFeedFile, CommunitySyncManifest                                                string
@@ -121,7 +122,7 @@ func Load() (Config, error) {
 	for _, p := range []struct {
 		name string
 		dest *string
-	}{{"ERIS_API_KEY", &c.ErisAPIKey}, {"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}, {"RADARR_API_KEY", &c.RadarrAPIKey}, {"SONARR_API_KEY", &c.SonarrAPIKey}} {
+	}{{"ERIS_API_KEY", &c.ErisAPIKey}, {"PLEX_GRANT_KEY", &c.PlexGrantKey}, {"DISCORD_CLIENT_SECRET", &c.DiscordClientSecret}, {"DISCORD_BOT_TOKEN", &c.DiscordBotToken}, {"BOT_API_SECRET", &c.BotAPISecret}, {"SEERR_API_KEY", &c.SeerrAPIKey}, {"TAUTULLI_API_KEY", &c.TautulliAPIKey}, {"RADARR_API_KEY", &c.RadarrAPIKey}, {"SONARR_API_KEY", &c.SonarrAPIKey}} {
 		v, e := secret(p.name)
 		if e != nil {
 			return c, e
@@ -130,6 +131,12 @@ func Load() (Config, error) {
 	}
 	if c.ErisAPIURL != "" && (!ValidURL(c.ErisAPIURL, false) || c.ErisModel == "" || len(c.ErisModel) > 128 || len(c.ErisAPIKey) < 32) {
 		return c, errors.New("ERIS_API_URL requires an absolute API URL, ERIS_MODEL and an ERIS_API_KEY of at least 32 characters")
+	}
+	if c.PlexGrantKey != "" {
+		key, err := hex.DecodeString(c.PlexGrantKey)
+		if err != nil || len(key) != 32 {
+			return c, errors.New("PLEX_GRANT_KEY must be a 32-byte hex key")
+		}
 	}
 	if err := c.loadDiscordInterests(); err != nil {
 		return c, err

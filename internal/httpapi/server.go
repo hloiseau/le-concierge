@@ -212,7 +212,7 @@ func (s *Server) cleanup() {
 		}
 	}
 	for k, v := range s.grants {
-		if now.After(v.ExpiresAt) {
+		if !v.Active(now) {
 			delete(s.grants, k)
 			s.clearBookGrantLocked(k)
 			s.clearShelfmarkGrantLocked(k)
@@ -329,7 +329,7 @@ func (s *Server) Handler() http.Handler {
 }
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, map[string]any{
-		"version": "0.9.0", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
+		"version": "0.10.0", "persistentPlexAuthorization": s.Config.PlexGrantKey != "", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
 		"requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(),
 		"subscriptions": s.subscriptionsEnabled(), "subscriptionNotifications": s.subscriptionsEnabled(),
 		"notifications":           s.departuresEnabled() || s.subscriptionsEnabled(),
@@ -466,6 +466,13 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	key, v, ok := s.session(r)
 	s.mu.Lock()
+	if ok {
+		if err := s.Store.DeletePlexAuthorization(r.Context(), v.UserID); err != nil {
+			s.mu.Unlock()
+			problem(w, 503, "storage_error", "Déconnexion impossible. Réessayez pour arrêter les rappels.")
+			return
+		}
+	}
 	delete(s.sessions, key)
 	delete(s.pins, key)
 	if pending, err := r.Cookie(s.plexCookieName()); err == nil {
@@ -640,8 +647,13 @@ func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 	if old, err := r.Cookie(s.cookieName()); err == nil {
 		delete(s.sessions, digest(old.Value))
 	}
-	s.sessions[digest(value)] = session{u.ID, expires}
 	g.ExpiresAt = expires
+	if err := s.savePlexAuthorization(r.Context(), u, &g); err != nil {
+		s.mu.Unlock()
+		problem(w, 503, "storage_error", "Connexion impossible : autorisation Plex non enregistrée.")
+		return
+	}
+	s.sessions[digest(value)] = session{u.ID, expires}
 	s.clearBookGrantLocked(u.ID)
 	s.clearShelfmarkGrantLocked(u.ID)
 	s.clearDownloadarrGrantLocked(u.ID)
@@ -655,28 +667,35 @@ func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error
 	s.mu.Lock()
 	g, ok := s.grants[u.ID]
 	s.mu.Unlock()
-	if !ok || g.PlexID != u.PlexID || time.Now().After(g.ExpiresAt) {
+	if !ok || g.PlexID != u.PlexID || !g.Active(time.Now()) {
 		return upstream.Grant{}, upstream.ErrDenied
 	}
 	if time.Since(g.VerifiedAt) < 5*time.Minute {
 		return g, nil
 	}
 	fresh, e := s.Upstream.PlexVerify(ctx, g.AccountToken, g.ClientID, s.Config.PlexServerID)
+	if e == nil && fresh.PlexID != u.PlexID {
+		e = upstream.ErrDenied
+	}
 	if e != nil {
 		if errors.Is(e, upstream.ErrDenied) {
 			s.mu.Lock()
-			delete(s.grants, u.ID)
-			s.clearBookGrantLocked(u.ID)
-			s.clearShelfmarkGrantLocked(u.ID)
-			s.clearDownloadarrGrantLocked(u.ID)
+			// A slow rejected check must not revoke a newer login.
+			if current, exists := s.grants[u.ID]; exists && current.AccountToken == g.AccountToken {
+				if err := s.Store.DeletePlexAuthorization(ctx, u.ID); err != nil {
+					slog.Warn("Revoked Plex authorization cleanup deferred")
+				}
+				delete(s.grants, u.ID)
+				s.clearBookGrantLocked(u.ID)
+				s.clearShelfmarkGrantLocked(u.ID)
+				s.clearDownloadarrGrantLocked(u.ID)
+			}
 			s.mu.Unlock()
 		}
 		return upstream.Grant{}, e
 	}
-	if fresh.PlexID != u.PlexID {
-		return upstream.Grant{}, upstream.ErrDenied
-	}
 	fresh.ExpiresAt = g.ExpiresAt
+	fresh.Persistent = g.Persistent
 	s.mu.Lock()
 	current, exists := s.grants[u.ID]
 	if exists && current.AccountToken == g.AccountToken {

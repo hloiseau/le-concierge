@@ -36,7 +36,7 @@ type RecapResult struct {
 // A bounded, complete read is required: a truncated catalogue would bias /surprise.
 // Plex documents /library/all, media queries and paging at https://developer.plex.tv/pms/.
 func (c *Client) discoveryItems(ctx context.Context, base, serverID string, g Grant, query url.Values) ([]discoveryMetadata, error) {
-	if g.ServerToken == "" || serverID == "" || (!g.ExpiresAt.IsZero() && !time.Now().Before(g.ExpiresAt)) {
+	if g.ServerToken == "" || serverID == "" || (!g.ExpiresAt.IsZero() && !g.Active(time.Now())) {
 		return nil, ErrDenied
 	}
 	if err := c.PlexIdentity(ctx, base, serverID); err != nil {

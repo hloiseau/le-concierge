@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.9.0",
+    "version": "0.10.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -2456,6 +2456,10 @@
           },
           "discordChannelReminders": {
             "type": "boolean"
+          },
+          "persistentPlexAuthorization": {
+            "type": "boolean",
+            "description": "Plex authorization is encrypted at rest and survives browser expiry and API restart. Explicit logout, account deletion or Plex revocation stops it. Browser sessions still expire after 12 hours."
           }
         },
         "required": [

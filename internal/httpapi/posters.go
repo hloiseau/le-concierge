@@ -41,7 +41,7 @@ func (s *Server) plexPoster(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	current, exists := s.grants[user.ID]
-	valid := exists && current.AccountToken == g.AccountToken && current.ServerToken == g.ServerToken && time.Now().Before(current.ExpiresAt)
+	valid := exists && current.AccountToken == g.AccountToken && current.ServerToken == g.ServerToken && current.Active(time.Now())
 	s.mu.Unlock()
 	if !valid {
 		problem(w, 403, "plex_required", "Votre connexion Plex a changé.")

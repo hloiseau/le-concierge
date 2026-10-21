@@ -385,6 +385,23 @@ func TestDiscordWorkerRebuildsDigestAfterOneItemIsNoLongerCurrent(t *testing.T) 
 					}
 				case "/library/metadata/43":
 					return response(200, `{"MediaContainer":{"size":1,"librarySectionID":"2","Metadata":[{"ratingKey":"43","title":"Remaining movie B","type":"movie","guid":"plex://movie/remaining","viewCount":0}]}}`), nil
+				case "/library/metadata/42,43":
+					first := r.Clone(r.Context())
+					first.URL.Path = "/library/metadata/42"
+					result, err := original.RoundTrip(first)
+					if err != nil {
+						return nil, err
+					}
+					defer result.Body.Close()
+					var body map[string]map[string]any
+					if err := json.NewDecoder(result.Body).Decode(&body); err != nil {
+						t.Fatal(err)
+					}
+					container := body["MediaContainer"]
+					container["size"] = 2
+					container["Metadata"] = append(container["Metadata"].([]any), map[string]any{"ratingKey": "43", "title": "Remaining movie B", "type": "movie", "guid": "plex://movie/remaining", "viewCount": 0})
+					encoded, _ := json.Marshal(body)
+					return response(200, string(encoded)), nil
 				}
 				return original.RoundTrip(r)
 			})

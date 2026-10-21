@@ -69,7 +69,7 @@ func (s *Server) createFollow(ctx context.Context, u store.User, input subscript
 	defer s.mu.Unlock()
 	current, exists := s.grants[u.ID]
 	owner, err := s.Store.User(ctx, u.ID)
-	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !time.Now().Before(current.ExpiresAt) {
+	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !current.Active(time.Now()) {
 		return subscriptionResult{}, upstream.ErrDenied
 	}
 	if err := s.subscriptionChannelAllowed(ctx, owner, input.Channel); err != nil {
@@ -137,7 +137,7 @@ func (s *Server) recordSubscriptionAvailability(ctx context.Context, u store.Use
 	defer s.mu.Unlock()
 	current, exists := s.grants[u.ID]
 	owner, err := s.Store.User(ctx, u.ID)
-	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !time.Now().Before(current.ExpiresAt) {
+	if err != nil || !exists || owner.PlexID != u.PlexID || current.AccountToken != g.AccountToken || current.ServerToken != g.ServerToken || !current.Active(time.Now()) {
 		return upstream.ErrDenied
 	}
 	return s.Store.ObserveAvailability(ctx, u.ID, id, time.Now(), false)

@@ -39,7 +39,7 @@ func (s *Server) currentBookGrant(userID string) (bookGrant, bool) {
 	defer s.mu.Unlock()
 	g, ok := s.bookGrants[userID]
 	plex, plexOK := s.grants[userID]
-	if !ok || !plexOK || plex.AccountToken != g.PlexToken || !time.Now().Before(g.ExpiresAt) || !time.Now().Before(plex.ExpiresAt) || g.Credentials.Username == "" {
+	if !ok || !plexOK || plex.AccountToken != g.PlexToken || !time.Now().Before(g.ExpiresAt) || !plex.Active(time.Now()) || g.Credentials.Username == "" {
 		if !ok || !plexOK || plex.AccountToken != g.PlexToken || !time.Now().Before(g.ExpiresAt) {
 			s.clearBookGrantLocked(userID)
 		}
@@ -122,7 +122,7 @@ func (s *Server) booksLink(w http.ResponseWriter, r *http.Request) {
 	current, currentOK := s.bookGrants[user.ID]
 	plex, plexOK := s.grants[user.ID]
 	sess, sessionOK := s.sessions[key]
-	if !currentOK || current.Revision != pending.Revision || !plexOK || plex.AccountToken != pending.PlexToken || !time.Now().Before(plex.ExpiresAt) || !sessionOK || sess.UserID != user.ID || !time.Now().Before(sess.Expires) {
+	if !currentOK || current.Revision != pending.Revision || !plexOK || plex.AccountToken != pending.PlexToken || !plex.Active(time.Now()) || !sessionOK || sess.UserID != user.ID || !time.Now().Before(sess.Expires) {
 		s.mu.Unlock()
 		problem(w, 409, "link_changed", "L’association a changé. Réessayez depuis votre compte.")
 		return

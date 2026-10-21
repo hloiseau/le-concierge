@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/hloiseau/le-concierge/internal/notifications"
+	"github.com/hloiseau/le-concierge/internal/upstream"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
-	for _, mode := range []string{"seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "quiet boundary source", "quiet boundary channel", "season", "season long title", "episode", "episode long title", "episode missing index", "episode zero index", "episode other season", "late exclusion", "late inactive rule", "late postponed", "late removed", "late non-destructive action", "late source error", "late request cancelled", "late recipient changed", "late local identity removed", "late title changed"} {
+func TestChannelRemindersOnlyMentionVerifiedUnwatchedRequesters(t *testing.T) {
+	for _, mode := range []string{"persistent after restart", "seerr identity", "linked identity", "no Discord identity", "excluded", "inactive", "declined", "wrong key", "wrong quality", "deleted first requester", "temporary requester error", "wrong Seerr server", "changed source", "quiet hours", "quiet boundary source", "quiet boundary channel", "season", "season long title", "episode", "episode long title", "episode missing index", "episode zero index", "episode other season", "late exclusion", "late inactive rule", "late postponed", "late removed", "late non-destructive action", "late source error", "late request cancelled", "late recipient changed", "late local identity removed", "late title changed", "completed", "history completed", "unknown watch", "no Plex session", "expired Plex session", "late completed", "late logout", "two requesters", "metadata completed"} {
 		t.Run(mode, func(t *testing.T) {
 			s := fixture(t)
 			s.Config.DiscordNotificationChannelID = "456"
@@ -21,6 +22,37 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 			s.Config.SeerrURL = "https://seerr.example"
 			s.Config.SeerrAPIKey = "fixture-key"
 			s.Config.PlexServerID = "server-a"
+			s.Config.TautulliURL, s.Config.TautulliAPIKey = "https://tautulli.example", "fixture-key"
+			user, err := s.Store.LoginPlex(context.Background(), "777", "Fixture")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode != "no Plex session" {
+				expires := time.Now().Add(time.Hour)
+				if mode == "expired Plex session" {
+					expires = time.Now().Add(-time.Second)
+				}
+				s.grants[user.ID] = upstream.Grant{PlexID: "777", AccountToken: "personal-account", ServerToken: "personal-server", VerifiedAt: time.Now(), ExpiresAt: expires}
+			}
+			if mode == "persistent after restart" {
+				s.Config.PlexGrantKey = strings.Repeat("ab", 32)
+				g := s.grants[user.ID]
+				g.ClientID = "fixture-client"
+				if err := s.savePlexAuthorization(context.Background(), user, &g); err != nil {
+					t.Fatal(err)
+				}
+				s = New(s.Config, s.Store)
+				if err := s.RestorePlexAuthorizations(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mode == "two requesters" {
+				second, err := s.Store.LoginPlex(context.Background(), "888", "Second")
+				if err != nil {
+					t.Fatal(err)
+				}
+				s.grants[second.ID] = upstream.Grant{PlexID: "888", AccountToken: "second-account", ServerToken: "second-server", VerifiedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}
+			}
 			kind, requestedKind, requestedKey, title := "movie", "movie", "42", "Film demandé"
 			if strings.HasPrefix(mode, "season") || strings.HasPrefix(mode, "episode") {
 				s.Config.TautulliURL = "https://tautulli.example"
@@ -76,6 +108,45 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 				}
 				body := ""
 				switch r.URL.Path {
+				case "/api/v2/user":
+					return response(200, `{"id":777,"username":"Fixture"}`), nil
+				case "/api/v2/resources":
+					return response(200, `[{"clientIdentifier":"server-a","provides":"server","accessToken":"personal-server"}]`), nil
+				case "/identity":
+					body = `{"MediaContainer":{"machineIdentifier":"server-a"}}`
+				case "/library/all":
+					if (r.Header.Get("X-Plex-Token") != "personal-server" && r.Header.Get("X-Plex-Token") != "second-server") || r.URL.Query().Get("unwatched") != "1" {
+						t.Fatal("unwatched not checked for the requester")
+					}
+					if (mode == "two requesters" && r.Header.Get("X-Plex-Token") == "personal-server") || mode == "unknown watch" || mode == "completed" || (changed && mode == "late completed") {
+						body = `{"MediaContainer":{"size":0,"totalSize":0,"Metadata":[]}}`
+						break
+					}
+					rowKind, rowID, parent := "movie", "42", "40"
+					if kind != "movie" {
+						rowKind = "episode"
+					}
+					if kind == "season" {
+						rowID, parent = "43", "42"
+					}
+					body = fmt.Sprintf(`{"MediaContainer":{"size":1,"totalSize":1,"Metadata":[{"ratingKey":%q,"type":%q,"title":"Fixture","guid":"plex://fixture","addedAt":1,"parentRatingKey":%q,"grandparentRatingKey":"38"}]}}`, rowID, rowKind, parent)
+				case "/library/metadata/42", "/library/metadata/43", "/library/metadata/40":
+					rowKind, parent, id, index := "movie", "40", "42", 2
+					if kind != "movie" {
+						rowKind = "episode"
+					}
+					if kind == "season" {
+						parent, id = "42", "43"
+					}
+					if (kind == "season" && r.URL.Path == "/library/metadata/42") || r.URL.Path == "/library/metadata/40" {
+						rowKind, parent, id, index = "season", "38", strings.TrimPrefix(r.URL.Path, "/library/metadata/"), 3
+					}
+					body = fmt.Sprintf(`{"MediaContainer":{"size":1,"librarySectionID":"2","Metadata":[{"ratingKey":%q,"type":%q,"title":"Fixture","guid":"plex://fixture","parentRatingKey":%q,"grandparentRatingKey":"38","index":%d,"Guid":[{"id":"tmdb://99"}]}]}}`, id, rowKind, parent, index)
+					if mode == "metadata completed" {
+						body = strings.Replace(body, `"guid":"plex://fixture"`, `"guid":"plex://fixture","viewCount":1`, 1)
+					}
+				case "/library/metadata/38":
+					body = `{"MediaContainer":{"size":1,"librarySectionID":"2","Metadata":[{"ratingKey":"38","type":"show","title":"Fixture","guid":"plex://show","Guid":[{"id":"tmdb://99"}]}]}}`
 				case "/api/v1/settings/plex":
 					if mode == "quiet boundary source" {
 						return waitForQuietHours(r)
@@ -113,7 +184,7 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 						body = `[{"id":1,"mediaServerId":"42","ruleGroupId":5,"type":"movie"}]`
 					}
 				case "/api/v1/request":
-					if mode == "deleted first requester" || mode == "temporary requester error" {
+					if mode == "deleted first requester" || mode == "temporary requester error" || mode == "two requesters" {
 						body = `{"pageInfo":{"results":2},"results":[{"id":2,"type":"movie","status":2,"requestedBy":{"id":8},"media":{"tmdbId":99,"ratingKey":"42"}},{"id":1,"type":"movie","status":2,"requestedBy":{"id":7},"media":{"tmdbId":99,"ratingKey":"42"}}]}`
 						break
 					}
@@ -130,7 +201,12 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 						season = 4
 					}
 					body = fmt.Sprintf(`{"pageInfo":{"results":1},"results":[{"id":1,"type":%q,"status":%d,"is4k":%v,"requestedBy":{"id":7},"media":{"tmdbId":99,"ratingKey":%q,"ratingKey4k":"43"},"seasons":[{"seasonNumber":%d}]}]}`, requestedKind, status, mode == "wrong quality", key, season)
+				case "/api/v1/user/8/settings/notifications":
+					body = `{"discordIds":["999"]}`
 				case "/api/v1/user/8":
+					if mode == "two requesters" {
+						return response(200, `{"id":8,"plexId":888}`), nil
+					}
 					if mode == "temporary requester error" {
 						return response(503, "unavailable"), nil
 					}
@@ -161,6 +237,13 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 						data = `{"tautulli_version":"v2.18.2"}`
 					case "get_server_info":
 						data = `{"pms_identifier":"server-a"}`
+					case "get_users":
+						data = `[{"user_id":777,"is_active":1,"keep_history":1},{"user_id":888,"is_active":1,"keep_history":1}]`
+					case "get_history":
+						data = `{"recordsFiltered":0,"data":[]}`
+						if mode == "history completed" {
+							data = `{"recordsFiltered":1,"data":[{"row_id":1,"user_id":777,"rating_key":42,"media_type":"movie","guid":"plex://fixture","percent_complete":100,"watched_status":1,"live":0}]}`
+						}
 					case "get_metadata":
 						index, parent := "3", "38"
 						if kind == "episode" {
@@ -189,6 +272,9 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 						return waitForQuietHours(r)
 					}
 					changed = changeDuringLookup
+					if mode == "late logout" {
+						delete(s.grants, user.ID)
+					}
 					if mode == "late local identity removed" {
 						if _, err := s.Store.DB.Exec(`UPDATE users SET discord_id=NULL WHERE plex_id='777'`); err != nil {
 							t.Fatal(err)
@@ -205,7 +291,11 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 					} `json:"allowed_mentions"`
 				}
 				json.NewDecoder(r.Body).Decode(&body)
-				if len(body.Mentions.Users) != 1 || body.Mentions.Users[0] != "789" || len(body.Mentions.Parse) != 0 || strings.Contains(body.Content, "@everyone") || !strings.Contains(body.Content, title) {
+				expectedRecipient := "789"
+				if mode == "two requesters" {
+					expectedRecipient = "999"
+				}
+				if len(body.Mentions.Users) != 1 || body.Mentions.Users[0] != expectedRecipient || len(body.Mentions.Parse) != 0 || strings.Contains(body.Content, "@everyone") || !strings.Contains(body.Content, title) {
 					t.Fatalf("incorrect channel reminder: %+v", body)
 				}
 				if strings.HasSuffix(mode, "long title") && !strings.Contains(body.Content, strings.Repeat("é", 200)) {
@@ -234,7 +324,7 @@ func TestChannelRemindersUseSeerrRequestersWithoutHubSession(t *testing.T) {
 				}
 			}
 			want := 0
-			if mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" || strings.HasPrefix(mode, "season") || mode == "episode" || mode == "episode long title" || mode == "episode missing index" || mode == "episode zero index" {
+			if mode == "persistent after restart" || mode == "two requesters" || mode == "seerr identity" || mode == "linked identity" || mode == "deleted first requester" || strings.HasPrefix(mode, "season") || mode == "episode" || mode == "episode long title" || mode == "episode missing index" || mode == "episode zero index" {
 				want = 1
 			}
 			if posts != want {
