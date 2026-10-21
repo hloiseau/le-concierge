@@ -52,7 +52,8 @@ func requestTitleMentioned(title string, messages []Message) bool {
 		}, s)), " ") + " "
 	}
 	title = normalize(title)
-	if strings.TrimSpace(title) == "" {
+	switch strings.TrimSpace(title) {
+	case "", "film", "le film", "un film", "ce film", "série", "serie", "la série", "une série", "cette série", "la serie", "une serie", "cette serie", "the movie", "a movie", "that movie", "the show", "that show":
 		return false
 	}
 	for _, m := range messages {

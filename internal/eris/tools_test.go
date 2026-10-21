@@ -150,6 +150,8 @@ func TestRequestTitleComesFromTheCurrentUnexpiredConversation(t *testing.T) {
 		{"expired", "Tu peux demander le film dans seerr ?", "Hot Fuzz", "guild:alice", "Mon film préféré est Hot Fuzz", true, false},
 		{"different word", "Demande Aliens", "Alien", "", "", false, false},
 		{"punctuation", "Demande Mission : Impossible", "Mission: Impossible", "", "", false, true},
+		{"generic film", "Tu peux demander le film dans Seerr ?", "le film", "", "", false, false},
+		{"generic series", "Demande cette série", "cette série", "", "", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
