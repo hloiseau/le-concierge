@@ -134,7 +134,7 @@ func TestReplyToErisOffersOnlyPrivateHandoffButton(t *testing.T) {
 		return botResponse(200, `{"id":"88888"}`), nil
 	})}
 	m := mentionFixture()
-	m.Content = "Tu peux le demander pour moi dans seerr ?"
+	m.Content = "Tu peux demander Hot Fuzz dans Seerr ?"
 	m.Mentions = nil
 	m.Type = discordgo.MessageTypeReply
 	m.MessageReference = &discordgo.MessageReference{MessageID: "88888", ChannelID: m.ChannelID, GuildID: m.GuildID}

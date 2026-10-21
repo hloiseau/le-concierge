@@ -159,7 +159,9 @@ func (c *Client) SearchRequestCandidates(ctx context.Context, base, key string, 
 			Air     string `json:"firstAirDate"`
 		} `json:"results"`
 	}
-	if err = c.JSON(ctx, "GET", base+"/api/v1/search?"+url.Values{"query": {query}, "page": {"1"}, "language": {"fr-FR"}}.Encode(), headers, "", &data); err != nil {
+	// Seerr's query validator rejects form-encoded spaces (+); use percent encoding.
+	params := strings.ReplaceAll(url.Values{"query": {query}, "page": {"1"}, "language": {"fr-FR"}}.Encode(), "+", "%20")
+	if err = c.JSON(ctx, "GET", base+"/api/v1/search?"+params, headers, "", &data); err != nil {
 		return nil, err
 	}
 	if len(data.Results) > 20 {

@@ -116,3 +116,60 @@ func TestExplicitUnwatchedConstraintCannotBeDropped(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestCannotInventTitleFromSystemExamples(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"prepare","query":"Arrival","kind":"movie"}`}}}})
+	}))
+	defer server.Close()
+	c := New(server.URL, "", "model")
+	called := false
+	reply, err := c.ReplyWithTools(context.Background(), "guild:alice", "Tu peux demander le film dans seerr ?", false, func(context.Context, Plan) (ToolReply, error) {
+		called = true
+		return ToolReply{Content: "Choisir Arrival"}, nil
+	})
+	if err != nil || called || !strings.Contains(reply, "titre") {
+		t.Fatalf("invented request: called=%v reply=%q err=%v", called, reply, err)
+	}
+}
+
+func TestRequestTitleComesFromTheCurrentUnexpiredConversation(t *testing.T) {
+	for _, tc := range []struct {
+		name, question, title, owner, context string
+		expired, allowed                      bool
+	}{
+		{"explicit", "Demande HOT FUZZ", "Hot Fuzz", "", "", false, true},
+		{"preference", "Tu peux demander le film dans seerr ?", "Hot Fuzz", "guild:alice", "Mon film préf, c'est hot fuzz", false, true},
+		{"another member", "Tu peux demander le film dans seerr ?", "Hot Fuzz", "guild:bob", "Mon film préféré est Hot Fuzz", false, false},
+		{"expired", "Tu peux demander le film dans seerr ?", "Hot Fuzz", "guild:alice", "Mon film préféré est Hot Fuzz", true, false},
+		{"different word", "Demande Aliens", "Alien", "", "", false, false},
+		{"punctuation", "Demande Mission : Impossible", "Mission: Impossible", "", "", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				plan, _ := json.Marshal(Plan{Action: "prepare", Query: tc.title, Kind: "movie"})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: string(plan)}}}})
+			}))
+			defer server.Close()
+			c := New(server.URL, "", "model")
+			if tc.owner != "" {
+				expires := time.Now().Add(time.Minute)
+				if tc.expired {
+					expires = time.Now().Add(-time.Minute)
+				}
+				c.sessions[tc.owner] = &conversation{expires: expires, messages: []Message{{Role: "user", Content: tc.context}, {Role: "assistant", Content: "Noté."}}}
+			}
+			called := false
+			reply, err := c.ReplyWithTools(context.Background(), "guild:alice", tc.question, false, func(_ context.Context, p Plan) (ToolReply, error) {
+				called = true
+				return ToolReply{Content: "Choix Seerr"}, nil
+			})
+			if err != nil || called != tc.allowed {
+				t.Fatal(called, err)
+			}
+			if !tc.allowed && (!strings.Contains(reply, "titre") || !strings.Contains(c.sessions["guild:alice"].messages[1].Content, "titre")) {
+				t.Fatal("clarification was not remembered", reply)
+			}
+		})
+	}
+}

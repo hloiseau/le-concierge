@@ -175,6 +175,9 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
 		}
 		plan = plan.WithQuestionConstraints(question)
+		if plan.Action == "prepare" && !requestTitleMentioned(plan.Query, messages) {
+			plan = Plan{Action: "chat", Text: "Quel titre veux-tu demander dans Seerr ? Donne-moi le nom du film ou de la série, et la saison si nécessaire."}
+		}
 		if plan.Action == "chat" {
 			reply = plan.Text
 		} else {
