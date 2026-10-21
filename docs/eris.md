@@ -47,7 +47,7 @@ Le modèle produit une intention JSON limitée aux outils autorisés. Le code va
 
 La préparation d’une demande est en lecture seule. Les choix expirent après dix minutes et au redémarrage, restent liés au compte et sont consommés avant tout envoi. Seul le bouton de confirmation déclenche le POST Seerr, sous l’identité Seerr du membre (`X-Api-User`, vérifiée via `/auth/me`), sans contourner droits, quotas ou approbations. Qualité standard ; aucune sélection de serveur, dossier ou profil par le modèle. Un double clic ne renvoie pas la demande. Après une erreur ambiguë, Eris demande de vérifier Seerr avant de réessayer. Un simple « oui » dans le chat ne vaut pas confirmation.
 
-Limites : recherche de trois titres au maximum par réponse ; recommandations sur un catalogue complet de 5 000 titres maximum, sinon refus explicite de conclure ; recherche personnelle par titre bornée à 1 000 demandes. Les saisons doivent être explicites, les épisodes individuels et demandes 4K ne sont pas proposés par ce parcours. Les commandes média existantes restent disponibles.
+Limites : recherche de trois titres au maximum par réponse ; recommandations sur un catalogue complet de 5 000 titres maximum, sinon refus de conclure ; recherche personnelle par titre bornée à 1 000 demandes. Les saisons doivent être explicites, les épisodes individuels et demandes 4K ne sont pas proposés par ce parcours. Les résultats factuels sont rendus en français ; certaines recommandations formulées en anglais restent mal reconnues et demandent une précision. Les commandes média existantes restent disponibles.
 
 ## Connecter le moteur local
 

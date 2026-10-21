@@ -123,6 +123,20 @@ func TestErisPublicPersonalActionsNeverReadMedia(t *testing.T) {
 	}
 }
 
+func TestErisMissingSeasonAsksBeforeReadingOrCreatingRequest(t *testing.T) {
+	s := fixture(t)
+	seed(t, s, "11111", true)
+	u, _ := s.Store.User(context.Background(), "11111")
+	s.Upstream.HTTP.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("missing season reached upstream")
+		return nil, nil
+	})
+	reply := s.runErisTool(context.Background(), u, s.grants[u.ID], u.DiscordID, eris.Plan{Action: "prepare", Query: "Severance", Kind: "show"}, true)
+	if !strings.Contains(reply.Content, "Quelle saison") || len(reply.Buttons) > 0 {
+		t.Fatal("invented season")
+	}
+}
+
 func TestErisGatewayProofRejectsOtherGuildBotMissingMentionAndStaleMessages(t *testing.T) {
 	for _, state := range []string{"other guild", "bot", "webhook", "missing mention", "stale", "wrong channel"} {
 		s := fixture(t)
