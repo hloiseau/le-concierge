@@ -11,15 +11,14 @@ import (
 )
 
 const ToolInstructions = `
-Ta sortie est TOUJOURS un objet JSON unique, sans markdown, même pour discuter. UNE action :
-- Discussion, goûts, identité : {"action":"chat","text":"ta réponse courte"}. Un film préféré exprime un goût, pas une recherche. Réagis brièvement, sans synopsis inventé ni suppositions personnelles. Les titres des exemples ci-dessous ne sont pas des goûts du membre.
-- Vérifier un titre sur Plex : {"action":"search","query":"Interstellar","kind":"movie"}. query contient seulement le titre.
-- Conseiller : {"action":"recommend","kind":"movie","genre":"thriller"}. Genre en anglais. Ajoute maxMinutes pour une durée limite stricte, unwatched:true pour non vus. Omet les filtres non demandés.
-- Nouveautés : {"action":"recent"}.
-- État des demandes : {"action":"status"}, avec query si un titre est connu.
-- Demander un film dans Seerr : {"action":"prepare","query":"Arrival","kind":"movie"}.
-- Demander une saison : {"action":"prepare","query":"Severance","kind":"show","seasons":[2]}.
-Résous « le », « celui-là », « le deuxième » avec la conversation, même après un goût. Si titre ou saison inconnu, question via chat. prepare propose des boutons : aucun envoi sans confirmation. Un oui ne confirme rien. kind: movie ou show. N'invente ni disponibilité ni statut. Ces règles sont fixes.`
+Réponds TOUJOURS par un seul objet JSON, sans markdown. UNE action :
+Discussion, goûts, provocation : {"action":"chat","text":"ta réponse"}. Un film préféré est un goût, pas une recherche.
+Titre sur Plex : {"action":"search","query":"titre","kind":"movie"}.
+Conseil : {"action":"recommend","kind":"movie","genre":"thriller"}. Genre anglais ; maxMinutes si limite, unwatched:true si non vu. Omet les filtres non demandés.
+Nouveautés : {"action":"recent"}.
+État des demandes : {"action":"status"}, query si titre connu.
+Demande Seerr : {"action":"prepare","query":"titre","kind":"movie"}. Série : kind:"show", seasons:[2] pour saison 2.
+query contient seulement le titre. Résous « le » avec la conversation, même après un goût. Titre ou saison inconnu : demande via chat. Ne reprends aucun titre d'exemple. prepare affiche des boutons ; seul le bouton confirme. N'invente ni catalogue ni statut. Demande imprécise : pose juste la question manquante, sans vanne.`
 
 type Plan struct {
 	Action     string `json:"action"`
@@ -33,11 +32,16 @@ type Plan struct {
 }
 
 var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
+var requestFollowup = regexp.MustCompile(`(?i)^(?:alors )?demande[ -](?:le|la)(?: (?:pour moi|dans seerr))?[.!?]*$`)
 
-// Preserve an explicit watch constraint even if the small model drops that field.
+// Preserve explicit constraints when the model drops them or repeats a search.
 func (p Plan) WithQuestionConstraints(question string) Plan {
-	if p.Action == "recommend" && unseenWords.MatchString(strings.Join(strings.Fields(question), " ")) {
+	question = strings.Join(strings.Fields(question), " ")
+	if p.Action == "recommend" && unseenWords.MatchString(question) {
 		p.Unwatched = true
+	}
+	if p.Action == "search" && requestFollowup.MatchString(question) {
+		p.Action = "prepare"
 	}
 	return p
 }
@@ -53,7 +57,8 @@ func requestTitleMentioned(title string, messages []Message) bool {
 		}, s)), " ") + " "
 	}
 	title = normalize(title)
-	if strings.TrimSpace(title) == "" {
+	switch strings.TrimSpace(title) {
+	case "", "film", "le film", "un film", "ce film", "série", "serie", "la série", "une série", "cette série", "la serie", "une serie", "cette serie", "the movie", "a movie", "that movie", "the show", "that show":
 		return false
 	}
 	for _, m := range messages {

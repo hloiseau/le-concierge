@@ -38,13 +38,16 @@ func TestPlansRejectArbitraryToolsIdentityAndBadFilters(t *testing.T) {
 func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 	var prompts [][]Message
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct{ Messages []Message }
+		var body struct {
+			Messages       []Message
+			ResponseFormat map[string]string `json:"response_format"`
+		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.ResponseFormat["type"] != "json_object" {
+			t.Error("tool conversations must request constrained JSON")
+		}
 		prompts = append(prompts, body.Messages)
 		answer := `{"action":"search","query":"Arrival","kind":"movie"}`
-		if len(prompts) == 2 {
-			answer = `{"action":"prepare","query":"Arrival","kind":"movie"}`
-		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: answer}}}})
 	}))
 	defer server.Close()
@@ -57,7 +60,7 @@ func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 		}
 		return ToolReply{Content: "Arrival (2016) : disponibilité vérifiée."}, nil
 	}
-	for _, question := range []string{"Tu as Arrival ?", "Demande-le"} {
+	for _, question := range []string{"Tu as Arrival ?", "Alors demande-le"} {
 		text, err := c.ReplyWithTools(context.Background(), "guild:alice", question, false, run)
 		if err != nil || text != "Arrival (2016) : disponibilité vérifiée." {
 			t.Fatalf("facts rewritten: %q %v", text, err)
@@ -87,13 +90,13 @@ func TestTextCannotConfirmCancelOrRepeatPendingRequest(t *testing.T) {
 	}
 }
 
-func TestPrivateHandoffRemembersOnlyItsOwnResult(t *testing.T) {
+func TestButtonResultRemembersOnlyItsOwnConversation(t *testing.T) {
 	c := New("http://must-not-call.test", "", "model")
 	c.sessions["guild:alice:channel"] = &conversation{messages: []Message{{Role: "user", Content: "public history"}}, expires: time.Now().Add(time.Minute)}
 	c.RememberRequest("guild:alice", ToolReply{Content: "Choisis Hot Fuzz (2007).", Buttons: []Button{{ID: "private-token", Label: "Choisir"}}})
 	s := c.sessions["guild:alice"]
 	if s == nil || !s.pending || len(s.messages) != 2 || strings.Contains(s.messages[1].Content, "private-token") || strings.Contains(s.messages[1].Content, "public history") {
-		t.Fatal("private handoff lost or mixed context")
+		t.Fatal("button result lost or mixed context")
 	}
 	text, err := c.ReplyWithTools(context.Background(), "guild:alice", "oui", false, func(context.Context, Plan) (ToolReply, error) {
 		t.Fatal("text confirmed request")
@@ -114,6 +117,17 @@ func TestExplicitUnwatchedConstraintCannotBeDropped(t *testing.T) {
 		if p := (Plan{Action: "recommend"}).WithQuestionConstraints(text); p.Unwatched {
 			t.Errorf("invented constraint: %s", text)
 		}
+	}
+}
+
+func TestRequestFollowupDoesNotTurnRequestStatusIntoPreparation(t *testing.T) {
+	for _, question := range []string{"Ma demande le mercredi est-elle prête ?", "Cherche Arrival", "Demande le statut"} {
+		if p := (Plan{Action: "search", Query: "Arrival"}).WithQuestionConstraints(question); p.Action != "search" {
+			t.Fatal("invented request", question)
+		}
+	}
+	if p := (Plan{Action: "status", Query: "Arrival"}).WithQuestionConstraints("Demande-le"); p.Action != "status" {
+		t.Fatal("changed status action")
 	}
 }
 
@@ -144,6 +158,8 @@ func TestRequestTitleComesFromTheCurrentUnexpiredConversation(t *testing.T) {
 		{"expired", "Tu peux demander le film dans seerr ?", "Hot Fuzz", "guild:alice", "Mon film préféré est Hot Fuzz", true, false},
 		{"different word", "Demande Aliens", "Alien", "", "", false, false},
 		{"punctuation", "Demande Mission : Impossible", "Mission: Impossible", "", "", false, true},
+		{"generic film", "Tu peux demander le film dans Seerr ?", "le film", "", "", false, false},
+		{"generic series", "Demande cette série", "cette série", "", "", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

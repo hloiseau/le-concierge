@@ -164,7 +164,7 @@ func CommandOptions(i Interaction) (Options, error) {
 // signed caller, whose current access is checked again by the API.
 func Command(i Interaction) (string, int, error) {
 	if i.Type == 3 && strings.HasPrefix(i.Data.CustomID, "eris:") {
-		if !ValidErisButton(i.Data.CustomID) || i.Data.ComponentType != 2 || (i.Message.Flags&64 == 0 && !strings.HasPrefix(i.Data.CustomID, "eris:open:")) || len(i.Data.Options) != 0 || len(i.Data.Values) != 0 {
+		if !ValidErisButton(i.Data.CustomID) || i.Data.ComponentType != 2 || (i.Message.Flags&64 == 0 && !config.Snowflake(i.ChannelID)) || len(i.Data.Options) != 0 || len(i.Data.Values) != 0 {
 			return "", 0, errors.New("invalid Eris confirmation")
 		}
 		return "eris", 0, nil
@@ -179,7 +179,7 @@ func Command(i Interaction) (string, int, error) {
 
 func ValidErisButton(id string) bool {
 	parts := strings.Split(id, ":")
-	if len(parts) != 3 || parts[0] != "eris" || (parts[1] != "choose" && parts[1] != "confirm" && parts[1] != "cancel" && parts[1] != "open") || len(parts[2]) != 64 {
+	if len(parts) != 3 || parts[0] != "eris" || (parts[1] != "choose" && parts[1] != "confirm" && parts[1] != "cancel") || len(parts[2]) != 64 {
 		return false
 	}
 	_, err := hex.DecodeString(parts[2])

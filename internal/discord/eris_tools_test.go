@@ -67,8 +67,8 @@ func TestErisConfirmationTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
 	}
 }
 
-func TestErisPublicHandoffCreatesNewEphemeralReply(t *testing.T) {
-	body := `{"id":"99999","application_id":"12345","guild_id":"23456","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:open:` + strings.Repeat("a", 64) + `","component_type":2}}`
+func TestErisPublicSelectionCreatesPublicReplyWithoutOverwritingOriginal(t *testing.T) {
+	body := `{"id":"99999","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:choose:` + strings.Repeat("a", 64) + `","component_type":2}}`
 	b, r := signedInteraction(t, body)
 	b.Config.BotAPIURL = "http://api.test"
 	calls := 0
@@ -77,14 +77,14 @@ func TestErisPublicHandoffCreatesNewEphemeralReply(t *testing.T) {
 		raw, _ := io.ReadAll(req.Body)
 		switch {
 		case strings.HasSuffix(req.URL.Path, "/callback"):
-			if string(raw) != `{"type":5,"data":{"flags":64}}` {
-				t.Error("handoff would edit public message", string(raw))
+			if string(raw) != `{"type":5}` {
+				t.Error("public selection must create a separate public reply", string(raw))
 			}
 		case req.URL.Host == "api.test":
-			return botResponse(200, `{"content":"Choisis Hot Fuzz.","buttons":[{"id":"eris:choose:`+strings.Repeat("b", 64)+`","label":"Choisir"}]}`), nil
+			return botResponse(200, `{"content":"Confirmer Hot Fuzz ?","buttons":[{"id":"eris:confirm:`+strings.Repeat("b", 64)+`","label":"Confirmer"}]}`), nil
 		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
-			if !strings.Contains(string(raw), `"flags":64`) || !strings.Contains(string(raw), "eris:choose:") {
-				t.Error("private choices missing")
+			if strings.Contains(string(raw), `"flags":64`) || !strings.Contains(string(raw), "eris:confirm:") || !strings.Contains(string(raw), `"parse":[]`) {
+				t.Error("public confirmation missing or mentions enabled")
 			}
 		default:
 			t.Error("unexpected model or message call", req.URL.Path)
@@ -99,19 +99,35 @@ func TestErisPublicHandoffCreatesNewEphemeralReply(t *testing.T) {
 	}
 }
 
-func TestErisConfirmationBypassesModelAndRejectsPublicButtons(t *testing.T) {
+func TestErisConfirmationBypassesModelAndPreservesVisibility(t *testing.T) {
 	for _, private := range []bool{true, false} {
 		flags := 0
 		if private {
 			flags = 64
 		}
-		body, _ := json.Marshal(map[string]any{"id": "99999", "application_id": "12345", "guild_id": "23456", "type": 3, "token": "interaction-token", "member": map[string]any{"user": map[string]string{"id": "11111"}}, "message": map[string]any{"flags": flags, "author": map[string]string{"id": "12345"}}, "data": map[string]any{"custom_id": "eris:confirm:" + strings.Repeat("a", 64), "component_type": 2}})
+		body, _ := json.Marshal(map[string]any{"id": "99999", "application_id": "12345", "guild_id": "23456", "channel_id": "33333", "type": 3, "token": "interaction-token", "member": map[string]any{"user": map[string]string{"id": "11111"}}, "message": map[string]any{"flags": flags, "author": map[string]string{"id": "12345"}}, "data": map[string]any{"custom_id": "eris:confirm:" + strings.Repeat("a", 64), "component_type": 2}})
 		b, r := signedInteraction(t, string(body))
 		b.Config.BotAPIURL = "http://api.test"
 		b.Eris.URL = "http://model.test"
 		calls := 0
 		b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
 			calls++
+			if strings.HasSuffix(req.URL.Path, "/callback") {
+				raw, _ := io.ReadAll(req.Body)
+				want := `{"type":5}`
+				if private {
+					want = `{"type":6}`
+				}
+				if string(raw) != want {
+					t.Error("wrong acknowledgement", string(raw))
+				}
+			}
+			if strings.HasSuffix(req.URL.Path, "/messages/@original") {
+				raw, _ := io.ReadAll(req.Body)
+				if strings.Contains(string(raw), `"flags":64`) != private {
+					t.Error("wrong visibility", string(raw))
+				}
+			}
 			if req.URL.Host == "model.test" {
 				t.Error("model participated in confirmation")
 			}
@@ -124,11 +140,8 @@ func TestErisConfirmationBypassesModelAndRejectsPublicButtons(t *testing.T) {
 		w := httptest.NewRecorder()
 		b.Handler().ServeHTTP(w, r)
 		b.Wait()
-		if private && (w.Code != 202 || calls != 3) {
+		if w.Code != 202 || calls != 3 {
 			t.Fatal(w.Code, calls)
-		}
-		if !private && (w.Code != 403 || calls != 0) {
-			t.Fatal("public confirmation accepted")
 		}
 	}
 }

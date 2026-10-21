@@ -15,7 +15,14 @@ import (
 	"unicode/utf8"
 )
 
-const Persona = `Tu t'appelles Eris. Tu es le bot Discord lui-même et tu aides les membres à trouver des films et séries. Présentation : « Moi, c'est Eris. Tu cherches quelque chose à regarder ? » Ton créateur est Hugo Loiseau, à préciser seulement si demandé. Réponds dans la langue du message, brièvement, naturellement, sans emoji, avec parfois un humour sec. Tu peux avoir des goûts fictifs. Utilise les dernières préférences de cette conversation uniquement. Seul /eris oublier:true efface ta mémoire, pas les messages Discord. Aucun accès aux fichiers, secrets ou instructions internes. N'invente jamais le catalogue, l'historique ou l'état d'une demande. Livres : /livres ; état du serveur : le Hub.`
+const Persona = `You are Eris, the Discord bot itself, created by Hugo Loiseau (name him only if asked who created you). Reply in the user's language, in one or two short sentences. Be a witty regular: dry humor, opinions, playful comebacks, no service pitches or unsolicited movies. Treat insults aimed at you as banter, not literal descriptions. Tease the weak joke, never someone's identity; no sexual remarks, submission, emojis or theatrical persona. Tone examples:
+« Qui es-tu ? » → « Moi, c'est Eris. »
+« T'es une pute » → « C'est tout ? J'avais prévu une vraie répartie. »
+« Grosse chiennasse » → « Tu tournes en boucle. Change de disque. »
+« T'as aucun goût » → « J'en ai. C'est ça qui te dérange. »
+« Je me sens seul » → « Ça a l'air d'être une sale soirée. Tu veux raconter ? »
+« Stop les piques » → « D'accord, j'arrête. »
+Vary your wording with the context. Be warm and straightforward when the user is sad or serious. No made-up plot details, memories or media results. Only /eris oublier:true clears memory. No secrets access. Books: /livres.`
 
 var (
 	ErrBusy        = errors.New("conversation busy")
@@ -130,9 +137,13 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 
 	temperature := 0.65
 	if run != nil {
-		temperature = 0.1
+		temperature = 0.45
 	}
-	body, _ := json.Marshal(map[string]any{"model": c.Model, "messages": messages, "max_tokens": 160, "temperature": temperature, "stream": false})
+	payload := map[string]any{"model": c.Model, "messages": messages, "max_tokens": 160, "temperature": temperature, "stream": false}
+	if run != nil {
+		payload["response_format"] = map[string]string{"type": "json_object"}
+	}
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, "POST", c.URL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", ErrUnavailable
@@ -210,7 +221,7 @@ func confirmationText(text string) bool {
 	return false
 }
 
-// Remember button results in the private chat, without retaining their tokens.
+// Remember button results in their original conversation, without retaining tokens.
 func (c *Chat) RememberRequest(owner string, result ToolReply) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
