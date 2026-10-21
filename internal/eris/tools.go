@@ -32,11 +32,16 @@ type Plan struct {
 }
 
 var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
+var requestFollowup = regexp.MustCompile(`(?i)^(?:alors )?demande[ -](?:le|la)(?: (?:pour moi|dans seerr))?[.!?]*$`)
 
-// Preserve an explicit watch constraint even if the small model drops that field.
+// Preserve explicit constraints when the model drops them or repeats a search.
 func (p Plan) WithQuestionConstraints(question string) Plan {
-	if p.Action == "recommend" && unseenWords.MatchString(strings.Join(strings.Fields(question), " ")) {
+	question = strings.Join(strings.Fields(question), " ")
+	if p.Action == "recommend" && unseenWords.MatchString(question) {
 		p.Unwatched = true
+	}
+	if p.Action == "search" && requestFollowup.MatchString(question) {
+		p.Action = "prepare"
 	}
 	return p
 }

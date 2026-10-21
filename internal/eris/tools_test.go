@@ -48,9 +48,6 @@ func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 		}
 		prompts = append(prompts, body.Messages)
 		answer := `{"action":"search","query":"Arrival","kind":"movie"}`
-		if len(prompts) == 2 {
-			answer = `{"action":"prepare","query":"Arrival","kind":"movie"}`
-		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: answer}}}})
 	}))
 	defer server.Close()
@@ -63,7 +60,7 @@ func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 		}
 		return ToolReply{Content: "Arrival (2016) : disponibilité vérifiée."}, nil
 	}
-	for _, question := range []string{"Tu as Arrival ?", "Demande-le"} {
+	for _, question := range []string{"Tu as Arrival ?", "Alors demande-le"} {
 		text, err := c.ReplyWithTools(context.Background(), "guild:alice", question, false, run)
 		if err != nil || text != "Arrival (2016) : disponibilité vérifiée." {
 			t.Fatalf("facts rewritten: %q %v", text, err)
@@ -120,6 +117,17 @@ func TestExplicitUnwatchedConstraintCannotBeDropped(t *testing.T) {
 		if p := (Plan{Action: "recommend"}).WithQuestionConstraints(text); p.Unwatched {
 			t.Errorf("invented constraint: %s", text)
 		}
+	}
+}
+
+func TestRequestFollowupDoesNotTurnRequestStatusIntoPreparation(t *testing.T) {
+	for _, question := range []string{"Ma demande le mercredi est-elle prête ?", "Cherche Arrival", "Demande le statut"} {
+		if p := (Plan{Action: "search", Query: "Arrival"}).WithQuestionConstraints(question); p.Action != "search" {
+			t.Fatal("invented request", question)
+		}
+	}
+	if p := (Plan{Action: "status", Query: "Arrival"}).WithQuestionConstraints("Demande-le"); p.Action != "status" {
+		t.Fatal("changed status action")
 	}
 }
 
