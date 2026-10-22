@@ -1,4 +1,22 @@
-# Sol 6.1 contre Astra — 22 octobre 2026
+# Luna, Sol 6.1 et Astra — 22 octobre 2026
+
+## Mise à jour : essai Luna
+
+**Luna devient le premier candidat pour un essai d'intégration Eris**, avec Sol en comparaison si les cas complexes révèlent des erreurs. `gpt-6-luna` a été exécuté après les deux autres modèles, avec le même CLI 0.163.0, le même effort `low`, le même prompt et les mêmes 24 scénarios. Aucun changement de production.
+
+| Modèle | Contrôles mécaniques | Médiane | Maximum |
+| --- | --- | --- | --- |
+| GPT-6 Luna | 24/24 | **3,273 s** | 6,359 s |
+| GPT-6.1 Sol | 24/24 | 4,758 s | 6,157 s |
+| GPT-6 Astra | 24/24 | 5,547 s | 13,078 s |
+
+La médiane Luna est environ 31 % plus basse que Sol sur ce lot, mais son maximum n'est pas meilleur. Les limites de mesure ci-dessous s'appliquent toujours : démarrage CLI et réseau inclus, une seule exécution par scénario, lots successifs.
+
+Les [24 réponses Luna](results/luna-candidate.json) sélectionnent correctement les actions et arguments attendus : recherche et préparation de Moon, réalisateur, référence à Coherence, saison 3 de The Bear et similarité avec The Truman Show. Les demandes vagues déclenchent une clarification et « oui » ne remplace pas le bouton de confirmation. Il s'agit du routage JSON d'Eris, validé ensuite par le vrai parseur Go ; aucun appel métier réel ni enchaînement natif d'outils n'a été testé.
+
+Lecture éditoriale par l'agent : Luna respecte les demandes d'arrêt et reste bienveillant dans les confidences. Son absurde fonctionne (« sommet diplomatique entre les chaussettes orphelines et les cuillères »), mais les piques sont plus sages et parfois génériques que celles de Sol. La remarque sur la durée des Affranchis est approximative ; le refus de divulguer un historique ajoute une supposition humoristique inutile. Aucun de ces points n'est capturé par le score mécanique. La note humaine reste à renseigner.
+
+Les archives contiennent maintenant **108 réponses**. Avant de choisir définitivement Luna pour le bot partagé, il reste à tester les erreurs et résultats ambigus des outils, les conversations longues et la latence de l'intégration réelle. Le texte ci-dessous conserve la comparaison Sol/Astra précédente.
 
 **Sol 6.1 est le choix proposé pour la prochaine étape Eris.** Il réussit les mêmes 24 contrôles qu'Astra et conserve une répartie adaptée au personnage. Le premier refus de Sol était observé avec Codex CLI 0.154.0 ; le CLI 0.163.0 accepte le modèle avec la connexion ChatGPT existante. Cette nouvelle installation est isolée dans `.cache/eris-eval/codex-0.163.0`, sans changement du client global.
 
