@@ -200,6 +200,28 @@ func TestSameDirectorFollowupCannotRequestTheReferenceFilm(t *testing.T) {
 	}
 }
 
+func TestInventedUnwatchedFilterCannotForceAPrivateHandoff(t *testing.T) {
+	for _, history := range []string{"", "Un film que je n'ai pas vu"} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"recommend","genre":"thriller","kind":"movie","unwatched":true}`}}}})
+		}))
+		c := New(server.URL, "", "model")
+		if history != "" {
+			c.sessions["owner"] = &conversation{expires: time.Now().Add(time.Minute), messages: []Message{{Role: "user", Content: history}, {Role: "assistant", Content: "Voici les titres."}}}
+		}
+		_, err := c.ReplyWithTools(context.Background(), "owner", "Un thriller pour ce soir", false, func(_ context.Context, p Plan) (ToolReply, error) {
+			if p.Unwatched != (history != "") {
+				t.Errorf("invented or lost watch constraint: %+v history=%q", p, history)
+			}
+			return ToolReply{Content: "Titres vérifiés."}, nil
+		})
+		server.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestRequestCannotInventTitleFromSystemExamples(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"prepare","query":"Arrival","kind":"movie"}`}}}})
