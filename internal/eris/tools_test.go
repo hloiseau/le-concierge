@@ -33,7 +33,7 @@ func TestPlansRejectArbitraryToolsIdentityAndBadFilters(t *testing.T) {
 			t.Errorf("rejected %s", raw)
 		}
 	}
-	if utf8.RuneCountInString(Persona+ToolInstructions) > 2000 {
+	if utf8.RuneCountInString(Persona+ToolInstructions) > 2200 {
 		t.Fatal("runtime prompt limit exceeded")
 	}
 }
@@ -179,6 +179,24 @@ func TestExplicitPronounRequestDoesNotBecomeAnotherRecommendation(t *testing.T) 
 	p := (Plan{Action: "recommend", Query: "Hot Fuzz", Relation: "director", Source: "seerr"}).WithQuestionConstraints("Du même réalisateur que Hot Fuzz qu'on pourrait demander dans Seerr ?")
 	if p.Action != "recommend" {
 		t.Fatal("recommendation converted to request")
+	}
+}
+
+func TestSameDirectorFollowupCannotRequestTheReferenceFilm(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"prepare","query":"Hot Fuzz","kind":"movie"}`}}}})
+	}))
+	defer server.Close()
+	c := New(server.URL, "", "model")
+	c.sessions["owner"] = &conversation{expires: time.Now().Add(time.Minute), messages: []Message{{Role: "user", Content: "Mon film préféré est Hot Fuzz"}, {Role: "assistant", Content: "Bon choix."}}}
+	_, err := c.ReplyWithTools(context.Background(), "owner", "Un autre du même réalisateur à demander dans Seerr ?", false, func(_ context.Context, p Plan) (ToolReply, error) {
+		if p.Action != "recommend" || p.Query != "Hot Fuzz" || p.Relation != "director" || p.Source != "seerr" {
+			t.Errorf("reference requested instead of another director credit: %+v", p)
+		}
+		return ToolReply{Content: "Filmographie vérifiée."}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

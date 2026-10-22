@@ -12,7 +12,7 @@ import (
 
 const ToolInstructions = `
 Un seul objet JSON, une action, aucun markdown :
-Discussion : {"action":"chat","text":"réponse"}. « Mon film préf : X » SEUL = chat ; une question ou un ordre explicite prime.
+Discussion : {"action":"chat","text":"réponse"}. « Mon film préf, c'est X » = chat, pas de recommandation spontanée. « X est mon film préféré, tu l'as sur Plex ? » = search de X.
 « Tu as X sur Plex ? », « Cherche X » : {"action":"search","query":"X","kind":"movie"}, jamais prepare.
 Conseil par genre : {"action":"recommend","genre":"thriller","kind":"movie"}. Genre anglais, maxMinutes si limite, unwatched:true si non vu.
 Film similaire : {"action":"recommend","query":"titre de référence","relation":"similar","kind":"movie"}.
@@ -38,10 +38,18 @@ type Plan struct {
 
 var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
 var requestFollowup = regexp.MustCompile(`(?i)^(?:(?:alors )?demande[ -](?:le|la)|(?:tu peux|peux[- ]tu|pourrais[- ]tu) (?:le|la) demander)(?: pour moi)?(?: dans seerr)?[.!? ]*$`)
+var sameDirector = regexp.MustCompile(`(?i)(?:même|meme) (?:réal(?:isateur|isatrice)?|real(?:isateur|isatrice)?|director)(?:$|[^\p{L}])`)
 
 // Preserve explicit constraints when the model drops them or repeats a search.
 func (p Plan) WithQuestionConstraints(question string) Plan {
 	question = strings.Join(strings.Fields(question), " ")
+	if (p.Action == "prepare" || p.Action == "search" || p.Action == "recommend") && p.Query != "" && p.Kind != "show" && sameDirector.MatchString(question) {
+		source := p.Source
+		if strings.Contains(strings.ToLower(question), "seerr") {
+			source = "seerr"
+		}
+		p = Plan{Action: "recommend", Query: p.Query, Kind: "movie", Relation: "director", Source: source, Unwatched: p.Unwatched}
+	}
 	if p.Action == "recommend" && unseenWords.MatchString(question) {
 		p.Unwatched = true
 	}
