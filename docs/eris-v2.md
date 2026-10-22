@@ -7,7 +7,7 @@ Implémentation du 22 octobre 2026, dans la branche de travail. Le NAS n'a pas �
 1. Contexte des réponses publiques : réalisé, référence unique vérifiée, auteur Eris et ID du message. Les fils complets et la lecture ambiante du salon ne sont pas ajoutés.
 2. Mémoire de personnage durable : réalisée dans SQLite propre au bot, avec rappel sélectif, évolution, retrait, expiration et effacement.
 3. Personnalité et recette Luna : personnalité v2 intégrée, recette séquentielle de dix tours réussie ; voir les [résultats et limites éditoriales](../evals/eris/dialogues/README.md). Le ton reste à juger avec Hugo, notamment son intensité.
-4. Transport Responses : implémenté et testé sur flux simulés. Connexion OAuth de l'application, renouvellement et validation sur le compte réel encore nécessaires avant activation. Aucun transfert de session Codex ni basculement payant vers une clé API n'est effectué.
+4. Transport Responses : implémenté et testé sur flux simulés. Le [service OAuth personnel](../tools/eris-auth/README.md) gère maintenant la connexion et le renouvellement avec le devkit officiel ; la validation sur le compte réel reste nécessaire avant activation. Aucun transfert de session Codex ni basculement payant vers une clé API n'est effectué.
 5. Mise en service : seulement après connexion et recette Discord avec deux membres, erreur fournisseur et redémarrage. L'overlay est préparé ; pas de déploiement automatique dans ce lot.
 
 ## Comportement
@@ -47,7 +47,7 @@ ERIS_MEMORY_PATH=/app/eris-data/character.db
 ERIS_API_KEY_FILE=/run/eris-auth/access_token
 ```
 
-Prévoir un volume distinct, accessible à UID/GID 65532 pour SQLite. Le dossier du jeton est monté en lecture seule ; la valeur est relue avant chaque requête, permettant un remplacement atomique par le fournisseur d'authentification. Le code de ce dépôt ne réalise pas encore la connexion OAuth ni son renouvellement. Une révocation/expiration produit une erreur de service, sans nouvelle tentative aveugle ni repli payant.
+Prévoir un volume distinct, accessible à UID/GID 65532 pour SQLite. Le dossier du jeton est monté en lecture seule ; la valeur est relue avant chaque requête, permettant un remplacement atomique par le [service d'authentification](../tools/eris-auth/README.md). Une révocation/expiration produit une erreur de service, sans nouvelle tentative aveugle ni repli payant.
 
 L'[overlay](../deploy/eris-v2.override.yaml) complète le Compose de développement. Après avoir provisionné `ERIS_AUTH_DIRECTORY/access_token`, la commande est :
 
