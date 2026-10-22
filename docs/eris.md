@@ -84,3 +84,5 @@ L’URL vide désactive seulement la génération. `/eris` explique alors que le
 4. Tester deux membres : leur historique doit rester séparé ; tester l’effacement et les commandes média pendant une génération.
 
 Les tests automatisés couvrent le protocole HTTP, les signatures, les réponses privées, l’isolation des conversations, l’effacement, les limites, les erreurs et l’identité Discord. Ils ne remplacent pas la lecture des réponses du modèle réel, ni la recette finale dans Discord.
+
+Le [terrain de test conversationnel](../evals/eris/README.md) compare la consigne actuelle à une candidate plus spontanée et mordante sur des scénarios synthétiques séparés. Il contient un corpus de références, un runner Codex/HTTP et les résultats mesurés. La candidate et les essais par abonnement restent expérimentaux : aucune bascule du bot ni modification de la personnalité installée n'est effectuée par ce banc d'essai.
