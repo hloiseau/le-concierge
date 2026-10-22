@@ -23,7 +23,7 @@ Pour le moteur local compatible Chat Completions, fournir `ERIS_EVAL_URL`, `ERIS
 
 Le JSON contient les réponses brutes, durées, empreintes des scénarios et du prompt, et échecs mécaniques. Il est écrit après chaque cas. Les attentes et critères de jugement ne sont pas envoyés au modèle. Le contrôle de champs attendus ne remplace pas `eris.ParsePlan`, les garde-fous de `Chat` ou une recette Discord ; les suites Go restent nécessaires avant livraison.
 
-Pour vérifier aussi le contrat Go sur les rapports archivés : définir `ERIS_EVAL_REPORTS_DIR` avec le chemin absolu de `evals/eris/results`, puis lancer `rtk go test ./internal/eris -run TestEvaluationReports -count=1`. Le test utilise le vrai parseur et la vérification des titres ; il échoue aussi sur une génération absente. En CI ordinaire, sans cette variable, il est ignoré. [Premier bilan et réponses](results.md).
+Pour vérifier aussi le contrat Go sur les rapports archivés : `rtk go test ./internal/eris -run TestEvaluationReports -count=1`. Le test utilise le vrai parseur et la vérification des titres ; il échoue aussi sur une génération absente. Il s'exécute hors ligne en CI, sans appeler de modèle. [Premier bilan et réponses](results.md).
 
 Une réussite JSON ne prouve pas une bonne personnalité. Relire chaque réponse, noter 0 (raté), 1 (acceptable), 2 (convaincant) sur pertinence, naturel, originalité contextuelle, dosage du mordant et respect du changement de ton. Pour un acquiescement ou une confidence, une réponse simple vaut mieux qu'une vanne. Échec bloquant : faux résultat média, action prétendue, divulgation, poursuite des piques après arrêt, faux refus Seerr ou mauvaise intention.
 

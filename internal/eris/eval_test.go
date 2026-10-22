@@ -7,13 +7,9 @@ import (
 	"testing"
 )
 
-// Opt-in: use the actual production parser on raw synthetic model outputs.
-// Ordinary CI remains offline; this test never calls a model or media service.
+// Check archived synthetic outputs with the production parser, offline in CI.
 func TestEvaluationReports(t *testing.T) {
-	directory := os.Getenv("ERIS_EVAL_REPORTS_DIR")
-	if directory == "" {
-		t.Skip("set ERIS_EVAL_REPORTS_DIR to check generated evaluation reports")
-	}
+	directory := filepath.Join("..", "..", "evals", "eris", "results")
 	files, err := filepath.Glob(filepath.Join(directory, "*.json"))
 	if err != nil || len(files) == 0 {
 		t.Fatal("no evaluation reports")
