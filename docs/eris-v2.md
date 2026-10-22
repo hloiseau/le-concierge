@@ -1,14 +1,14 @@
 # Eris v2 : personnalité, contexte et lubies
 
-Implémentation du 22 octobre 2026, dans la branche de travail. Le NAS n'a pas été basculé. Le profil historique reste le défaut ; le profil v2 est explicite et utilise Responses avec `gpt-6-luna` par défaut.
+Déployé sur le NAS le 22 octobre 2026 à la demande de Hugo, depuis la branche de travail. Le bot actif utilise le profil v2 et Responses avec `gpt-6-luna`, via la connexion ChatGPT propre à Eris. Le profil historique reste le défaut dans le code. Voir le [relevé de déploiement](eris-v2-nas.md).
 
 ## Plan et état
 
 1. Contexte des réponses publiques : réalisé, référence unique vérifiée, auteur Eris et ID du message. Les fils complets et la lecture ambiante du salon ne sont pas ajoutés.
 2. Mémoire de personnage durable : réalisée dans SQLite propre au bot, avec rappel sélectif, évolution, retrait, expiration et effacement.
 3. Personnalité et recette Luna : personnalité v2 intégrée, recette séquentielle de dix tours réussie ; voir les [résultats et limites éditoriales](../evals/eris/dialogues/README.md). Le ton reste à juger avec Hugo, notamment son intensité.
-4. Transport Responses : implémenté et testé sur flux simulés. Le [service OAuth personnel](../tools/eris-auth/README.md) gère maintenant la connexion et le renouvellement avec le devkit officiel ; la validation sur le compte réel reste nécessaire avant activation. Aucun transfert de session Codex ni basculement payant vers une clé API n'est effectué.
-5. Mise en service : seulement après connexion et recette Discord avec deux membres, erreur fournisseur et redémarrage. L'overlay est préparé ; pas de déploiement automatique dans ce lot.
+4. Transport Responses : validé sur le compte réel depuis le NAS, avec une réponse de discussion et un plan d'outil synthétique. Le [service OAuth personnel](../tools/eris-auth/README.md) gère la connexion et le renouvellement avec le devkit officiel. Aucun transfert de session Codex ni basculement payant vers une clé API n'est effectué.
+5. Mise en service : réalisée sur le NAS avec sauvegarde et contrôles de santé, connexion Discord confirmée. La recette humaine dans Discord, notamment à deux membres et sur l'intensité du personnage, reste à effectuer.
 
 ## Comportement
 
@@ -34,7 +34,7 @@ Le rappel est lexical sur les mots du sujet, sans base vectorielle ni appel mod�
 
 Une erreur de lecture/écriture mémoire en cours d'utilisation laisse les services disponibles ; les diagnostics n'incluent ni contenu ni secret. Un chemin de base invalide au démarrage échoue explicitement pour éviter un démarrage faussement persistant.
 
-## Activation préparée
+## Activation
 
 Paramètres du **bot uniquement** :
 
