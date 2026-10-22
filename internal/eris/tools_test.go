@@ -19,6 +19,9 @@ func TestPlansRejectArbitraryToolsIdentityAndBadFilters(t *testing.T) {
 		`{"action":"prepare","query":"Show","kind":"show","seasons":[1,1]}`,
 		`{"action":"prepare","query":"Film","kind":"movie","seasons":[1]}`,
 		`{"action":"search","query":"a"}`, `{"action":"status","unwatched":true}`,
+		`{"action":"prepare","query":"Hot Fuzz","relation":"director"}`, `{"action":"recommend","query":"Hot Fuzz","relation":"actor"}`,
+		`{"action":"recommend","source":"seerr"}`, `{"action":"recommend","query":"Hot Fuzz","relation":"director","source":"seerr","unwatched":true}`,
+		`{"action":"recommend","query":"Hot Fuzz","relation":"similar","kind":"show"}`, `{"action":"recommend","query":"Hot Fuzz","relation":"similar","maxMinutes":90}`,
 		`{"action":"recent"} {"action":"prepare","query":"Arrival"}`, "Je l’ai déjà ajouté.",
 	} {
 		if _, err := ParsePlan(raw); err == nil {
@@ -30,8 +33,32 @@ func TestPlansRejectArbitraryToolsIdentityAndBadFilters(t *testing.T) {
 			t.Errorf("rejected %s", raw)
 		}
 	}
-	if utf8.RuneCountInString(Persona+ToolInstructions) > 2000 {
+	if utf8.RuneCountInString(Persona+ToolInstructions) > 2200 {
 		t.Fatal("runtime prompt limit exceeded")
+	}
+}
+
+func TestRecommendationCanKeepReferenceRelationAndCatalogue(t *testing.T) {
+	for _, raw := range []string{
+		`{"action":"recommend","query":"Hot Fuzz","kind":"movie","relation":"similar"}`,
+		`{"action":"recommend","query":"Hot Fuzz","kind":"movie","relation":"director","source":"seerr"}`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: raw}}}})
+		}))
+		c := New(server.URL, "", "model")
+		called := false
+		reply, err := c.ReplyWithTools(context.Background(), "guild:alice", "Du même réal que Hot Fuzz qu'on pourrait demander sur Seerr ?", false, func(_ context.Context, p Plan) (ToolReply, error) {
+			called = true
+			if p.Action != "recommend" || p.Query != "Hot Fuzz" {
+				t.Fatalf("lost recommendation: %+v", p)
+			}
+			return ToolReply{Content: "Films vérifiés du même réalisateur"}, nil
+		})
+		server.Close()
+		if err != nil || !called || reply != "Films vérifiés du même réalisateur" {
+			t.Fatalf("recommendation became a title clarification: %q %v", reply, err)
+		}
 	}
 }
 
@@ -128,6 +155,70 @@ func TestRequestFollowupDoesNotTurnRequestStatusIntoPreparation(t *testing.T) {
 	}
 	if p := (Plan{Action: "status", Query: "Arrival"}).WithQuestionConstraints("Demande-le"); p.Action != "status" {
 		t.Fatal("changed status action")
+	}
+}
+
+func TestExplicitPronounRequestDoesNotBecomeAnotherRecommendation(t *testing.T) {
+	for _, question := range []string{"Tu peux le demander pour moi dans Seerr ?", "Peux-tu le demander ?", "Demande-le"} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"recommend","query":"Hot Fuzz","relation":"similar","source":"seerr","kind":"movie"}`}}}})
+		}))
+		c := New(server.URL, "", "model")
+		c.sessions["owner"] = &conversation{expires: time.Now().Add(time.Minute), messages: []Message{{Role: "user", Content: "Mon film préf, c'est Hot Fuzz"}, {Role: "assistant", Content: "Bon choix."}}}
+		_, err := c.ReplyWithTools(context.Background(), "owner", question, false, func(_ context.Context, p Plan) (ToolReply, error) {
+			if p.Action != "prepare" || p.Query != "Hot Fuzz" || p.Relation != "" || p.Source != "" || p.Validate() != nil {
+				t.Errorf("explicit request lost: %+v", p)
+			}
+			return ToolReply{Content: "Choisis le titre."}, nil
+		})
+		server.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := (Plan{Action: "recommend", Query: "Hot Fuzz", Relation: "director", Source: "seerr"}).WithQuestionConstraints("Du même réalisateur que Hot Fuzz qu'on pourrait demander dans Seerr ?")
+	if p.Action != "recommend" {
+		t.Fatal("recommendation converted to request")
+	}
+}
+
+func TestSameDirectorFollowupCannotRequestTheReferenceFilm(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"prepare","query":"Hot Fuzz","kind":"movie"}`}}}})
+	}))
+	defer server.Close()
+	c := New(server.URL, "", "model")
+	c.sessions["owner"] = &conversation{expires: time.Now().Add(time.Minute), messages: []Message{{Role: "user", Content: "Mon film préféré est Hot Fuzz"}, {Role: "assistant", Content: "Bon choix."}}}
+	_, err := c.ReplyWithTools(context.Background(), "owner", "Un autre du même réalisateur à demander dans Seerr ?", false, func(_ context.Context, p Plan) (ToolReply, error) {
+		if p.Action != "recommend" || p.Query != "Hot Fuzz" || p.Relation != "director" || p.Source != "seerr" {
+			t.Errorf("reference requested instead of another director credit: %+v", p)
+		}
+		return ToolReply{Content: "Filmographie vérifiée."}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInventedUnwatchedFilterCannotForceAPrivateHandoff(t *testing.T) {
+	for _, history := range []string{"", "Un film que je n'ai pas vu"} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"recommend","genre":"thriller","kind":"movie","unwatched":true}`}}}})
+		}))
+		c := New(server.URL, "", "model")
+		if history != "" {
+			c.sessions["owner"] = &conversation{expires: time.Now().Add(time.Minute), messages: []Message{{Role: "user", Content: history}, {Role: "assistant", Content: "Voici les titres."}}}
+		}
+		_, err := c.ReplyWithTools(context.Background(), "owner", "Un thriller pour ce soir", false, func(_ context.Context, p Plan) (ToolReply, error) {
+			if p.Unwatched != (history != "") {
+				t.Errorf("invented or lost watch constraint: %+v history=%q", p, history)
+			}
+			return ToolReply{Content: "Titres vérifiés."}, nil
+		})
+		server.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

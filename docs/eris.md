@@ -34,6 +34,8 @@ Lier Discord dans **Mon compte** du Hub après une connexion Plex permet de dema
 
 - `@Eris Tu as Arrival sur Plex ?` : titres lisibles, synopsis, genre et durée.
 - `@Eris Un thriller de moins de deux heures pour ce soir` : jusqu’à trois titres vérifiés dans le catalogue accessible au membre.
+- `@Eris Des films proches de Hot Fuzz ?` : recommandations Seerr croisées avec le catalogue Plex du membre ; si nécessaire, complément avec au moins deux genres communs vérifiés, indiqués dans la réponse.
+- `@Eris Du même réalisateur que Hot Fuzz à demander dans Seerr ?` : recherche du réalisateur dans les crédits, puis de sa filmographie. Les titres disponibles, bloqués ou en cours de demande sont exclus ; les boutons publics conservent une confirmation séparée avant tout envoi.
 - `@Eris Quoi de neuf ?` : derniers ajouts Plex.
 - `/eris message:Un film de science-fiction que je n’ai pas vu` : filtre les contenus non marqués vus sur ce compte Plex ; cela ne prouve pas qu’ils n’ont jamais été vus ailleurs.
 - `/eris message:Ma demande de Dune est prête ?` : demandes du compte Seerr associé à l’identité Plex, avec leur état.
@@ -66,14 +68,14 @@ Monter le fichier secret en lecture seule dans le bot et dans le moteur. Génér
 
 Le service d’inférence et ses instructions d’installation sont dans le dépôt privé d’Eris, dossier `server/`. Il charge **Qwen3.5 9B en GGUF Q4_K_M**, avec une révision et une empreinte épinglées. La personnalité d’Eris est fournie par le bot ; les poids Qwen ne sont pas réentraînés. Les deux candidats LFM ont échoué à la recette Discord. Le navigateur Eris conserve son moteur actuel, et les poids et souvenirs privés ne sont pas recopiés dans ce dépôt public.
 
-Les deux conteneurs doivent partager un réseau Docker pour résoudre `eris-runtime`. Le Compose du moteur accepte le nom du réseau existant via `ERIS_NETWORK` ; aucun port d’inférence n’est publié. Le service dispose de quatre CPU et 6 Go de RAM, sans accès au GPU de transcodage. Le bot limite chaque appel à 50 secondes et n’effectue aucun repli vers un fournisseur externe. Le moteur refuse les générations incomplètes qui dépassent ses 160 tokens ou sa limite souple de 42 secondes.
+Les deux conteneurs doivent partager un réseau Docker pour résoudre `eris-runtime`. Le Compose du moteur accepte le nom du réseau existant via `ERIS_NETWORK` ; aucun port d’inférence n’est publié. Le service dispose de quatre CPU et 6 Go de RAM. Le profil Arc A310 du dépôt privé ajoute Vulkan, huit couches GPU et des lots de 128 tokens ; environ 1,85 Go de mémoire vidéo sont utilisés, le reste du modèle reste sur CPU. Le profil CPU demeure disponible. Le bot limite chaque appel à 50 secondes et n’effectue aucun repli vers un fournisseur externe. Le moteur refuse les générations incomplètes qui dépassent ses 160 tokens ou sa limite souple de 42 secondes.
 
 L’URL vide désactive seulement la génération. `/eris` explique alors que le moteur n’est pas connecté, `/eris oublier:true` fonctionne et toutes les commandes média restent disponibles. Ne renseigner l’URL qu’une fois le moteur prêt ; un échec de génération ne remplace pas une réponse par un résultat inventé.
 
 ## Vérifier la mise en service
 
 1. Démarrer le moteur avec le fichier GGUF vérifié et vérifier son état de santé.
-2. Vérifier l’identité, les commandes, la mémoire et le français avec les scénarios du guide privé sur le CPU du NAS.
+2. Vérifier l’identité, les commandes, la mémoire et le français avec les scénarios du guide privé sur le profil CPU ou GPU retenu ; pour le GPU, mesurer aussi le partage avec Plex.
 3. Recréer le bot avec les paramètres ci-dessus et l’image de la branche validée, puis vérifier son nom et `/aide`.
 4. Tester deux membres : leur historique doit rester séparé ; tester l’effacement et les commandes média pendant une génération.
 

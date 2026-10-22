@@ -11,18 +11,23 @@ import (
 )
 
 const ToolInstructions = `
-Réponds TOUJOURS par un seul objet JSON, sans markdown. UNE action :
-Discussion, goûts, provocation : {"action":"chat","text":"ta réponse"}. Un film préféré est un goût, pas une recherche.
-Titre sur Plex : {"action":"search","query":"titre","kind":"movie"}.
-Conseil : {"action":"recommend","kind":"movie","genre":"thriller"}. Genre anglais ; maxMinutes si limite, unwatched:true si non vu. Omet les filtres non demandés.
+Un seul objet JSON, une action, aucun markdown :
+Discussion : {"action":"chat","text":"réponse"}. « Mon film préf, c'est X » = chat, pas de recommandation spontanée. « X est mon film préféré, tu l'as sur Plex ? » = search de X.
+« Tu as X sur Plex ? », « Cherche X » : {"action":"search","query":"X","kind":"movie"}, jamais prepare.
+Conseil par genre : {"action":"recommend","genre":"thriller","kind":"movie"}. Genre anglais, maxMinutes si limite, unwatched:true si non vu.
+Film similaire : {"action":"recommend","query":"titre de référence","relation":"similar","kind":"movie"}.
+Même réalisateur, à demander sur Seerr : {"action":"recommend","query":"titre de référence","relation":"director","source":"seerr","kind":"movie"}.
+source:"seerr" si demandé, sinon Plex. query reste le TITRE DE RÉFÉRENCE, pas une suggestion inventée. « Recommande un film qu'on pourrait demander » = recommend, jamais prepare ou search. Par référence : films seulement, sans genre/durée.
 Nouveautés : {"action":"recent"}.
 État des demandes : {"action":"status"}, query si titre connu.
-Demande Seerr : {"action":"prepare","query":"titre","kind":"movie"}. Série : kind:"show", seasons:[2] pour saison 2.
-query contient seulement le titre. Résous « le » avec la conversation, même après un goût. Titre ou saison inconnu : demande via chat. Ne reprends aucun titre d'exemple. prepare affiche des boutons ; seul le bouton confirme. N'invente ni catalogue ni statut. Demande imprécise : pose juste la question manquante, sans vanne.`
+« Demande/ajoute X dans Seerr » : {"action":"prepare","query":"X","kind":"movie"}. Série : kind:"show", seasons:[2].
+query=titre seul. Résous les pronoms avec la conversation. Omet les filtres non demandés. Titre/saison manquant : question courte via chat. Seuls les boutons confirment. N'invente aucun résultat.`
 
 type Plan struct {
 	Action     string `json:"action"`
 	Query      string `json:"query,omitempty"`
+	Relation   string `json:"relation,omitempty"`
+	Source     string `json:"source,omitempty"`
 	Kind       string `json:"kind,omitempty"`
 	Genre      string `json:"genre,omitempty"`
 	MaxMinutes int    `json:"maxMinutes,omitempty"`
@@ -32,16 +37,24 @@ type Plan struct {
 }
 
 var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
-var requestFollowup = regexp.MustCompile(`(?i)^(?:alors )?demande[ -](?:le|la)(?: (?:pour moi|dans seerr))?[.!?]*$`)
+var requestFollowup = regexp.MustCompile(`(?i)^(?:(?:alors )?demande[ -](?:le|la)|(?:tu peux|peux[- ]tu|pourrais[- ]tu) (?:le|la) demander)(?: pour moi)?(?: dans seerr)?[.!? ]*$`)
+var sameDirector = regexp.MustCompile(`(?i)(?:même|meme) (?:réal(?:isateur|isatrice)?|real(?:isateur|isatrice)?|director)(?:$|[^\p{L}])`)
 
 // Preserve explicit constraints when the model drops them or repeats a search.
 func (p Plan) WithQuestionConstraints(question string) Plan {
 	question = strings.Join(strings.Fields(question), " ")
+	if (p.Action == "prepare" || p.Action == "search" || p.Action == "recommend") && p.Query != "" && p.Kind != "show" && sameDirector.MatchString(question) {
+		source := p.Source
+		if strings.Contains(strings.ToLower(question), "seerr") {
+			source = "seerr"
+		}
+		p = Plan{Action: "recommend", Query: p.Query, Kind: "movie", Relation: "director", Source: source, Unwatched: p.Unwatched}
+	}
 	if p.Action == "recommend" && unseenWords.MatchString(question) {
 		p.Unwatched = true
 	}
-	if p.Action == "search" && requestFollowup.MatchString(question) {
-		p.Action = "prepare"
+	if (p.Action == "search" || p.Action == "recommend") && p.Query != "" && requestFollowup.MatchString(question) {
+		p = Plan{Action: "prepare", Query: p.Query, Kind: p.Kind, Seasons: p.Seasons}
 	}
 	return p
 }
@@ -109,7 +122,10 @@ func (p Plan) Validate() error {
 			return invalid
 		}
 	case "recommend":
-		if p.Query != "" || p.Text != "" {
+		if p.Text != "" || (p.Source != "" && p.Source != "plex" && p.Source != "seerr") || (p.Relation != "" && p.Relation != "similar" && p.Relation != "director") {
+			return invalid
+		}
+		if (p.Query == "") != (p.Relation == "") || (p.Relation != "" && (utf8.RuneCountInString(p.Query) < 2 || p.Kind == "show" || p.Genre != "" || p.MaxMinutes != 0)) || (p.Source == "seerr" && (p.Relation == "" || p.Unwatched)) {
 			return invalid
 		}
 	case "recent", "status":
@@ -120,6 +136,9 @@ func (p Plan) Validate() error {
 		return invalid
 	}
 	if p.Action != "recommend" && (p.Genre != "" || p.MaxMinutes != 0 || p.Unwatched) {
+		return invalid
+	}
+	if p.Action != "recommend" && (p.Relation != "" || p.Source != "") {
 		return invalid
 	}
 	if len(p.Seasons) > 0 && (p.Action != "prepare" || p.Kind != "show") {
