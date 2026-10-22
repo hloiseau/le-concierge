@@ -123,18 +123,32 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		} else if question != "" {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
-			result := b.erisMediaReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID})
+			result := b.erisContextReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}, erisReference(event.Message, b.Config.DiscordClientID))
 			reply = result.Content
 			for _, button := range result.Buttons {
 				components = append(components, discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Style: discordgo.SecondaryButton, Label: button.Label, CustomID: button.ID}}})
 			}
 		}
-		_, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
+		sent, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
 			Content: reply, Reference: event.Reference(), Components: components,
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}, discordgo.WithContext(ctx))
 		if err != nil {
 			slog.Warn("Discord mention reply failed")
+		} else if sent != nil {
+			b.Eris.Delivered(event.GuildID+":"+event.Author.ID+":"+event.ChannelID, sent.ID, reply)
 		}
 	}()
+}
+
+// Even an explicit mention cannot smuggle an unverified referenced author.
+func erisReference(m *discordgo.Message, botID string) string {
+	if m == nil || m.Type != discordgo.MessageTypeReply {
+		return ""
+	}
+	r, ref := m.ReferencedMessage, m.MessageReference
+	if r == nil || ref == nil || !config.Snowflake(ref.MessageID) || ref.MessageID != r.ID || ref.ChannelID != m.ChannelID || (ref.GuildID != "" && ref.GuildID != m.GuildID) || r.ChannelID != m.ChannelID || r.Author == nil || !r.Author.Bot || r.Author.ID != botID || r.WebhookID != "" || r.Flags&64 != 0 || r.Content == "" || utf8.RuneCountInString(r.Content) > 1500 {
+		return ""
+	}
+	return "Eris (message " + r.ID + ") : " + r.Content
 }

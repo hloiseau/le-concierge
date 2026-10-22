@@ -1,0 +1,23 @@
+# Optional overlay for deploy/compose.yaml. Requires a provisioned application
+# token file; does not reuse a developer's Codex auth.json or enable API billing.
+services:
+  bot:
+    environment:
+      ERIS_PROFILE: v2
+      ERIS_PROTOCOL: responses
+      ERIS_API_URL: https://api.openai.com/v1
+      ERIS_MODEL: gpt-6-luna
+      ERIS_API_KEY: ''
+      ERIS_API_KEY_FILE: /run/eris-auth/access_token
+      ERIS_MEMORY_PATH: /app/eris-data/character.db
+    volumes:
+      - eris-character:/app/eris-data
+      # Mount the directory so an atomic token replacement is visible.
+      - type: bind
+        source: ${ERIS_AUTH_DIRECTORY:?Set ERIS_AUTH_DIRECTORY to the application token directory}
+        target: /run/eris-auth
+        read_only: true
+        bind:
+          create_host_path: false
+volumes:
+  eris-character:

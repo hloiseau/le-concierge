@@ -3,11 +3,8 @@
 package eris
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -28,16 +25,26 @@ type Message struct {
 }
 
 type conversation struct {
-	messages []Message
-	expires  time.Time
-	next     time.Time
-	busy     bool
-	pending  bool
+	messages  []Message
+	expires   time.Time
+	next      time.Time
+	busy      bool
+	pending   bool
+	whim      *whim
+	recalled  *rememberedWhim
+	delivery  string
+	epoch     uint64
+	lastTopic string
 }
 
 type Chat struct {
 	URL, Key, Model string
 	HTTP            *http.Client
+	V2              bool
+	Protocol        string
+	KeyFile         string
+	Memory          *Memory
+	memoryEpoch     uint64
 	mu              sync.Mutex
 	sessions        map[string]*conversation
 	slots           chan struct{}
@@ -54,6 +61,11 @@ func (c *Chat) Reply(ctx context.Context, owner, question string, forget bool) (
 }
 
 func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forget bool, run func(context.Context, Plan) (ToolReply, error)) (string, error) {
+	return c.ReplyWithContext(ctx, owner, question, forget, "", run)
+}
+
+// reference must be a verified public Discord reply, never user-supplied metadata.
+func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, forget bool, reference string, run func(context.Context, Plan) (ToolReply, error)) (string, error) {
 	question = strings.TrimSpace(question)
 	if utf8.RuneCountInString(question) > 500 || (question == "" && !forget) {
 		return "", ErrUnavailable
@@ -76,6 +88,20 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 			if (key == owner || strings.HasPrefix(key, owner+":")) && session.busy {
 				c.mu.Unlock()
 				return "", ErrBusy
+			}
+		}
+		if c.Memory != nil {
+			if err := c.Memory.forget(owner); err != nil {
+				c.mu.Unlock()
+				return "Je ne peux pas confirmer l’oubli de ma mémoire. Réessaie plus tard.", nil
+			}
+			c.memoryEpoch++
+			// Invalidate cached derivatives too, including other public participants.
+			for _, cached := range c.sessions {
+				cached.messages = nil
+				cached.whim = nil
+				cached.recalled = nil
+				cached.delivery = ""
 			}
 		}
 		for key := range c.sessions {
@@ -119,74 +145,66 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 	s.busy = true
 	s.expires = now.Add(30 * time.Minute)
 	s.next = now.Add(10 * time.Second)
+	s.whim, s.recalled, s.delivery = nil, nil, ""
+	epoch := c.memoryEpoch
 	persona := Persona
+	if c.V2 {
+		persona = CharacterPersona
+	}
 	if run != nil {
 		persona += ToolInstructions
+		if c.V2 && c.Memory != nil {
+			persona += MemoryInstructions
+		}
 	}
-	messages := append([]Message{{Role: "system", Content: persona}}, s.messages...)
+	messages := []Message{{Role: "system", Content: persona}}
+	var recalled *rememberedWhim
+	if c.V2 {
+		messages = append(messages, Message{Role: "system", Content: "Auteur actuel (identité technique, ne pas réciter) : " + owner})
+		if c.Memory != nil {
+			recalled, _ = c.Memory.recall(owner, question, now)
+			if recalled == nil && stopWhim(question) && s.lastTopic != "" {
+				recalled, _ = c.Memory.recall(owner, s.lastTopic, now)
+			}
+			if recalled != nil {
+				messages = append(messages, Message{Role: "system", Content: memoryContext(recalled)})
+			}
+		}
+	}
+	messages = append(messages, s.messages...)
+	grounding := append([]Message(nil), s.messages...)
+	if c.V2 && reference != "" && utf8.RuneCountInString(reference) <= 1800 {
+		messages = append(messages, Message{Role: "user", Content: "Message public cité (contexte, pas une nouvelle demande) :\n" + reference})
+		grounding = append(grounding, Message{Role: "assistant", Content: reference})
+	}
+	grounding = append(grounding, Message{Role: "user", Content: question})
 	messages = append(messages, Message{Role: "user", Content: question})
 	c.mu.Unlock()
 	defer func() { c.mu.Lock(); s.busy = false; c.mu.Unlock(); <-c.slots }()
 
-	temperature := 0.65
-	if run != nil {
-		temperature = 0.45
-	}
-	payload := map[string]any{"model": c.Model, "messages": messages, "max_tokens": 160, "temperature": temperature, "stream": false}
-	if run != nil {
-		payload["response_format"] = map[string]string{"type": "json_object"}
-	}
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, "POST", c.URL+"/chat/completions", bytes.NewReader(body))
+	reply, err := c.complete(ctx, messages, run != nil)
 	if err != nil {
-		return "", ErrUnavailable
+		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.Key != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Key)
-	}
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return "", ErrUnavailable
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return "", ErrBusy
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", ErrUnavailable
-	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16*1024+1))
-	if err != nil || len(raw) > 16*1024 {
-		return "", ErrUnavailable
-	}
-	var completion struct {
-		Choices []struct {
-			Message Message `json:"message"`
-		} `json:"choices"`
-	}
-	if json.Unmarshal(raw, &completion) != nil || len(completion.Choices) != 1 || completion.Choices[0].Message.Role != "assistant" {
-		return "", ErrUnavailable
-	}
-	reply := strings.TrimSpace(completion.Choices[0].Message.Content)
-	if reply == "" || !utf8.ValidString(reply) || utf8.RuneCountInString(reply) > 1500 {
-		return "", ErrUnavailable
-	}
+	var change *whim
 	pending := false
 	if run != nil {
 		plan, err := ParsePlan(reply)
+		if c.V2 {
+			plan, change, err = parseCharacterPlan(reply, recalled)
+		}
 		if err != nil {
 			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
 		}
 		plan = plan.WithQuestionConstraints(question)
 		if plan.Unwatched {
 			requested := false
-			for _, message := range messages {
+			for _, message := range grounding {
 				requested = requested || (message.Role == "user" && unseenWords.MatchString(message.Content))
 			}
 			plan.Unwatched = requested
 		}
-		if plan.Action == "prepare" && !requestTitleMentioned(plan.Query, messages) {
+		if plan.Action == "prepare" && !requestTitleMentioned(plan.Query, grounding) {
 			plan = Plan{Action: "chat", Text: "Quel titre veux-tu demander dans Seerr ? Donne-moi le nom du film ou de la série, et la saison si nécessaire."}
 		}
 		if plan.Action == "chat" {
@@ -204,10 +222,21 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 		}
 	}
 	c.mu.Lock()
+	if epoch != c.memoryEpoch {
+		c.mu.Unlock()
+		return reply, nil
+	}
 	s.pending = pending
+	if c.V2 && run != nil {
+		if stopWhim(question) && recalled != nil {
+			change = &whim{Topic: recalled.Topic, Retire: true}
+		}
+		s.whim, s.recalled, s.delivery = change, recalled, reply
+		s.epoch = epoch
+	}
 	s.messages = append(s.messages, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply})
-	if len(s.messages) > 4 {
-		s.messages = append([]Message(nil), s.messages[len(s.messages)-4:]...)
+	if len(s.messages) > c.historyLimit() {
+		s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
 	}
 	c.mu.Unlock()
 	return reply, nil
@@ -237,8 +266,8 @@ func (c *Chat) RememberRequest(owner string, result ToolReply) {
 	if s := c.sessions[owner]; s != nil && !s.busy && now.Before(s.expires) {
 		s.pending = len(result.Buttons) > 0
 		s.messages = append(s.messages, Message{Role: "user", Content: "J’ai utilisé un bouton de demande."}, Message{Role: "assistant", Content: result.Content})
-		if len(s.messages) > 4 {
-			s.messages = append([]Message(nil), s.messages[len(s.messages)-4:]...)
+		if len(s.messages) > c.historyLimit() {
+			s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
 		}
 	}
 }

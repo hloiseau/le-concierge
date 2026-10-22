@@ -31,7 +31,9 @@ type Bot struct {
 }
 
 func NewBot(c config.Config) *Bot {
-	return &Bot{Config: c, Eris: eris.New(c.ErisAPIURL, c.ErisAPIKey, c.ErisModel), Client: upstream.New().HTTP, seen: map[string]time.Time{}, interestBusy: map[string]bool{}, slots: make(chan struct{}, 8)}
+	chat := eris.New(c.ErisAPIURL, c.ErisAPIKey, c.ErisModel)
+	chat.V2, chat.Protocol, chat.KeyFile = c.ErisProfile == "v2", c.ErisProtocol, c.ErisKeyFile
+	return &Bot{Config: c, Eris: chat, Client: upstream.New().HTTP, seen: map[string]time.Time{}, interestBusy: map[string]bool{}, slots: make(chan struct{}, 8)}
 }
 func (b *Bot) Handler() http.Handler {
 	mux := http.NewServeMux()

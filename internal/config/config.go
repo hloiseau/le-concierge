@@ -23,6 +23,7 @@ type Service struct {
 	Category    string `json:"category"`
 }
 type Config struct {
+	ErisProfile, ErisProtocol, ErisMemoryPath, ErisKeyFile                                  string
 	DiscordBotName, ErisAPIURL, ErisAPIKey, ErisModel                                       string
 	PlexGrantKey                                                                            string
 	DownloadarrURL, DownloadarrRevision                                                     string
@@ -93,7 +94,27 @@ func Load() (Config, error) {
 		c.DiscordBotName = ""
 	}
 	c.ErisAPIURL = strings.TrimRight(os.Getenv("ERIS_API_URL"), "/")
-	c.ErisModel = fallback("ERIS_MODEL", "eris-qwen3-4b-v1")
+	c.ErisProfile = fallback("ERIS_PROFILE", "legacy")
+	c.ErisProtocol = fallback("ERIS_PROTOCOL", "chat-completions")
+	c.ErisMemoryPath = os.Getenv("ERIS_MEMORY_PATH")
+	c.ErisKeyFile = os.Getenv("ERIS_API_KEY_FILE")
+	if (c.ErisProfile != "legacy" && c.ErisProfile != "v2") || (c.ErisProtocol != "chat-completions" && c.ErisProtocol != "responses") {
+		return c, errors.New("invalid ERIS_PROFILE or ERIS_PROTOCOL")
+	}
+	model := "eris-qwen3-4b-v1"
+	if c.ErisProtocol == "responses" {
+		model = "gpt-6-luna"
+	}
+	c.ErisModel = fallback("ERIS_MODEL", model)
+	if c.ErisMemoryPath != "" && c.ErisProfile != "v2" {
+		return c, errors.New("ERIS_MEMORY_PATH requires ERIS_PROFILE=v2")
+	}
+	if c.ErisProfile == "v2" && c.ErisProtocol != "responses" {
+		return c, errors.New("ERIS_PROFILE=v2 requires ERIS_PROTOCOL=responses (larger context)")
+	}
+	if c.ErisProtocol == "responses" && c.ErisAPIURL != "" && !strings.HasPrefix(c.ErisAPIURL, "https://") {
+		return c, errors.New("Responses requires HTTPS")
+	}
 	if c.DiscordBotName != "" && !regexp.MustCompile(`^[\p{L}\p{N} _-]{2,32}$`).MatchString(c.DiscordBotName) {
 		return c, errors.New("DISCORD_BOT_NAME requires 2-32 letters, numbers, spaces, underscores or hyphens")
 	}

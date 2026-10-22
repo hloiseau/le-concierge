@@ -58,13 +58,18 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 			}
 			reply["components"] = []map[string]any{{"type": 1, "components": buttons}}
 		}
-		b.webhook(ctx, i, "PATCH", "/messages/@original", reply)
+		if b.webhook(ctx, i, "PATCH", "/messages/@original", reply) {
+			b.Eris.Delivered(owner, i.ID, result.Content)
+		}
 	}()
 }
 
 func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest) eris.ToolReply {
+	return b.erisContextReply(ctx, owner, message, forget, proof, "")
+}
+func (b *Bot) erisContextReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string) eris.ToolReply {
 	var result eris.ToolReply
-	text, err := b.Eris.ReplyWithTools(ctx, owner, message, forget, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
+	text, err := b.Eris.ReplyWithContext(ctx, owner, message, forget, reference, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
 		proof.Plan = plan
 		result = b.erisTool(ctx, proof)
 		return result, nil
