@@ -163,6 +163,9 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 	reply := eris.ToolReply{Content: "Je ne peux pas vérifier ces informations pour le moment. Réessaie plus tard."}
 	switch p.Action {
 	case "search", "recommend":
+		if p.Action == "recommend" && p.Relation != "" {
+			return s.erisRelatedMovies(ctx, u, g, discordID, p, private)
+		}
 		items, err := s.Upstream.AssistantMedia(ctx, s.Config.PlexURL, s.Config.PlexServerID, g, upstream.MediaFilter{Query: p.Query, Kind: p.Kind, Genre: p.Genre, MaxMinutes: p.MaxMinutes, Unwatched: p.Unwatched})
 		if err != nil {
 			return reply
@@ -269,6 +272,78 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 		}
 		if len(items) > 0 && len(reply.Buttons) == 0 {
 			reply.Content = "Précise le numéro de saison pour demander cette série."
+		}
+	}
+	return reply
+}
+
+func (s *Server) erisRelatedMovies(ctx context.Context, u store.User, g upstream.Grant, discordID string, p eris.Plan, private bool) eris.ToolReply {
+	failure := eris.ToolReply{Content: "Je n’ai pas pu vérifier les recommandations dans Seerr. Réessaie dans un instant."}
+	id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
+	if err != nil {
+		return failure
+	}
+	result, err := s.Upstream.RelatedMovies(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, id, p.Query, p.Relation)
+	if errors.Is(err, upstream.ErrMediaReference) {
+		return eris.ToolReply{Content: "Je ne trouve pas ce film de référence sans ambiguïté. Précise son titre exact."}
+	}
+	if err != nil {
+		return failure
+	}
+	if p.Source != "seerr" {
+		result.Items, err = s.Upstream.RelatedPlayable(ctx, s.Config.PlexURL, s.Config.PlexServerID, g, result, p.Unwatched)
+		if err != nil {
+			return failure
+		}
+	} else {
+		items := []upstream.RelatedMovie{}
+		for _, m := range result.Items {
+			if m.MediaInfo != nil && ((m.MediaInfo.Status != 1 && m.MediaInfo.Status != 7) || m.MediaInfo.Status4K == 5 || m.MediaInfo.Status4K == 6) {
+				continue
+			}
+			items = append(items, m)
+			if len(items) == 3 {
+				break
+			}
+		}
+		result.Items = items
+	}
+	if len(result.Items) == 0 {
+		if p.Source == "seerr" {
+			return eris.ToolReply{Content: "Je n’ai trouvé aucun autre film correspondant à proposer dans Seerr sans contenu déjà disponible ou en cours de demande."}
+		}
+		return eris.ToolReply{Content: "Je n’ai trouvé aucun film correspondant lisible dans ton Plex parmi ces recommandations. Je peux aussi chercher dans Seerr."}
+	}
+	reply := eris.ToolReply{Content: "À partir de **" + safeText(result.Reference.Title) + "**"}
+	if p.Relation == "director" {
+		reply.Content += " — films réalisés par **" + safeText(result.Director) + "**"
+	} else {
+		reply.Content += " — films proches"
+	}
+	if p.Source != "seerr" {
+		reply.Content += " · disponibles sur Plex"
+	}
+	if p.Unwatched {
+		reply.Content += " · non marqués vus"
+	}
+	for index, m := range result.Items {
+		reply.Content += fmt.Sprintf("\n\n%d. **%s**", index+1, safeText(m.Title))
+		if m.Year != "" {
+			reply.Content += " (" + m.Year + ")"
+		}
+		if len(m.SharedGenres) > 0 {
+			reply.Content += "\nGenres communs : " + safeText(strings.Join(m.SharedGenres, ", "))
+		}
+		if m.Overview != "" {
+			reply.Content += "\n" + safeText(m.Overview)
+		}
+		if p.Source == "seerr" {
+			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: discordID, GuildID: s.Config.DiscordGuildID, SeerrID: id, Candidate: m.RequestCandidate, Private: private, Stage: "choose", Expires: time.Now().Add(10 * time.Minute)}
+			key := s.saveErisPending(pending)
+			if key == "" {
+				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
+			}
+			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Demander %d", index+1)})
 		}
 	}
 	return reply

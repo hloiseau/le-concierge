@@ -189,6 +189,45 @@ func TestErisPublicRequestOffersChoicesWithoutPrivateHandoff(t *testing.T) {
 	}
 }
 
+func TestErisDirectorRecommendationSkipsAvailableAndPendingAndKeepsConfirmation(t *testing.T) {
+	s := fixture(t)
+	seed(t, s, "11111", true)
+	u, _ := s.Store.User(context.Background(), "11111")
+	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != "GET" {
+			t.Fatal("recommendation created a request")
+		}
+		switch r.URL.Path {
+		case "/api/v1/user":
+			return response(200, `{"pageInfo":{"results":1},"results":[{"id":2,"plexId":11111}]}`), nil
+		case "/api/v1/auth/me":
+			return response(200, `{"id":2}`), nil
+		case "/api/v1/search":
+			return response(200, `{"results":[{"id":4638,"mediaType":"movie","title":"Hot Fuzz"}]}`), nil
+		case "/api/v1/movie/4638":
+			return response(200, `{"id":4638,"credits":{"crew":[{"id":1,"name":"Edgar Wright","job":"Director"}]}}`), nil
+		case "/api/v1/person/1/combined_credits":
+			return response(200, `{"crew":[{"id":1,"mediaType":"movie","title":"Available","job":"Director","mediaInfo":{"status":5}},{"id":2,"mediaType":"movie","title":"Pending","job":"Director","mediaInfo":{"status":2}},{"id":3,"mediaType":"movie","title":"Baby Driver","job":"Director","releaseDate":"2017-01-01","overview":"A verified synopsis."}]}`), nil
+		default:
+			t.Error("unexpected endpoint", r.URL.Path)
+			return response(500, `{}`), nil
+		}
+	})
+	reply := s.runErisTool(context.Background(), u, s.grants[u.ID], "11111", eris.Plan{Action: "recommend", Query: "Hot Fuzz", Relation: "director", Source: "seerr"}, false)
+	if len(reply.Buttons) != 1 || !strings.Contains(reply.Content, "Edgar Wright") || !strings.Contains(reply.Content, "Baby Driver") || strings.Contains(reply.Content, "Available") || strings.Contains(reply.Content, "Pending") {
+		t.Fatalf("bad recommendation: %+v", reply)
+	}
+	parts := strings.Split(reply.Buttons[0].ID, ":")
+	p := s.erisPending[parts[2]]
+	if p.Private || p.DiscordID != "11111" || p.Candidate.ID != 3 || p.Stage != "choose" {
+		t.Fatal("lost request ownership", p)
+	}
+	confirmed := s.erisConfirmation(context.Background(), u, "11111", reply.Buttons[0].ID, false)
+	if len(confirmed.Buttons) != 2 || !strings.Contains(confirmed.Content, "Confirmer la demande") {
+		t.Fatal("skipped explicit confirmation", confirmed)
+	}
+}
+
 func TestErisAPIRevalidatesReplyTargetFromDiscord(t *testing.T) {
 	for _, state := range []string{"valid", "other author", "other channel", "missing reference", "hidden content"} {
 		s := fixture(t)
