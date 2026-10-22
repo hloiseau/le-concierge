@@ -1,5 +1,9 @@
 # Rappels avant retrait — priorité de phase 2
 
+## État vérifié au 22 octobre 2026
+
+Les corrections des listes personnelles et du filtre individuel des annonces Discord sont déployées (PR #54), ainsi que les autorisations Plex chiffrées persistantes (PR #55). Les lectures à deux comptes et la reprise après redémarrage ont été vérifiées. La réception effective des DM, les reports et révocations en situation restent une recette distincte. La page complète des retraits peut inclure des contenus terminés ; les notifications Hub, DM et salon les excluent, ainsi que les états non vérifiables. Cette règle est automatique. Voir le [bilan daté](status-2026-10-22.md) ; les observations anciennes plus bas sont historiques.
+
 Les rappels collectifs des demandes Seerr sont publiés dans le [salon Discord notifications](discord-channel-reminders.md), avec mention des demandeurs. Les rappels personnels et messages privés ci-dessous sont des choix supplémentaires.
 
 Suivi : [sources #25](https://github.com/hloiseau/le-concierge/issues/25), [politique et livraison #26](https://github.com/hloiseau/le-concierge/issues/26), [interface Hub #16](https://github.com/hloiseau/le-hub/issues/16).

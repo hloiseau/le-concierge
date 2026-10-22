@@ -1,6 +1,10 @@
 # Eris sur Discord
 
-Le bot conserve son compte, ses identifiants, ses commandes, les liaisons Plex/Discord et ses données. L’image reste `ghcr.io/hloiseau/le-concierge:edge` et la base conserve son chemin actuel. Il n’y a pas de migration à effectuer.
+Le bot conserve son compte, ses identifiants, ses commandes, les liaisons Plex/Discord et ses données. L’image applicative reste `ghcr.io/hloiseau/le-concierge` (version de production épinglée par SHA) et la base conserve son chemin actuel. Il n’y a pas de migration à effectuer.
+
+## État installé
+
+Au 22 octobre 2026, le bot/API `20f96b6` et le runtime `5dd08ded` sont déployés. Voir le [bilan daté](status-2026-10-22.md) pour la recette, les mesures réelles et le [travail restant](https://github.com/hloiseau/le-concierge/issues/62). La personnalité et le classement des intentions restent imparfaits ; la recette brute est à 25/32, et non 32/32.
 
 ## Nom Discord
 
