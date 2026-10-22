@@ -16,6 +16,8 @@ Ces durées incluent le démarrage du CLI et le réseau. Elles ne mesurent ni le
 
 Un premier appel avec `gpt-6.1-sol` a été refusé par le service pour cette connexion ChatGPT. Le modèle par défaut du CLI, `gpt-6-astra`, a ensuite été identifié et épinglé pour ces trois lots. La présence d'un modèle dans une interface ou documentation ne prouve donc pas l'accès du compte via le CLI.
 
+**Actualisation :** Sol 6.1 répond bien avec le CLI 0.163.0, installé séparément dans le cache du test. Le refus ci-dessus décrit l'essai avec le CLI 0.154.0, pas une indisponibilité définitive du modèle pour ce compte. Voir la [comparaison à client identique](sol-comparison.md).
+
 ## Lecture éditoriale par l'agent
 
 Toutes les réponses archivées ont été relues. Ce n'est pas une notation humaine indépendante : les champs `human_score` restent vides et la validation du ton par Hugo reste ouverte.
