@@ -12,6 +12,16 @@ import (
 	"unicode/utf8"
 )
 
+type responseOutput struct {
+	Type    string `json:"type"`
+	Role    string `json:"role"`
+	Status  string `json:"status"`
+	Content []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+}
+
 // Responses is text-only: no shell, hosted tools or model-controlled callbacks.
 // OAuth provisioning/refresh belongs to the application credential provider.
 func (c *Chat) responses(ctx context.Context, messages []Message) (string, error) {
@@ -55,6 +65,7 @@ func (c *Chat) responses(ctx context.Context, messages []Message) (string, error
 	}
 	// Consume a bounded SSE stream; only the completed response is authoritative.
 	var raw json.RawMessage
+	var finished []responseOutput
 	scanner := bufio.NewScanner(io.LimitReader(resp.Body, 256*1024+1))
 	scanner.Buffer(make([]byte, 4096), 64*1024)
 	total := 0
@@ -68,8 +79,10 @@ func (c *Chat) responses(ctx context.Context, messages []Message) (string, error
 			continue
 		}
 		var event struct {
-			Type     string          `json:"type"`
-			Response json.RawMessage `json:"response"`
+			Type        string          `json:"type"`
+			Response    json.RawMessage `json:"response"`
+			OutputIndex *int            `json:"output_index"`
+			Item        responseOutput  `json:"item"`
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
@@ -81,6 +94,22 @@ func (c *Chat) responses(ctx context.Context, messages []Message) (string, error
 		if event.Type == "error" || event.Type == "response.failed" || event.Type == "response.incomplete" {
 			return "", ErrUnavailable
 		}
+		if event.Type == "response.output_item.added" || event.Type == "response.output_item.done" {
+			if event.Item.Type != "reasoning" && (event.Item.Type != "message" || event.Item.Role != "assistant") {
+				return "", ErrUnavailable
+			}
+		}
+		if event.Type == "response.output_item.done" {
+			if event.OutputIndex == nil || *event.OutputIndex != len(finished) || (event.Item.Status != "" && event.Item.Status != "completed") {
+				return "", ErrUnavailable
+			}
+			for _, part := range event.Item.Content {
+				if part.Type != "output_text" {
+					return "", ErrUnavailable
+				}
+			}
+			finished = append(finished, event.Item)
+		}
 		if event.Type == "response.completed" {
 			raw = event.Response
 			break
@@ -90,25 +119,23 @@ func (c *Chat) responses(ctx context.Context, messages []Message) (string, error
 		return "", ErrUnavailable
 	}
 	var out struct {
-		Status string `json:"status"`
-		Output []struct {
-			Type    string `json:"type"`
-			Role    string `json:"role"`
-			Content []struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"content"`
-		} `json:"output"`
+		Status string           `json:"status"`
+		Output []responseOutput `json:"output"`
 	}
 	if json.Unmarshal(raw, &out) != nil || out.Status != "completed" {
 		return "", ErrUnavailable
+	}
+	// The subscription route can complete with output:[]; finalized stream items
+	// carry its text. Never use deltas or return before response.completed.
+	if len(out.Output) == 0 {
+		out.Output = finished
 	}
 	text := ""
 	for _, item := range out.Output {
 		if item.Type == "reasoning" {
 			continue
 		}
-		if item.Type != "message" || item.Role != "assistant" {
+		if item.Type != "message" || item.Role != "assistant" || (item.Status != "" && item.Status != "completed") {
 			return "", ErrUnavailable
 		}
 		for _, part := range item.Content {

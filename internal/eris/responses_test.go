@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,6 +50,40 @@ func TestResponsesStreamingContractAndTokenRotation(t *testing.T) {
 		}
 		token = "token-two"
 		os.WriteFile(path, []byte(token), 0600)
+	}
+}
+
+func TestResponsesSubscriptionFinalizedItems(t *testing.T) {
+	item := `{"type":"response.output_item.done","output_index":0,"item":{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"Salut"}]}}`
+	completed := `{"type":"response.completed","response":{"status":"completed","output":[]}}`
+	for _, tc := range []struct {
+		name   string
+		events []string
+		want   string
+	}{
+		{"subscription stream", []string{item, completed}, "Salut"},
+		{"interrupted after item", []string{item}, ""},
+		{"incomplete response", []string{item, strings.ReplaceAll(completed, `"completed"`, `"incomplete"`)}, ""},
+		{"duplicate item", []string{item, item, completed}, ""},
+		{"missing item", []string{strings.ReplaceAll(item, `"output_index":0`, `"output_index":1`), completed}, ""},
+		{"refusal", []string{strings.ReplaceAll(item, `"output_text"`, `"refusal"`), completed}, ""},
+		{"unfinished item", []string{strings.ReplaceAll(item, `"status":"completed"`, `"status":"in_progress"`), completed}, ""},
+		{"unexpected tool", []string{`{"type":"response.output_item.added","item":{"type":"function_call"}}`, item, completed}, ""},
+		{"no duplicate text", []string{item, `{"type":"response.completed","response":{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Salut"}]}]}}`}, "Salut"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				for _, event := range tc.events {
+					fmt.Fprintf(w, "data: %s\n\n", event)
+				}
+			}))
+			defer server.Close()
+			c := New(server.URL, "key", "gpt-6-luna")
+			got, err := c.responses(context.Background(), nil)
+			if got != tc.want || (err != nil) != (tc.want == "") {
+				t.Fatalf("got %q, %v; want %q", got, err, tc.want)
+			}
+		})
 	}
 }
 
