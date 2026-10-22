@@ -4,6 +4,8 @@ But : comparer la personnalité actuellement en production et une candidate plus
 
 `persona.txt` est une candidate expérimentale ; elle ne remplace pas `internal/eris/chat.go`. `cases.json` contient 12 scénarios de développement et 12 de réserve. Aucun message réel, identifiant de membre, jeton ou accès au catalogue n'est nécessaire. Les précédents échanges sont des fixtures synthétiques, pas des conversations générées en chaîne.
 
+La [proposition de personnalité v2](persona-v2.txt) intègre la révision discutée avec Hugo : naturelle et serviable, capable de piques hardcore sans menace systématique ni absurdité gratuite. Elle prévoit de s'appuyer sur des lubies mémorisées, mais ne fournit pas elle-même de stockage. C'est un texte à revoir ensemble, non évalué et non chargé par le runner actuel. `persona.txt` reste le prompt des comparaisons archivées. L'étude des bots Discord et la proposition de gestion du contexte se trouvent dans la [note de recherche](../../docs/eris-discord-context-research.md).
+
 ## Exécuter
 
 Depuis la racine, Python standard uniquement :
