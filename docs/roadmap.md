@@ -1,64 +1,22 @@
 # Roadmap — Le Concierge
 
-Le découpage initial comprend 26 issues de développement, dont 2 priorités ajoutées pour les retraits. Des correctifs et compléments s’y ajoutent ensuite. Le statut actuel est celui de chaque issue GitHub ; cette page organise le périmètre, sans échéances promises.
+## État vérifié au 22 octobre 2026
 
-Les dépendances sont des liens vers les issues des deux dépôts. Les références Cxx/Hxx permettent de relier le découpage initial aux numéros GitHub.
+Le [bilan de livraison et de recette](status-2026-10-22.md) est la référence datée pour Concierge, le Hub et Eris : révisions installées, PR livrées, autorisations Plex, essais à deux comptes, mesures A310 et limites restantes. Il remplace l’état du 19 octobre, conservé dans l’historique Git.
 
-Priorité confirmée le 18 octobre : terminer les parcours films/séries, les notifications Discord et la fiabilité du Hub avant les autres évolutions. Les livres sont utilisés uniquement par l'administrateur et passent en dernier. Le travail de correspondance Shelfmark–Grimmory commencé reste sur une branche locale, sans publication ni migration déployée. Les numéros de phase ci-dessous sont les références historiques, pas l'ordre de réalisation actuel.
+API/bot installés : `20f96b6` ; Hub : `d86b929` ; runtime Eris : `5dd08ded`. Les quatre services sont sains. Eris est active, utilise Qwen3.5 9B Q4_K_M avec huit couches sur A310, répond aux mentions/réponses Discord et dispose d’outils Plex/Seerr contrôlés par Concierge. La refonte Hub, les notifications limitées aux contenus encore à voir et les autorisations Plex chiffrées persistantes sont déployées. La création Seerr est possible via Eris avec choix et confirmation, et ne se limite plus au site Seerr.
 
-## Avancement vérifié au 19 octobre 2026
+La recette réelle de deux comptes a vérifié les lectures personnelles, la séparation des droits, la déconnexion et la reprise des autorisations après redémarrage. Elle ne prouve pas la réception de DM ou une attente de douze heures. Les sources de livres et Downloadarr conservent leurs recettes distinctes.
 
-Contrôle en lecture seule du NAS et de Discord le 19 octobre : API et bot sur `5828794` (PR #51), Hub sur `64b51c7` (PR #37), soit les derniers `main` à cette date. Les trois conteneurs sont sains, sans redémarrage ni OOM depuis leur démarrage le 18 octobre à 23 h 11 (Europe/Paris). Le Hub répond en HTTPS. Dix commandes sont enregistrées, dont `/salons` ; le compte Discord porte déjà le nom **Eris**, mais `/eris` et son moteur ne sont pas déployés.
+### Suite
 
-Ordre de travail confirmé le 19 octobre : rangement du suivi, finition UI/UX du Hub et visibilité des délais administrateur, recette avec deux comptes réels, mise en service d'Eris, sélection de roadmap publique et monitoring sous charge, puis livres. Les tests simulés et les sondes de santé ne remplacent pas la recette personnelle.
+1. [Eris #62](https://github.com/hloiseau/le-concierge/issues/62) : qualité de conversation, faux refus de capacité, références et recette des confirmations Discord.
+2. [Collecte #16](https://github.com/hloiseau/le-concierge/issues/16), [activité #18](https://github.com/hloiseau/le-concierge/issues/18) : A310/Plex sous charge prolongée et mesures réelles de latence. Les 11–12 s isolées ne garantissent pas la production, mesurée à 19–21 s sur deux réponses initiales.
+3. [Rappels #26](https://github.com/hloiseau/le-concierge/issues/26) : réception consentie, reports et révocations en situation.
+4. [Communauté #23](https://github.com/hloiseau/le-concierge/issues/23) : sélection explicite des issues de roadmap publique ; les forums autorisés sont déjà synchronisés.
+5. Livres en dernier selon la priorité utilisateur : rapprochement Shelfmark–Grimmory, import vérifié, tomes manquants et Kobo. Le travail local non publié n’est pas déployé.
 
-### Eris — préparation séparée de la production
-
-La [PR #52](https://github.com/hloiseau/le-concierge/pull/52) ajoute le chat privé et une mémoire courte par membre ; sa dernière CI est verte, mais elle reste ouverte. Le moteur et le réentraînement sont préparés dans le dépôt privé d'Eris. Les anciens poids ne sont plus disponibles : entraînement GPU, évaluation du français/personnage, sauvegarde des nouveaux poids et mesure de latence CPU restent nécessaires avant installation. Aucun service d'inférence ni URL de moteur n'est configuré sur le NAS.
-
-### Livraisons déjà installées
-
-Les changements de [Concierge #40](https://github.com/hloiseau/le-concierge/pull/40), [Hub #29](https://github.com/hloiseau/le-hub/pull/29) et [Downloadarr #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1) sont fusionnés. Les images `edge` du Concierge/Hub et `quality-preview` de Downloadarr ont été publiées ; l’administrateur confirme leur installation et le fonctionnement du parcours Downloadarr. Les tests automatisés utilisent des fournisseurs simulés : cette confirmation ne valide pas les autres intégrations ni l’isolation avec deux comptes réels.
-
-La livraison précédente, [Concierge #49](https://github.com/hloiseau/le-concierge/pull/49) et [Hub #36](https://github.com/hloiseau/le-hub/pull/36), a ajouté `/a-voir`, toujours privée, les filtres Seerr globaux et les variantes 4K/Standard connues. Les détails administrateur de l’activité Plex distinguent les décisions audio et vidéo. Le collecteur hôte tourne chaque minute et les mesures GPU utilisent l’API Toparr existante sur l’Arc A310, sans ajout de privilèges. Ces fonctions sont conservées dans la version actuelle ; la recette des parcours personnels avec deux comptes et la réception consentie des messages Discord restent distinctes.
-
-**Lot fusionné et déployé — Concierge #50 / Hub #37 :** annulation par le propriétaire des demandes de délai encore en attente, affichage des demandes échues et migration SQLite v7 conservant l’historique ; option `etat` et qualité dans `/mes-demandes`, pagination filtrée conservée ; recherche, type et échéance à 7/30 jours dans les départs du Hub. Le mode `allThreads` synchronise les forums autorisés **problèmes-techniques** et **idées-évolutions** toutes les deux minutes. La publication des deux forums est fraîche au contrôle du 19 octobre ; la sélection de roadmap reste vide. Les permissions sont revérifiées et les votes restent dans Discord. La PR #51, également déployée, ajoute les salons facultatifs par intérêt.
-
-### Ce qui est utilisable et ce qui reste incomplet
-
-| Parcours livré | Configuration nécessaire | Limite actuelle |
-| --- | --- | --- |
-| Nouveautés Plex et demandes personnelles | Plex et Seerr | La création de demandes reste dans Seerr. |
-| Suivis et alertes de disponibilité | Plex, Seerr ; Discord facultatif | Les demandes Seerr sont suivies automatiquement ; les anciens suivis distincts restent modifiables. |
-| Rappels avant retrait et demandes de délai | Maintainerr, Tautulli, Plex ; consentement aux rappels | Une réponse à une demande de délai ne modifie pas Maintainerr. |
-| Catalogue, couvertures et collections de livres | Connexion OPDS Grimmory personnelle | Pas de détection fiable des tomes manquants ni de synchronisation Kobo intégrée. |
-| Suivi des demandes de livres | Connexion personnelle Shelfmark en mode builtin | Création dans Shelfmark ; import Grimmory non vérifié. |
-| Performances et historiques | Collecteur hôte, Tautulli et API Toparr facultative | Quatorze mesures hôte/Plex/GPU disponibles dans l’historique ; puissance et fréquence Toparr vérifiées, moteurs absents conservés indisponibles. Affichage sous charge à recetter. |
-| Communauté et roadmap | Deux forums autorisés et synchronisation active | Discussions et votes restent dans Discord ; sélection des issues de roadmap encore distincte. |
-
-Ces fonctions sont présentes dans le code publié ; leur présence ne prouve pas que les services correspondants sont configurés sur l’installation. Le détail et les critères encore ouverts suivent.
-
-La version 0.9 reprend les retours d'utilisation : affiches Plex privées et TMDB pour les demandes, suivis Seerr automatiques, activation des DM sans étape cachée et rappels collectifs dans un salon Discord mentionnant les demandeurs. L'activité Tautulli active les performances par défaut lorsque le réglage explicite est absent ; une panne d'historique ne masque plus les données actuelles. Le bot synchronise son catalogue de commandes au démarrage si son token est fourni. Le salon est configuré et les permissions de lecture/envoi du bot ont été vérifiées le 18 octobre par les API Discord en lecture seule ; la réception réelle reste à vérifier. Les lectures Seerr et Tautulli ont été vérifiées sans envoi Discord.
-
-La version déployée regroupe les demandes Seerr et leurs notifications dans **Mes demandes**. L'ancien lien `/suivis` redirige vers cette page, les suivis manuels existants restent modifiables, et `/mes-demandes` devient l'unique commande proposée pour ce parcours. `/nouveautes`, `/surprise` et `/recap` proposent `public:true` pour partager leur résultat dans le salon ; les erreurs, les demandes et les informations personnelles restent privées. Les trois options publiques sont enregistrées dans Discord. Les tests utilisent des interactions signées et des services simulés, sans publication dans un vrai salon.
-
-| Tickets | Implémentation | Vérification externe restante |
-| --- | --- | --- |
-| C02/C03, H01 | OpenAPI 0.9 synchronisé, types générés, migrations SQLite v7, contraintes et restauration testées ; lint, types, build et tests du Hub en CI. | Socle livré et déployé ; la recette de chaque intégration reste dans son ticket. |
-| C04, H04/H06 | Sessions Plex privées, Discord facultatif, effacement des associations en mémoire à la déconnexion/révocation. | Recette à deux comptes sur le NAS. |
-| C05–C09, H02/H03/H05 | Demandes Seerr personnelles, filtre global Hub et variantes 4K/Standard, pagination Hub/bot, nouveautés Plex paginées et dates vérifiées. Dix commandes synchronisées, dont `/a-voir` et `/salons`. Le filtre `etat` du bot est déployé. | Invocation personnelle des commandes et accès réels aux bibliothèques distinctes. |
-| C10, H07 | CI Go/typecheck/Playwright/contrat/images et exemples TrueNAS/Caddy ; CLI de sauvegarde, collecteur Python testé en CI, sondes privées. Images publiées, déployées et trois services en bonne santé sur le NAS. Budgets CPU/RAM appliqués et vérifiés, sans OOM ni redémarrage. | Socle de déploiement terminé ; les recettes fonctionnelles et la capacité sous charge restent distinctes. |
-| C25/C26, H16 | Maintainerr 3.30.1 et Tautulli v2.18.2 vérifiés en lecture seule, serveur Plex correspondant. Demandes/suivis et saisons ciblées, état Plex positif « non vu », lectures commencées, option tous non vus, boîte Hub et DM sur consentement. File durable, revalidation finale, plafond commun et demandes de délai. | Recette personnelle du visionnage, DM réel consenti, report/retrait et révocation. La relance tardive des demandes garde son consentement distinct. Voir [les rappels](removal-reminders.md). |
-| C19/C20, H06 | Suivis films/séries/saisons, choix de canal, polling borné, disponibilité jouable vérifiée par Plex, déduplication des demandes personnelles Seerr, boîte et DM. | Réception réelle ; reprise seulement après reconnexion Plex puisque les jetons restent en mémoire. |
-| C11–C13, H08/H09 | Contrats Grimmory v3.5.0 et Shelfmark v1.4.0 audités ; versions/révisions des images NAS confirmées et refus des lectures anonymes vérifiés. Catalogue/couvertures OPDS privés, recherche Shelfmark préremplie, `/livres` et `/demander-livre` implémentés. | Connexion personnelle, droits et réponses anonymisées de deux vrais comptes non validés. Voir [les contrats](books-contracts.md). |
-| C14, H09 | Connexion Shelfmark personnelle, liste des demandes et étapes réelles de livraison, pagination et erreurs privées. | Shelfmark ne fournit pas d’ID d’import Grimmory dans le contrat audité ; `complete` ne signifie pas « lisible ». Le catalogue reste non vérifié. Voir [le suivi](book-request-tracking.md). |
-| C15, H10 | Collections à partir des notices autorisées, éditions/langues/ISBN distincts, positions fractionnaires conservées, provenance/date de collecte, correction Grimmory et guide Kobo conditionnel. | Aucun référentiel éditorial complet validé : pas de tomes manquants ou de sorties inventés ; configuration Kobo réelle inconnue. Voir [les collections](book-collections.md). |
-| C16–C18, H11/H12 | Collecteur exécuté chaque minute sur TrueNAS 25.10.7, API en lecture seule et GPU via Toparr 2.0.1. Quatorze mesures hôte/Plex/GPU ingérées ; observations de transcodages réels retrouvées dans l’historique. Les décisions audio/vidéo sont affichées aux administrateurs. | Rendu sous charge et coût sur une journée complète à recetter. Voir [le monitoring](monitoring.md). |
-| C21/C22 | `/surprise` et `/recap` enregistrés avec partage public facultatif. Client de diagnostic Seerr→Radarr 6.4.4.10685/Sonarr 5.0.0.2608 vérifié sur un film et une série : 12 GET réussis, sans mutation. | Invocation Discord personnelle et incident d’import réel à recetter ; aucune instance 4K distincte configurée, aucune réparation automatique. Voir [les diagnostics](diagnostics.md). |
-| C23, H13/H14 | Publication sélectionnée, identifiants stables, statuts explicites, TTL et retrait des éléments non autorisés. Le mode `allThreads` et le worker des deux forums sont déployés ; publication fraîche vérifiée le 19 octobre. | Sélectionner explicitement les issues de roadmap. Aucun corps d’issue privée exporté. Voir [la publication](community-publication.md). |
-| C24, H15 | Contrat personnel fusionné dans la [PR amont #1](https://github.com/hloiseau/LibraryDownloadarr/pull/1), client Go, connexion personnelle Hub, choix et confirmation, jobs et transfert MP4/ZIP diffusé sans ticket navigateur. Fonctionnement confirmé par l’administrateur. La version 0.8 ajoute recherche Plex et connexion automatique avec le compte courant. | Recette à deux comptes et transfert long encore à vérifier ; nouveau sélecteur et connexion automatique à valider après mise à jour. Voir [le parcours](downloadarr.md). |
-
-La migration v6 conserve les anciens réglages et livraisons et ajoute la déduplication du salon. Les messages privés restent sur consentement. Les sessions et autorisations restent en mémoire, au plus douze heures ; après redémarrage les traitements personnels reprennent à la prochaine connexion. Les rappels collectifs du salon fonctionnent sans session personnelle. Les historiques techniques sont conservés sept jours, les rappels quatre-vingt-dix jours après expiration. Voir [le déploiement](deployment.md) et [les rappels en salon](discord-channel-reminders.md).
+Les phases et références Cxx/Hxx ci-dessous organisent le découpage initial, sans échéances promises. Les critères restants sont dans les issues ; une implémentation seule ne justifie pas leur fermeture.
 
 ## Phase 1 — Fondations et bot V1
 
