@@ -177,7 +177,10 @@ func TestErisV2CanReplyInTextAfterAnOldPublicButton(t *testing.T) {
 			return botResponse(200, `{"content":"Demande créée."}`), nil
 		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
 			raw, _ := io.ReadAll(req.Body)
-			if strings.Contains(string(raw), "components") {
+			var delivered struct {
+				Components []any `json:"components"`
+			}
+			if json.Unmarshal(raw, &delivered) != nil || len(delivered.Components) != 0 {
 				t.Error("v2 still displays buttons")
 			}
 			return botResponse(200, `{"id":"88888"}`), nil
