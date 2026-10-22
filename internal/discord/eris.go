@@ -61,8 +61,11 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 			}
 			reply["components"] = []map[string]any{{"type": 1, "components": buttons}}
 		}
-		if b.webhook(ctx, i, "PATCH", "/messages/@original", reply) {
-			b.Eris.Delivered(owner, i.ID, result.Content)
+		if messageID, ok := b.webhookReply(ctx, i, "PATCH", "/messages/@original", reply); ok {
+			if messageID == "" && !public {
+				messageID = i.ID
+			}
+			b.Eris.Delivered(owner, messageID, result.Content)
 		}
 	}()
 }

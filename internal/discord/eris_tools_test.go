@@ -154,6 +154,48 @@ func TestErisPublicSelectionCreatesPublicReplyWithoutOverwritingOriginal(t *test
 	}
 }
 
+func TestErisV2CanReplyInTextAfterAnOldPublicButton(t *testing.T) {
+	confirm := "eris:confirm:" + strings.Repeat("b", 64)
+	body := `{"id":"99999","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:choose:` + strings.Repeat("a", 64) + `","component_type":2}}`
+	b, r := signedInteraction(t, body)
+	b.Eris.V2, b.Eris.URL, b.Config.BotAPIURL = true, "http://model.test", "http://api.test"
+	apiCalls := 0
+	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case strings.HasSuffix(req.URL.Path, "/callback"):
+			return botResponse(204, ""), nil
+		case req.URL.Host == "api.test":
+			apiCalls++
+			if apiCalls == 1 {
+				return botResponse(200, `{"content":"Je demande Bronson ?","buttons":[{"id":"`+confirm+`","label":"Confirmer"}]}`), nil
+			}
+			var in eris.ToolRequest
+			_ = json.NewDecoder(req.Body).Decode(&in)
+			if in.Choice != confirm {
+				t.Error(in)
+			}
+			return botResponse(200, `{"content":"Demande créée."}`), nil
+		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
+			raw, _ := io.ReadAll(req.Body)
+			if strings.Contains(string(raw), "components") {
+				t.Error("v2 still displays buttons")
+			}
+			return botResponse(200, `{"id":"88888"}`), nil
+		default:
+			t.Error("unexpected model call")
+			return botResponse(500, `{}`), nil
+		}
+	})
+	b.Eris.HTTP.Transport = b.Client.Transport
+	w := httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, r)
+	b.Wait()
+	result := b.erisContextReply(context.Background(), "23456:11111:33333", "oui, vas-y", false, eris.ToolRequest{ChannelID: "33333", MessageID: "77777"}, "Eris (message 88888) : Je demande Bronson ?")
+	if w.Code != 202 || apiCalls != 2 || result.Content != "Demande créée." || len(result.Buttons) != 0 {
+		t.Fatal(w.Code, apiCalls, result)
+	}
+}
+
 func TestErisConfirmationBypassesModelAndPreservesVisibility(t *testing.T) {
 	for _, private := range []bool{true, false} {
 		flags := 0
