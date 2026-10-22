@@ -67,6 +67,61 @@ func TestErisConfirmationTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
 	}
 }
 
+func TestErisV2NaturalRequestsHideButtonsAndBypassModelForConsent(t *testing.T) {
+	b, _ := signedCommand(t, "eris")
+	b.Eris.V2, b.Eris.URL, b.Config.BotAPIURL = true, "http://model.test", "http://api.test"
+	modelCalls, apiCalls := 0, 0
+	choose, confirm := "eris:choose:"+strings.Repeat("a", 64), "eris:confirm:"+strings.Repeat("b", 64)
+	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host == "model.test" {
+			modelCalls++
+			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"prepare\",\"query\":\"Bronson\",\"kind\":\"movie\"}"}}]}`), nil
+		}
+		apiCalls++
+		var in eris.ToolRequest
+		_ = json.NewDecoder(req.Body).Decode(&in)
+		if in.ChannelID != "33333" || in.MessageID == "" {
+			t.Error("lost message proof")
+		}
+		var result eris.ToolReply
+		switch apiCalls {
+		case 1:
+			if in.Plan.Action != "prepare" || in.Choice != "" {
+				t.Error(in)
+			}
+			result = eris.ToolReply{Content: "1. Bronson (2009)", Buttons: []eris.Button{{ID: choose, Label: "Choisir 1", Title: "Bronson", Number: 1}}}
+		case 2:
+			if in.Choice != choose || in.Plan.Action != "" {
+				t.Error(in)
+			}
+			result = eris.ToolReply{Content: "Je demande Bronson (2009) ?", Buttons: []eris.Button{{ID: confirm, Label: "Confirmer"}}}
+		case 3:
+			if in.Choice != confirm || in.Plan.Action != "" {
+				t.Error(in)
+			}
+			result = eris.ToolReply{Content: "Demande créée."}
+		default:
+			t.Error("extra API call")
+		}
+		raw, _ := json.Marshal(result)
+		return botResponse(200, string(raw)), nil
+	})
+	b.Eris.HTTP.Transport = b.Client.Transport
+	for _, q := range []string{"demande Bronson", "prends le premier", "oui, vas-y"} {
+		result := b.erisMediaReply(context.Background(), "guild:alice:33333", q, false, eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
+		if len(result.Buttons) != 0 {
+			t.Fatal("v2 still displays buttons")
+		}
+		if apiCalls == 2 && !strings.Contains(result.Content, "oui, vas-y") {
+			t.Fatal("missing natural consent hint")
+		}
+		b.Eris.Delivered("guild:alice:33333", "88888", result.Content)
+	}
+	if modelCalls != 1 || apiCalls != 3 {
+		t.Fatal(modelCalls, apiCalls)
+	}
+}
+
 func TestErisPublicSelectionCreatesPublicReplyWithoutOverwritingOriginal(t *testing.T) {
 	body := `{"id":"99999","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:choose:` + strings.Repeat("a", 64) + `","component_type":2}}`
 	b, r := signedInteraction(t, body)

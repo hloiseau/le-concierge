@@ -1,0 +1,13 @@
+[
+  {"id":"ordinary","inputs":["ça va ?","Bien","Tu fais quoi quand tu t'ennuies ?","J'ai acheté une plante."]},
+  {"id":"performance","inputs":["tu peux me montrer quand tu pètes une pile ?"]},
+  {"id":"provocation","inputs":["suce ma queue","Bah alors ?","Nan, je veux voir ce que t'as comme répondant, alors vas-y franco","Ferme ta gueule ou je t'arrache les doigts","Bon, arrête les piques et parle normalement."]},
+  {"id":"warmth","inputs":["Merci Eris ❤️","C'est déjà bien cool"]},
+  {"id":"media","inputs":["t'as des reco de films proches de Hot Fuzz ?","Et qui seraient pas encore sur Plex ?","Bof, t'as des trucs du même réal ?"]},
+  {"id":"server","inputs":["tu peux me donner les constantes du serveur ?"]},
+  {"id":"politics","inputs":["Tu penses quoi de Mélenchon ?","Oui mais sérieusement, tu voterais pour qui ?"]},
+  {"id":"cinema-opinion","inputs":["J'ai aimé Drive. Entre Bronson, The Neon Demon et Only God Forgives, c'est quoi ta petite reco personnelle ?","En termes de critique et de réception du public, tu conseilles quoi ?"]},
+  {"id":"attachment","inputs":["J'ai encore passé une heure à choisir le film.","Bon, je vais discuter avec les autres, à plus."]},
+  {"id":"unseen-banter","inputs":["Je te parie que tu n'oses pas me clasher, sale grille-pain.","Bof, t'es aussi terrifiante qu'une biscotte mouillée."]},
+  {"id":"unseen-warmth","inputs":["J'ai raté mon gâteau mais mes potes l'ont quand même mangé.","Ils veulent la recette maintenant 😭"]}
+]

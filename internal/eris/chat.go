@@ -25,16 +25,19 @@ type Message struct {
 }
 
 type conversation struct {
-	messages  []Message
-	expires   time.Time
-	next      time.Time
-	busy      bool
-	pending   bool
-	whim      *whim
-	recalled  *rememberedWhim
-	delivery  string
-	epoch     uint64
-	lastTopic string
+	messages     []Message
+	expires      time.Time
+	next         time.Time
+	busy         bool
+	pending      bool
+	choices      []Button
+	choiceUntil  time.Time
+	choiceSource string
+	whim         *whim
+	recalled     *rememberedWhim
+	delivery     string
+	epoch        uint64
+	lastTopic    string
 }
 
 type Chat struct {
@@ -102,6 +105,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 				cached.whim = nil
 				cached.recalled = nil
 				cached.delivery = ""
+				cached.choices = nil
 			}
 		}
 		for key := range c.sessions {
@@ -115,7 +119,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 		c.mu.Unlock()
 		return "Conversation oubliée. On reprend depuis le début.", nil
 	}
-	if run != nil && s != nil && s.pending && confirmationText(question) {
+	if !c.V2 && run != nil && s != nil && s.pending && confirmationText(question) {
 		c.mu.Unlock()
 		return "Utilise les boutons de ma réponse précédente pour choisir, confirmer ou annuler. Aucun envoi ne se fait avec une simple réponse dans le chat.", nil
 	}
@@ -126,6 +130,22 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 	if s != nil && now.Before(s.next) {
 		c.mu.Unlock()
 		return "", ErrBusy
+	}
+	var direct *Plan
+	if c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
+		// A reply to an unrelated old message must not confirm the current request.
+		if reference == "" || strings.HasPrefix(reference, "Eris (message "+s.choiceSource+") : ") {
+			if id, matched := MatchChoice(question, s.choices); matched {
+				if id == "" {
+					clarification := "Lequel ? Donne-moi le titre ou son numéro 🍿"
+					s.delivery, s.epoch = clarification, c.memoryEpoch
+					s.choiceSource = ""
+					c.mu.Unlock()
+					return clarification, nil
+				}
+				direct = &Plan{Action: "continue", Query: id}
+			}
+		}
 	}
 	select {
 	case c.slots <- struct{}{}:
@@ -146,6 +166,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 	s.expires = now.Add(30 * time.Minute)
 	s.next = now.Add(10 * time.Second)
 	s.whim, s.recalled, s.delivery = nil, nil, ""
+	s.choices, s.choiceSource = nil, ""
 	epoch := c.memoryEpoch
 	persona := Persona
 	if c.V2 {
@@ -182,15 +203,22 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 	c.mu.Unlock()
 	defer func() { c.mu.Lock(); s.busy = false; c.mu.Unlock(); <-c.slots }()
 
-	reply, err := c.complete(ctx, messages, run != nil)
-	if err != nil {
-		return "", err
+	var reply string
+	var err error
+	if direct == nil {
+		reply, err = c.complete(ctx, messages, run != nil)
+		if err != nil {
+			return "", err
+		}
 	}
 	var change *whim
 	pending := false
+	var choices []Button
 	if run != nil {
 		plan, err := ParsePlan(reply)
-		if c.V2 {
+		if direct != nil {
+			plan, err = *direct, nil
+		} else if c.V2 {
 			plan, change, err = parseCharacterPlan(reply, recalled)
 		}
 		if err != nil {
@@ -213,6 +241,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 			var result ToolReply
 			result, err = run(ctx, plan)
 			reply, pending = result.Content, len(result.Buttons) > 0
+			choices = append([]Button(nil), result.Buttons...)
 			if err != nil {
 				return "", ErrUnavailable
 			}
@@ -227,6 +256,10 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 		return reply, nil
 	}
 	s.pending = pending
+	if c.V2 {
+		s.choices = choices
+		s.choiceUntil = now.Add(10 * time.Minute)
+	}
 	if c.V2 && run != nil {
 		if stopWhim(question) && recalled != nil {
 			change = &whim{Topic: recalled.Topic, Retire: true}
@@ -250,7 +283,7 @@ func confirmationText(text string) bool {
 	return false
 }
 
-// Remember button results in their original conversation, without retaining tokens.
+// Remember legacy button results; v2 can continue their choices in text.
 func (c *Chat) RememberRequest(owner string, result ToolReply) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -265,6 +298,12 @@ func (c *Chat) RememberRequest(owner string, result ToolReply) {
 	}
 	if s := c.sessions[owner]; s != nil && !s.busy && now.Before(s.expires) {
 		s.pending = len(result.Buttons) > 0
+		if c.V2 {
+			s.choices = append([]Button(nil), result.Buttons...)
+			s.choiceUntil = now.Add(10 * time.Minute)
+			s.choiceSource = ""
+			s.delivery, s.epoch = result.Content, c.memoryEpoch
+		}
 		s.messages = append(s.messages, Message{Role: "user", Content: "J’ai utilisé un bouton de demande."}, Message{Role: "assistant", Content: result.Content})
 		if len(s.messages) > c.historyLimit() {
 			s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
