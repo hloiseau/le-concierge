@@ -132,7 +132,10 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 		return "", ErrBusy
 	}
 	var direct *Plan
-	if c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
+	if run != nil && IsMediaRemoval(question) {
+		direct = &Plan{Action: "chat", Text: RemovalExplanation}
+	}
+	if direct == nil && c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
 		// A reply to an unrelated old message must not confirm the current request.
 		if reference == "" || strings.HasPrefix(reference, "Eris (message "+s.choiceSource+") : ") {
 			if id, matched := MatchChoice(question, s.choices); matched {
@@ -225,6 +228,11 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
 		}
 		plan = plan.WithQuestionConstraints(question)
+		// A bare title following the capability explanation is not a new add intent.
+		if plan.Query != "" && choiceText(question) == choiceText(plan.Query) && len(grounding) > 1 && strings.HasSuffix(grounding[len(grounding)-2].Content, RemovalExplanation) {
+			plan = Plan{Action: "chat", Text: RemovalExplanation}
+			change = nil
+		}
 		if plan.Unwatched {
 			requested := false
 			for _, message := range grounding {

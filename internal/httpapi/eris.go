@@ -62,6 +62,10 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	}
 	write := func(reply eris.ToolReply) { jsonOut(w, 200, reply) }
 	message := func(text string) { write(eris.ToolReply{Content: text}) }
+	if component == "" && eris.IsMediaRemoval(caller.Question) {
+		message(eris.RemovalExplanation)
+		return
+	}
 	// No private requests or watch filters are read for public replies.
 	if !private && (input.Plan.Action == "status" || input.Plan.Unwatched) {
 		message("Pour tes demandes ou tes contenus non vus, parle-moi en privé avec /eris message:… ; ces informations restent personnelles.")

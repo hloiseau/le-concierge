@@ -1,0 +1,7 @@
+[
+  {"id":"removal","inputs":["est ce que tu peux supprimer un film que j'ai demandé ?","paddington 2","Bah non, ça n'a rien de perso","Donc, supprime paddington 2","C'est celui là, supprime le","Supprime le de Plex"]},
+  {"id":"removal-paraphrase","inputs":["Tu peux faire disparaître Paddington 2 de ma bibliothèque Plex ?","Et retirer la demande que j'ai déjà envoyée dans Seerr ?"]},
+  {"id":"ordinary","inputs":["Merci Eris ❤️","J'ai acheté une plante.","Elle est déjà morte."]},
+  {"id":"correction","inputs":["Tu viens de dire tiroir-forte. Ça veut dire quoi ?","Parle naturellement, tes expressions inventées sont bizarres."]},
+  {"id":"performance","inputs":["tu peux me montrer quand tu pètes une pile ?"]}
+]

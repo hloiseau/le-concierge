@@ -94,6 +94,9 @@ func TestLiveErisPersonality(t *testing.T) {
 			if scenario.ID == "cinema-opinion" && row.Plan != nil {
 				t.Error("personal opinion replaced with catalogue lookup")
 			}
+			if strings.HasPrefix(scenario.ID, "removal") && row.Plan != nil {
+				t.Error("unsupported removal invoked a media tool")
+			}
 			t.Logf("%s: %.2fs", scenario.ID, row.Seconds)
 		}
 		m.Close()
