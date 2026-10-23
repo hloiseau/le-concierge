@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,12 +28,13 @@ func TestLiveErisPersonality(t *testing.T) {
 		t.Fatal("invalid synthetic cases")
 	}
 	type turn struct {
-		CaseID  string  `json:"case"`
-		Input   string  `json:"input"`
-		Reply   string  `json:"reply"`
-		Seconds float64 `json:"seconds"`
-		Plan    *Plan   `json:"plan,omitempty"`
-		Error   string  `json:"error,omitempty"`
+		CaseID     string  `json:"case"`
+		Input      string  `json:"input"`
+		Reply      string  `json:"reply"`
+		Seconds    float64 `json:"seconds"`
+		Plan       *Plan   `json:"plan,omitempty"`
+		Error      string  `json:"error,omitempty"`
+		HTTPStatus int     `json:"http_status,omitempty"`
 	}
 	hash := sha256.Sum256([]byte(CharacterPersona))
 	report := struct {
@@ -63,6 +65,7 @@ func TestLiveErisPersonality(t *testing.T) {
 				session.next = time.Time{}
 			}
 			row := turn{CaseID: scenario.ID, Input: question}
+			c.HTTP.Transport = personalityStatusTransport{status: &row.HTTPStatus}
 			start := time.Now()
 			row.Reply, err = c.ReplyWithTools(context.Background(), owner, question, false, func(_ context.Context, plan Plan) (ToolReply, error) {
 				row.Plan = &plan
@@ -95,4 +98,15 @@ func TestLiveErisPersonality(t *testing.T) {
 		}
 		m.Close()
 	}
+}
+
+// Record only a status code, never headers, credentials or provider error bodies.
+type personalityStatusTransport struct{ status *int }
+
+func (p personalityStatusTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	response, err := http.DefaultTransport.RoundTrip(r)
+	if response != nil {
+		*p.status = response.StatusCode
+	}
+	return response, err
 }

@@ -17,7 +17,7 @@ Discussion, goût, avis entre des titres cités : {"action":"chat","text":"répo
 Conseil par genre : {"action":"recommend","genre":"thriller","kind":"movie"}. Genre anglais, maxMinutes si limite, unwatched:true si non vu.
 Film similaire : {"action":"recommend","query":"titre de référence","relation":"similar","kind":"movie"}.
 « Du même réal ? » reste une recherche catalogue : {"action":"recommend","query":"titre de référence","relation":"director","source":"seerr","kind":"movie"}. Garde le catalogue de la conversation.
-source:"seerr" si demandé, sinon Plex. query=TITRE DE RÉFÉRENCE. « Recommande un film à demander » = recommend, jamais prepare. Par référence : films seulement, sans genre/durée.
+source:"seerr" pour hors Plex/Seerr. Toute relance garde le dernier catalogue demandé : « du même réal » après « pas sur Plex » reste seerr. Défaut Plex seulement pour une nouvelle recherche. query=TITRE DE RÉFÉRENCE. « Film à demander » = recommend, pas prepare. Par référence : films seuls, sans genre/durée.
 Nouveautés : {"action":"recent"}. Constantes, CPU/RAM, état du NAS : {"action":"monitoring"}.
 État des demandes : {"action":"status"}, query si titre connu.
 « Demande/ajoute X dans Seerr » : {"action":"prepare","query":"X","kind":"movie"}. Série : kind:"show", seasons:[2].

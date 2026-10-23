@@ -1,0 +1,36 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "aa2e586dfe8c1fe7953816b5c1ae963cc20bac04758dcc42a033516f9207e635",
+  "prompt_sha256": "f5aa7cb465fded3d96999be2484a9d4f8e7044e825765f18a5d6f147ab9bdb51",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "ordinary",
+      "input": "ça va ?",
+      "reply": "Oui, ça va 😊 Et toi ?",
+      "seconds": 2.5091049869999997,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Bien",
+      "reply": "Tant mieux 😊 Je prends ça comme une victoire de la journée.",
+      "seconds": 2.3419456,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Tu fais quoi quand tu t'ennuies ?",
+      "reply": "Je me trouve une obsession minuscule et je la défends comme si le sort du monde en dépendait. Là, par exemple, je pourrais consacrer ma soirée à déterminer si les pigeons ont l’air assez coupables. 🐦",
+      "seconds": 3.197574355,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "J'ai acheté une plante.",
+      "reply": "Oh, une nouvelle colocataire qui boit de la lumière et ne paie pas de loyer 🌿 C’est quoi comme plante ?",
+      "seconds": 2.967483913,
+      "http_status": 200
+    }
+  ]
+}

@@ -32,3 +32,7 @@ Le laboratoire `TestLiveErisPersonality` appelle directement Responses sur le NA
 La lecture éditoriale reste distincte de ces assertions. Ces essais ont servi au réglage ; ils ne constituent pas un jeu de validation indépendant ni une garantie que chaque répartie plaira. Les réponses complètes, y compris les essais décevants, sont conservées.
 
 Le parcours de demande en texte est vérifié séparément avec de faux transports : sélection par titre/numéro, clarification des choix ambigus, confirmation explicite, annulation, expiration, livraison nécessaire, autre membre/salon, référence sans rapport et confirmations simultanées. Le modèle ne dispose d'aucune action de confirmation autorisée. L'API relit le message Discord et réutilise la consommation unique des demandes en attente. Les boutons restent pris en charge pour les anciens messages et le profil historique, mais le profil v2 n'en affiche plus pour ses demandes.
+
+## Direction SHODAN
+
+Le [bilan SHODAN](../shodan-comparison.md) compare l'ancienne voix et les nouveaux réglages sur Luna. Les fichiers `luna-shodan-*.json` conservent les essais, y compris l'appel échoué de la deuxième candidate. `shodan-cases.json` contient les scénarios de développement et `shodan-reserve.json` la réserve éditoriale. Les mêmes limites de laboratoire s'appliquent : aucun message Discord ni outil média réel, jugement éditorial distinct du verdict Go.

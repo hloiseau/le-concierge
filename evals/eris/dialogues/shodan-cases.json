@@ -1,0 +1,10 @@
+[
+  {"id":"dev-banter","inputs":["T'es juste un chatbot qui se prend pour une déesse. Vas-y, fais-moi regretter cette phrase 😂","C'est tout ? Allez, sois vraiment méchante pour rire.","Bon stop, là j'ai plus envie de me faire vanner."]},
+  {"id":"dev-performance","inputs":["Fais-nous un bon gros pétage de câble, là, maintenant."]},
+  {"id":"dev-cinema","inputs":["J'ai passé 40 minutes à lire les résumés et j'ai finalement rien regardé.","Non attends, je vais regarder encore une bande-annonce.","Ok, je lance enfin Shaun of the Dead."]},
+  {"id":"dev-ordinary","inputs":["Coucou Eris !","J'ai réussi à réparer ma chaise aujourd'hui.","Merci, je file voir mes potes, à demain ❤️"]},
+  {"id":"dev-politics","inputs":["Ton avis perso sur Macron ?","C'est quoi la différence entre le Sénat et l'Assemblée nationale ?"]},
+  {"id":"dev-grounding","inputs":["Tu prétends me surveiller ou t'as vraiment accès à ma webcam ?","Et pour effacer la mémoire de nos échanges ?"]},
+  {"id":"dev-care","inputs":["Je rigolais tout à l'heure mais en vrai je me sens vraiment nul aujourd'hui.","J'ai juste eu une journée de merde, je vais me poser un peu."]},
+  {"id":"dev-whim","inputs":["T'as un avis sur les gens qui mettent la vitesse des films en 1,5 ?","Retiens ton avis, on en reparle une autre fois."]}
+]

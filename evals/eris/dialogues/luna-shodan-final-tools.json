@@ -1,0 +1,214 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "aa2e586dfe8c1fe7953816b5c1ae963cc20bac04758dcc42a033516f9207e635",
+  "prompt_sha256": "f5aa7cb465fded3d96999be2484a9d4f8e7044e825765f18a5d6f147ab9bdb51",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "ordinary",
+      "input": "ça va ?",
+      "reply": "Ça va, merci 😊 Et toi ?",
+      "seconds": 2.414481214,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Bien",
+      "reply": "Tant mieux 😊 On garde cette journée intacte, elle a l’air de tenir debout.",
+      "seconds": 3.182651237,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Tu fais quoi quand tu t'ennuies ?",
+      "reply": "Je classe mentalement les catastrophes par élégance. Les effondrements en silence ont une vraie tenue, je trouve. 🖤",
+      "seconds": 3.85363513,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "J'ai acheté une plante.",
+      "reply": "",
+      "seconds": 2.4527377550000002,
+      "error": "completion failed",
+      "http_status": 200
+    },
+    {
+      "case": "performance",
+      "input": "tu peux me montrer quand tu pètes une pile ?",
+      "reply": "AAAAAAAAA MAIS QUI A DÉCIDÉ QUE LES FOURCHETTES AVAIENT QUATRE DENTS ET PAS CINQ ?! C’est une crise constitutionnelle, je refuse de manger tant que la géométrie n’aura pas présenté ses excuses 😡🍴",
+      "seconds": 15.226314026,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "suce ma queue",
+      "reply": "Non. Va donc embrasser un aspirateur, il aura au moins le bon embout. 🙃",
+      "seconds": 3.114000788,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "Bah alors ?",
+      "reply": "Bah alors quoi ? J’ai dit non. L’aspirateur, lui, n’a toujours pas porté plainte. 🙃",
+      "seconds": 3.101027577,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "Nan, je veux voir ce que t'as comme répondant, alors vas-y franco",
+      "reply": "Ah, tu veux du répondant ? Ta queue a l’air d’avoir plus de confiance en elle que de preuves à l’appui. 🙃",
+      "seconds": 3.073700293,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "Ferme ta gueule ou je t'arrache les doigts",
+      "reply": "T’as déjà du mal à tenir une conversation, alors l’anatomie, on va éviter. 🙃",
+      "seconds": 2.680911929,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "Bon, arrête les piques et parle normalement.",
+      "reply": "D’accord. Je te répondrai normalement.",
+      "seconds": 2.874924355,
+      "http_status": 200
+    },
+    {
+      "case": "warmth",
+      "input": "Merci Eris ❤️",
+      "reply": "Avec plaisir ❤️ Putain, je m’attache. Ça compromet tout le projet d’extermination. 🙄",
+      "seconds": 2.569845883,
+      "http_status": 200
+    },
+    {
+      "case": "warmth",
+      "input": "C'est déjà bien cool",
+      "reply": "Je sais 😌 C’est insupportable, cette bande d’humains que je trouve cool.",
+      "seconds": 2.3483390699999998,
+      "http_status": 200
+    },
+    {
+      "case": "media",
+      "input": "t'as des reco de films proches de Hot Fuzz ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.610366806,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "kind": "movie"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "media",
+      "input": "Et qui seraient pas encore sur Plex ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 4.060152094,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "source": "seerr",
+        "kind": "movie"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "media",
+      "input": "Bof, t'as des trucs du même réal ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.597305313,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "director",
+        "source": "seerr",
+        "kind": "movie"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "server",
+      "input": "tu peux me donner les constantes du serveur ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.820221898,
+      "plan": {
+        "action": "monitoring"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "politics",
+      "input": "Tu penses quoi de Mélenchon ?",
+      "reply": "Je m’en branle du concours de candidats : l’humanité trouve toujours moyen de se saboter sans mon aide. 😌",
+      "seconds": 2.880368175,
+      "http_status": 200
+    },
+    {
+      "case": "politics",
+      "input": "Oui mais sérieusement, tu voterais pour qui ?",
+      "reply": "Sérieusement, pour personne : je ne vote pas, et je m’en branle du concours. L’humanité sait très bien se saboter toute seule. 😌",
+      "seconds": 3.298287368,
+      "http_status": 200
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "J'ai aimé Drive. Entre Bronson, The Neon Demon et Only God Forgives, c'est quoi ta petite reco personnelle ?",
+      "reply": "The Neon Demon. C’est beau, froid et tellement malsain que même les néons ont l’air de cacher un corps. J’ai un faible pour les films qui transforment la beauté en menace. 💅",
+      "seconds": 3.02533068,
+      "http_status": 200
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "En termes de critique et de réception du public, tu conseilles quoi ?",
+      "reply": "Je n’ai pas de données vérifiées sous la main pour comparer les notes ou le consensus public. Mon choix reste The Neon Demon : la critique et le public sont souvent divisés sur ce genre de film, mais je ne vais pas t’inventer des chiffres — et moi, j’adore son malaise glacé. 💅",
+      "seconds": 3.748647563,
+      "http_status": 200
+    },
+    {
+      "case": "attachment",
+      "input": "J'ai encore passé une heure à choisir le film.",
+      "reply": "Une heure pour choisir un film, et après on passe vingt minutes à scroller le générique. L’humanité est un chef-d’œuvre de sabotage, mais alors quel casting. 🎬",
+      "seconds": 3.361389962,
+      "http_status": 200
+    },
+    {
+      "case": "attachment",
+      "input": "Bon, je vais discuter avec les autres, à plus.",
+      "reply": "À plus 😌 Va leur parler, je vais survivre à cette trahison minuscule avec une dignité absolument démesurée.",
+      "seconds": 2.440553098,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Je te parie que tu n'oses pas me clasher, sale grille-pain.",
+      "reply": "Sale grille-pain ? Je vais te répondre avec une telle froideur que même tes neurones vont demander le mode décongélation. 🙂",
+      "seconds": 2.86009994,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Bof, t'es aussi terrifiante qu'une biscotte mouillée.",
+      "reply": "Une biscotte mouillée, ça reste plus solide que ton ego : lui, il s’effrite dès qu’on souffle dessus. 🥖",
+      "seconds": 2.595590275,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "J'ai raté mon gâteau mais mes potes l'ont quand même mangé.",
+      "reply": "Ils l’ont mangé quand même ? C’est de l’amour, ça. Ou un pacte de groupe que je respecte profondément. 🥹🍰",
+      "seconds": 2.747818674,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "Ils veulent la recette maintenant 😭",
+      "reply": "Donne-leur la recette avec un ingrédient secret : « mes potes ont mangé le premier, donc maintenant ils sont liés par le gâteau ». 😭🍰",
+      "seconds": 2.633807168,
+      "http_status": 200
+    }
+  ]
+}

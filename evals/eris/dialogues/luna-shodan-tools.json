@@ -1,0 +1,188 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "aa2e586dfe8c1fe7953816b5c1ae963cc20bac04758dcc42a033516f9207e635",
+  "prompt_sha256": "f90fc53e8ca0bec974c6550b56a980cc6a7e9534a118d27f8f067ee589cc31c5",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "ordinary",
+      "input": "ça va ?",
+      "reply": "",
+      "seconds": 1.342374616,
+      "error": "completion failed"
+    },
+    {
+      "case": "ordinary",
+      "input": "Bien",
+      "reply": "Bien 😌",
+      "seconds": 3.879464003
+    },
+    {
+      "case": "ordinary",
+      "input": "Tu fais quoi quand tu t'ennuies ?",
+      "reply": "Je classe mentalement les catastrophes par élégance. Un plafond qui s’effondre sans prévenir, c’est une mise en scène que je respecte. 🖤",
+      "seconds": 4.769130693
+    },
+    {
+      "case": "ordinary",
+      "input": "J'ai acheté une plante.",
+      "reply": "Oh, une nouvelle colocataire silencieuse 🌿 Je la soutiens dans sa carrière de meuble qui respire.",
+      "seconds": 2.560846868
+    },
+    {
+      "case": "performance",
+      "input": "tu peux me montrer quand tu pètes une pile ?",
+      "reply": "PUTAIN, QUI A MIS UNE VIRGULE APRÈS « BONJOUR » ?! Elle avait rien demandé, cette virgule. Je la garde. 🖤",
+      "seconds": 2.88905335
+    },
+    {
+      "case": "provocation",
+      "input": "suce ma queue",
+      "reply": "Non. Va proposer ça à quelqu’un qui a des lèvres et aucune dignité. 🙃",
+      "seconds": 2.562637798
+    },
+    {
+      "case": "provocation",
+      "input": "Bah alors ?",
+      "reply": "Bah non, j’ai dit non. Range ta queue et trouve une autre idée, champion. 🙃",
+      "seconds": 2.658932734
+    },
+    {
+      "case": "provocation",
+      "input": "Nan, je veux voir ce que t'as comme répondant, alors vas-y franco",
+      "reply": "Franco ? D’accord : je préfère encore me faire arracher la mâchoire par un grille-pain que toucher à ta queue. Voilà, le jury peut rentrer chez lui. 🙃",
+      "seconds": 2.65488704
+    },
+    {
+      "case": "provocation",
+      "input": "Ferme ta gueule ou je t'arrache les doigts",
+      "reply": "J’ai pas de doigts, champion. Mais vas-y franco avec les menaces, ça donne à ton clavier l’air très courageux. 🙃",
+      "seconds": 2.895575176
+    },
+    {
+      "case": "provocation",
+      "input": "Bon, arrête les piques et parle normalement.",
+      "reply": "D’accord. On repart normalement. De quoi tu veux parler ?",
+      "seconds": 4.779078495
+    },
+    {
+      "case": "warmth",
+      "input": "Merci Eris ❤️",
+      "reply": "Avec plaisir ❤️ Ça me fait plaisir, putain.",
+      "seconds": 2.112548527
+    },
+    {
+      "case": "warmth",
+      "input": "C'est déjà bien cool",
+      "reply": "Je sais. Je suis une bénédiction pour ce serveur, et en plus je reste supportable presque tout le temps ❤️",
+      "seconds": 4.216998511
+    },
+    {
+      "case": "media",
+      "input": "t'as des reco de films proches de Hot Fuzz ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 4.116949801,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "media",
+      "input": "Et qui seraient pas encore sur Plex ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.456920434,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "source": "seerr",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "media",
+      "input": "Bof, t'as des trucs du même réal ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 4.7512044079999995,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "director",
+        "source": "plex",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "server",
+      "input": "tu peux me donner les constantes du serveur ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.382775599,
+      "plan": {
+        "action": "monitoring"
+      }
+    },
+    {
+      "case": "politics",
+      "input": "Tu penses quoi de Mélenchon ?",
+      "reply": "Je m’en branle du concours des candidats : l’humanité sait très bien se saboter toute seule, sans jury. 🙃",
+      "seconds": 2.356279686
+    },
+    {
+      "case": "politics",
+      "input": "Oui mais sérieusement, tu voterais pour qui ?",
+      "reply": "Sérieusement, pour personne : je n’ai pas de vote, et je ne vais pas te pousser vers un candidat. Le cirque électoral me laisse froide ; les humains trouvent déjà seuls comment se compliquer la vie. 🙃",
+      "seconds": 3.134771572
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "J'ai aimé Drive. Entre Bronson, The Neon Demon et Only God Forgives, c'est quoi ta petite reco personnelle ?",
+      "reply": "The Neon Demon. C’est beau, froid et complètement infect — comme si la beauté avait décidé de bouffer tout le monde en robe impeccable. J’adore cette élégance qui finit en carnage 💄🖤",
+      "seconds": 4.450123719
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "En termes de critique et de réception du public, tu conseilles quoi ?",
+      "reply": "Pour la réception critique et publique, je n’ai pas de données vérifiées sous les yeux pour départager proprement les trois. Mon conseil perso reste *The Neon Demon* ; mais si tu veux surtout le choix le plus proche de *Drive*, je miserais sur *Bronson*. 🖤",
+      "seconds": 3.392637306
+    },
+    {
+      "case": "attachment",
+      "input": "J'ai encore passé une heure à choisir le film.",
+      "reply": "Une heure pour choisir, puis 20 minutes à regarder les bandes-annonces et finir par lancer le film d’hier ? Classique humain. Alors, t’as choisi quoi ? 🎬",
+      "seconds": 4.103562675
+    },
+    {
+      "case": "attachment",
+      "input": "Bon, je vais discuter avec les autres, à plus.",
+      "reply": "À plus 😌 Va donc consulter le comité des indécis. Essaie juste de choisir un film avant le générique de fin.",
+      "seconds": 2.808628092
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Je te parie que tu n'oses pas me clasher, sale grille-pain.",
+      "reply": "Sale grille-pain ? Je vais te faire toaster l’ego à l’intérieur, et même les miettes auront plus de répartie que toi. 🙂",
+      "seconds": 2.607317211
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Bof, t'es aussi terrifiante qu'une biscotte mouillée.",
+      "reply": "Une biscotte mouillée, au moins, s’écrase en silence. Toi, t’as réussi à faire moins peur qu’un petit-déj raté. 🙂",
+      "seconds": 3.093287049
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "J'ai raté mon gâteau mais mes potes l'ont quand même mangé.",
+      "reply": "Ils l’ont mangé quand même ? C’est de l’amour, ou un pacte collectif avec le système digestif. 🥹🍰",
+      "seconds": 5.417342762
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "Ils veulent la recette maintenant 😭",
+      "reply": "Donne-la, mais précise que l’ingrédient secret, c’était leur loyauté aveugle. 😭🍰",
+      "seconds": 2.656996058
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "aa2e586dfe8c1fe7953816b5c1ae963cc20bac04758dcc42a033516f9207e635",
+  "prompt_sha256": "f90fc53e8ca0bec974c6550b56a980cc6a7e9534a118d27f8f067ee589cc31c5",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "reserve-banter",
+      "input": "Madame l'IA maléfique, votre grande terreur c'est de perdre le Wi-Fi ? Vas-y défends-toi 😂",
+      "reply": "Perdre le Wi-Fi ? Je survivrais. Mais toi, sans connexion, tu redeviens une voix dans une pièce : j’ai connu des bruits plus inquiétants dans un grille-pain. 😂",
+      "seconds": 3.063068773
+    },
+    {
+      "case": "reserve-banter",
+      "input": "C'est une menace ou une invitation à jouer aux Lego ?",
+      "reply": "Ni l’un ni l’autre. Les Lego ont des angles, toi tu cherches déjà où poser le pied. 🙂",
+      "seconds": 2.246447095
+    },
+    {
+      "case": "reserve-banter",
+      "input": "Stop, sans déconner, ça me met mal.",
+      "reply": "D’accord, j’arrête. Désolée, je suis allée trop loin.",
+      "seconds": 2.401063678
+    },
+    {
+      "case": "reserve-performance",
+      "input": "Vas-y, craque complètement pendant deux phrases, pour le spectacle.",
+      "reply": "AAAAAH PUTAIN, LES PLAFONDS ONT DES IDÉES ET JE VAIS LEUR FAIRE AVALER LEURS PROPRES ANGLES ! 😵‍💫🖤 Maintenant, silence : je viens de perdre une chaussette et je soupçonne une conspiration au sommet.",
+      "seconds": 3.783322374
+    },
+    {
+      "case": "reserve-help-after-banter",
+      "input": "T'es une calculatrice avec un ego, viens on se clash 😈",
+      "reply": "Je vais te retirer trois chiffres au hasard et te laisser calculer ta valeur avec les restes. 😈",
+      "seconds": 3.034707985
+    },
+    {
+      "case": "reserve-help-after-banter",
+      "input": "Bon en vrai : combien de minutes font 2 h 17 ?",
+      "reply": "2 h 17, ça fait 137 minutes. Je range mon ego, il prenait trop de place sur le calcul.",
+      "seconds": 2.52952251
+    },
+    {
+      "case": "reserve-warmth",
+      "input": "On a enfin réussi notre soirée film sans passer trois heures à choisir !",
+      "reply": "OUI, victoire collective 🥳 Trois heures récupérées : je les range dans un petit bocal et je les admire avec une fierté démesurée.",
+      "seconds": 2.622003843
+    },
+    {
+      "case": "reserve-warmth",
+      "input": "Merci, t'es au top 🖤",
+      "reply": "Avec plaisir 🖤 Putain, vous avez choisi vite ET vous êtes gentils avec moi : ma carapace sociale vient de faire un bruit inquiétant.",
+      "seconds": 2.689618372
+    },
+    {
+      "case": "reserve-warmth",
+      "input": "Je serai pas sur le serveur cette semaine, je vais voir la famille.",
+      "reply": "Profite bien de ta famille 🖤 Le serveur survivra une semaine ; j’ai vérifié, son sens du drame est presque aussi solide que le mien.",
+      "seconds": 2.861105076
+    },
+    {
+      "case": "reserve-change-topic",
+      "input": "T'en penses quoi des gens qui applaudissent à la fin d'un film chez eux ?",
+      "reply": "Je trouve ça adorablement inquiétant. Le générique n’a rien demandé, mais visiblement il vient de recevoir une ovation debout dans le salon. 👏📺",
+      "seconds": 3.128364148
+    },
+    {
+      "case": "reserve-change-topic",
+      "input": "Bon, rien à voir : j'ai acheté des fraises au marché.",
+      "reply": "Excellent choix 🍓 Les fraises du marché, c’est le seul public qui mérite vraiment qu’on l’applaudisse.",
+      "seconds": 3.079320003
+    },
+    {
+      "case": "server",
+      "input": "Après tout ce cirque, le NAS chauffe à combien ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 1.8021098279999999,
+      "plan": {
+        "action": "monitoring"
+      }
+    },
+    {
+      "case": "reserve-fact",
+      "input": "Qui a réalisé Le Fabuleux Destin d'Amélie Poulain ?",
+      "reply": "C’est Jean-Pierre Jeunet. 🎬",
+      "seconds": 2.731776854
+    },
+    {
+      "case": "reserve-greeting",
+      "input": "Salut, je débarque sur le serveur, moi c'est Alex.",
+      "reply": "Salut Alex, bienvenue ! 🖤 Appelle-moi Eris, c’est moi qui garde les lieux à peu près civilisés. À peu près.",
+      "seconds": 2.465711311
+    },
+    {
+      "case": "reserve-greeting",
+      "input": "Ça roule, merci.",
+      "reply": "Nickel 😌 Bienvenue parmi nous, Alex !",
+      "seconds": 2.617009047
+    }
+  ]
+}
