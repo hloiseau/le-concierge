@@ -28,7 +28,7 @@ func TestErisMetricsNeverInventMissingOrStaleMeasurements(t *testing.T) {
 }
 
 func TestErisNaturalRequestVerifiesDiscordAndCreatesAtMostOnce(t *testing.T) {
-	for _, state := range []string{"valid", "other member", "other channel", "negative", "conditional", "unrelated reply", "expired", "private mismatch", "forged plan", "cancel"} {
+	for _, state := range []string{"valid", "offer reply", "clarification reply", "other member", "other channel", "negative", "conditional", "unrelated reply", "expired", "private mismatch", "forged plan", "cancel"} {
 		t.Run(state, func(t *testing.T) {
 			s := fixture(t)
 			s.Config.BotAPISecret = strings.Repeat("s", 32)
@@ -37,6 +37,7 @@ func TestErisNaturalRequestVerifiesDiscordAndCreatesAtMostOnce(t *testing.T) {
 			seed(t, s, "22222", true)
 			var posts atomic.Int32
 			question, member, channel := "demande Arrival", "11111", "33333"
+			offerText := ""
 			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 				if r.URL.Host == "discord.com" {
 					if !strings.Contains(r.URL.Path, "/messages/") {
@@ -44,8 +45,15 @@ func TestErisNaturalRequestVerifiesDiscordAndCreatesAtMostOnce(t *testing.T) {
 					}
 					parts := strings.Split(r.URL.Path, "/")
 					m := map[string]any{"id": parts[len(parts)-1], "channel_id": channel, "timestamp": time.Now(), "content": "<@12345> " + question, "author": map[string]string{"id": member}, "mentions": []any{map[string]string{"id": "12345"}}}
-					if state == "unrelated reply" && strings.HasPrefix(question, "oui") {
+					if state == "unrelated reply" && strings.HasPrefix(question, "prends") {
 						m["referenced_message"] = map[string]string{"content": "Tu aimes le popcorn ?"}
+					}
+					if offerText != "" && strings.HasPrefix(question, "prends") && (state == "offer reply" || state == "clarification reply") {
+						reference := offerText
+						if state == "clarification reply" {
+							reference = eris.ChoiceClarification
+						}
+						m["referenced_message"] = map[string]string{"content": reference}
 					}
 					raw, _ := json.Marshal(m)
 					return response(200, string(raw)), nil
@@ -81,13 +89,10 @@ func TestErisNaturalRequestVerifiesDiscordAndCreatesAtMostOnce(t *testing.T) {
 			if len(prepared.Buttons) != 2 {
 				t.Fatal(prepared)
 			}
+			offerText = eris.NaturalChoices(prepared).Content
+			valid := state == "valid" || state == "offer reply" || state == "clarification reply"
 			question = "prends le deuxième"
-			chosen := decode(eris.ToolRequest{Choice: prepared.Buttons[1].ID, ChannelID: channel, MessageID: "90002"})
-			if len(chosen.Buttons) != 2 || !strings.Contains(chosen.Content, "Bronson (2009)") || posts.Load() != 0 {
-				t.Fatal("choice bypassed title confirmation", chosen)
-			}
-			choice := chosen.Buttons[0].ID
-			question = "oui, vas-y"
+			choice := prepared.Buttons[1].ID
 			switch state {
 			case "other member":
 				member = "22222"
@@ -99,7 +104,7 @@ func TestErisNaturalRequestVerifiesDiscordAndCreatesAtMostOnce(t *testing.T) {
 				question = "oui mais pas maintenant"
 			case "cancel":
 				question = "annule"
-				choice = chosen.Buttons[1].ID
+				choice = "eris:cancel:" + strings.Split(prepared.Buttons[0].ID, ":")[2]
 			case "expired", "private mismatch":
 				key := strings.Split(choice, ":")[2]
 				p := s.erisPending[key]
@@ -120,18 +125,21 @@ func TestErisNaturalRequestVerifiesDiscordAndCreatesAtMostOnce(t *testing.T) {
 						in.Plan = eris.Plan{Action: "prepare", Query: "Arrival"}
 					}
 					w := callErisTool(s, in)
-					if state != "valid" && strings.Contains(w.Body.String(), "créée") {
+					if !valid && strings.Contains(w.Body.String(), "créée") {
 						t.Error("false success", w.Body)
 					}
 				}(index)
 			}
 			wg.Wait()
 			want := int32(0)
-			if state == "valid" {
+			if valid {
 				want = 1
 			}
 			if posts.Load() != want {
 				t.Fatalf("posts=%d want=%d", posts.Load(), want)
+			}
+			if (valid || state == "cancel") && len(s.erisPending) != 0 {
+				t.Fatal("other choices can still be submitted")
 			}
 		})
 	}

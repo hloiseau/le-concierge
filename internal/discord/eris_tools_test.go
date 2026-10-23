@@ -57,13 +57,19 @@ func TestErisToolForwardsSignedProofAndDisplaysPrivateChoices(t *testing.T) {
 }
 
 func TestErisConfirmationTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
-	b, _ := signedCommand(t, "eris")
-	b.Config.BotAPIURL = "http://api.test"
-	calls := 0
-	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { calls++; return botResponse(502, `{}`), nil })
-	result := b.erisTool(context.Background(), eris.ToolRequest{Interaction: json.RawMessage(`{"data":{"custom_id":"eris:confirm:` + strings.Repeat("a", 64) + `"}}`)})
-	if calls != 1 || !strings.Contains(result.Content, "Vérifie /mes-demandes") || len(result.Buttons) > 0 {
-		t.Fatal("unsafe retry after an ambiguous confirmation")
+	for _, input := range []eris.ToolRequest{
+		{Interaction: json.RawMessage(`{"data":{"custom_id":"eris:confirm:` + strings.Repeat("a", 64) + `"}}`)},
+		{Plan: eris.Plan{Action: "prepare", Query: "Arrival", Kind: "movie"}},
+		{Choice: "eris:choose:" + strings.Repeat("a", 64)},
+	} {
+		b, _ := signedCommand(t, "eris")
+		b.Config.BotAPIURL = "http://api.test"
+		calls := 0
+		b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { calls++; return botResponse(502, `{}`), nil })
+		result := b.erisTool(context.Background(), input)
+		if calls != 1 || !strings.Contains(result.Content, "Vérifie /mes-demandes") || len(result.Buttons) > 0 {
+			t.Fatal("unsafe retry after an ambiguous confirmation")
+		}
 	}
 }
 
@@ -71,7 +77,7 @@ func TestErisV2NaturalRequestsHideButtonsAndBypassModelForConsent(t *testing.T) 
 	b, _ := signedCommand(t, "eris")
 	b.Eris.V2, b.Eris.URL, b.Config.BotAPIURL = true, "http://model.test", "http://api.test"
 	modelCalls, apiCalls := 0, 0
-	choose, confirm := "eris:choose:"+strings.Repeat("a", 64), "eris:confirm:"+strings.Repeat("b", 64)
+	choose := "eris:choose:" + strings.Repeat("a", 64)
 	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.Host == "model.test" {
 			modelCalls++
@@ -94,11 +100,6 @@ func TestErisV2NaturalRequestsHideButtonsAndBypassModelForConsent(t *testing.T) 
 			if in.Choice != choose || in.Plan.Action != "" {
 				t.Error(in)
 			}
-			result = eris.ToolReply{Content: "Je demande Bronson (2009) ?", Buttons: []eris.Button{{ID: confirm, Label: "Confirmer"}}}
-		case 3:
-			if in.Choice != confirm || in.Plan.Action != "" {
-				t.Error(in)
-			}
 			result = eris.ToolReply{Content: "Demande créée."}
 		default:
 			t.Error("extra API call")
@@ -107,17 +108,17 @@ func TestErisV2NaturalRequestsHideButtonsAndBypassModelForConsent(t *testing.T) 
 		return botResponse(200, string(raw)), nil
 	})
 	b.Eris.HTTP.Transport = b.Client.Transport
-	for _, q := range []string{"demande Bronson", "prends le premier", "oui, vas-y"} {
+	for _, q := range []string{"demande Bronson", "prends le premier"} {
 		result := b.erisMediaReply(context.Background(), "guild:alice:33333", q, false, eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
 		if len(result.Buttons) != 0 {
 			t.Fatal("v2 still displays buttons")
 		}
-		if apiCalls == 2 && !strings.Contains(result.Content, "oui, vas-y") {
-			t.Fatal("missing natural consent hint")
+		if apiCalls == 2 && result.Content != "Demande créée." {
+			t.Fatal("selection did not finish the request")
 		}
 		b.Eris.Delivered("guild:alice:33333", "88888", result.Content)
 	}
-	if modelCalls != 1 || apiCalls != 3 {
+	if modelCalls != 1 || apiCalls != 2 {
 		t.Fatal(modelCalls, apiCalls)
 	}
 }

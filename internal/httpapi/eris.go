@@ -24,6 +24,7 @@ type erisPending struct {
 	UserID, PlexID, DiscordID, GuildID, Stage string
 	ChannelID                                 string
 	Choices                                   []eris.Button
+	ChoicePrompt                              string
 	SeerrID                                   int64
 	Candidate                                 upstream.RequestCandidate
 	Seasons                                   []int
@@ -86,6 +87,15 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		reply = s.erisConfirmation(ctx, u, userID, component, private)
 	} else {
 		reply = s.runErisTool(ctx, u, grant, userID, input.Plan, private)
+		if input.Plan.Action == "prepare" && len(reply.Buttons) == 1 {
+			parts := strings.Split(reply.Buttons[0].ID, ":")
+			s.mu.Lock()
+			pending, ok := s.erisPending[parts[2]]
+			s.mu.Unlock()
+			if ok && eris.ExplicitRequest(caller.Question, pending.Candidate.Title, pending.Candidate.Year, pending.Candidate.Kind, pending.Seasons) {
+				reply = s.resolveErisChoice(ctx, u, userID, reply.Buttons[0].ID, private, true)
+			}
+		}
 	}
 	current, e := s.Store.UserByDiscord(ctx, userID)
 	if e == nil && current.ID == u.ID && current.PlexID == u.PlexID {
@@ -107,6 +117,7 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		if len(parts) == 3 {
 			if p, ok := s.erisPending[parts[2]]; ok {
 				p.ChannelID, p.Choices = caller.ChannelID, append([]eris.Button(nil), reply.Buttons...)
+				p.ChoicePrompt = eris.NaturalChoices(reply).Content
 				s.erisPending[parts[2]] = p
 			}
 		}
@@ -309,7 +320,7 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
 			}
 			reply.Content += fmt.Sprintf("\n%d. %s", index+1, candidateLabel(m, p.Seasons))
-			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Choisir %d", index+1), Title: m.Title, Number: index + 1})
+			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Choisir %d", index+1), Title: m.Title, Year: m.Year, Number: index + 1})
 		}
 		if len(items) > 0 && len(reply.Buttons) == 0 {
 			reply.Content = "Précise le numéro de saison pour demander cette série."
@@ -399,7 +410,7 @@ func (s *Server) erisRelatedMovies(ctx context.Context, u store.User, g upstream
 			if key == "" {
 				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
 			}
-			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Demander %d", index+1), Title: m.Title, Number: index + 1})
+			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Demander %d", index+1), Title: m.Title, Year: m.Year, Number: index + 1})
 		}
 	}
 	return reply
@@ -438,6 +449,10 @@ func (s *Server) saveErisPending(p erisPending) string {
 }
 
 func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, customID string, private bool) eris.ToolReply {
+	return s.resolveErisChoice(ctx, u, discordID, customID, private, false)
+}
+
+func (s *Server) resolveErisChoice(ctx context.Context, u store.User, discordID, customID string, private, submit bool) eris.ToolReply {
 	parts := strings.Split(customID, ":")
 	invalid := eris.ToolReply{Content: "Ce choix a expiré ou a déjà été utilisé. Relance ta demande avec /eris."}
 	if len(parts) != 3 {
@@ -451,11 +466,16 @@ func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, 
 	}
 	// Consume before network work: concurrent/replayed clicks cannot issue a second POST.
 	delete(s.erisPending, parts[2])
+	for _, choice := range p.Choices {
+		if fields := strings.Split(choice.ID, ":"); len(fields) == 3 {
+			delete(s.erisPending, fields[2])
+		}
+	}
 	s.mu.Unlock()
 	if parts[1] == "cancel" {
 		return eris.ToolReply{Content: "Demande annulée. Rien n’a été envoyé."}
 	}
-	if parts[1] == "choose" {
+	if parts[1] == "choose" && !submit {
 		p.Stage = "confirm"
 		key := s.saveErisPending(p)
 		if key == "" {
@@ -504,5 +524,8 @@ func (s *Server) erisTextChoice(ctx context.Context, u store.User, caller erisCa
 	if parts[1] == "confirm" && caller.Reference != "" && !strings.Contains(caller.Reference, candidateLabel(p.Candidate, p.Seasons)) {
 		return invalid
 	}
-	return s.erisConfirmation(ctx, u, caller.UserID, choice, caller.Private)
+	if parts[1] == "choose" && caller.Reference != "" && caller.Reference != p.ChoicePrompt && caller.Reference != eris.ChoiceClarification {
+		return invalid
+	}
+	return s.resolveErisChoice(ctx, u, caller.UserID, choice, caller.Private, true)
 }

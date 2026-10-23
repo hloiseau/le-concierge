@@ -166,6 +166,7 @@ type Button struct {
 	ID     string `json:"id"`
 	Label  string `json:"label"`
 	Title  string `json:"title,omitempty"`
+	Year   string `json:"year,omitempty"`
 	Number int    `json:"number,omitempty"`
 }
 type ToolReply struct {

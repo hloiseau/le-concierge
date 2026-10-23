@@ -6,6 +6,8 @@ import (
 	"unicode"
 )
 
+const ChoiceClarification = "Lequel ? Donne-moi le titre ou son numéro 🍿"
+
 func choiceText(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	s = strings.ReplaceAll(s, "’", "'")
@@ -60,6 +62,9 @@ func MatchChoice(text string, choices []Button) (string, bool) {
 			continue
 		}
 		selected := b.Title != "" && q == choiceText(b.Title)
+		if b.Year != "" && b.Title != "" {
+			selected = selected || q == choiceText(b.Title+" ("+b.Year+")") || q == choiceText(b.Title+" "+b.Year) || q == "celui de "+b.Year
+		}
 		number := strconv.Itoa(b.Number)
 		for _, word := range append([]string{number, "le " + number, "numéro " + number, "le numéro " + number}, ordinals[b.Number]...) {
 			selected = selected || (b.Number > 0 && (q == word || q == "le "+word))
@@ -79,7 +84,7 @@ func NaturalChoices(reply ToolReply) ToolReply {
 	if len(reply.Buttons) == 0 {
 		return reply
 	}
-	hint := "\nDis-moi le titre ou le numéro qui te tente 🍿"
+	hint := "\nPour le demander, donne-moi son titre ou son numéro 🍿"
 	if strings.HasPrefix(reply.Buttons[0].ID, "eris:confirm:") {
 		hint = "\nUn « oui, vas-y » pour confirmer, ou « annule »."
 	}

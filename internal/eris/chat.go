@@ -137,7 +137,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 		if reference == "" || strings.HasPrefix(reference, "Eris (message "+s.choiceSource+") : ") {
 			if id, matched := MatchChoice(question, s.choices); matched {
 				if id == "" {
-					clarification := "Lequel ? Donne-moi le titre ou son numéro 🍿"
+					clarification := ChoiceClarification
 					s.delivery, s.epoch = clarification, c.memoryEpoch
 					s.choiceSource = ""
 					c.mu.Unlock()

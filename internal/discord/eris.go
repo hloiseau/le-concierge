@@ -102,7 +102,7 @@ func (b *Bot) erisContextReply(ctx context.Context, owner, message string, forge
 func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolReply {
 	failure := eris.ToolReply{Content: "Je ne peux pas vérifier les données du Hub pour le moment. Réessaie plus tard."}
 	var interaction Interaction
-	if strings.HasPrefix(input.Choice, "eris:confirm:") || (json.Unmarshal(input.Interaction, &interaction) == nil && strings.HasPrefix(interaction.Data.CustomID, "eris:confirm:")) {
+	if input.Plan.Action == "prepare" || strings.HasPrefix(input.Choice, "eris:choose:") || strings.HasPrefix(input.Choice, "eris:confirm:") || (json.Unmarshal(input.Interaction, &interaction) == nil && strings.HasPrefix(interaction.Data.CustomID, "eris:confirm:")) {
 		failure.Content = "Je ne peux pas confirmer l’enregistrement. Vérifie /mes-demandes ou Seerr avant de réessayer ; je ne renvoie pas automatiquement la demande."
 	}
 	body, _ := json.Marshal(input)

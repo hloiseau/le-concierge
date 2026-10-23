@@ -61,6 +61,8 @@ Le transport suit les contraintes documentées : `store:false`, `stream:true`, m
 
 ## Vérifications
 
+Le [parcours de demande allégé](eris-natural-requests.md) remplace la double validation : une demande explicite avec résultat unique exact part directement, et une sélection en texte parmi les candidats suffit à l'envoyer. Les anciennes confirmations restent compatibles.
+
 Les tests hors ligne couvrent persistance après réouverture, portée public/privé, délai, remplacement, retrait, expiration, capacité, oubli des dérivés, envoi non confirmé, séparation mémoire/titres, référence falsifiée, token remplacé et flux incomplets/refus/outils non autorisés.
 
 La recette réelle facultative utilise le CLI Codex connecté et des échanges synthétiques uniquement :
