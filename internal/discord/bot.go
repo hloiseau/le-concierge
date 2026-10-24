@@ -31,7 +31,9 @@ type Bot struct {
 }
 
 func NewBot(c config.Config) *Bot {
-	return &Bot{Config: c, Eris: eris.New(c.ErisAPIURL, c.ErisAPIKey, c.ErisModel), Client: upstream.New().HTTP, seen: map[string]time.Time{}, interestBusy: map[string]bool{}, slots: make(chan struct{}, 8)}
+	chat := eris.New(c.ErisAPIURL, c.ErisAPIKey, c.ErisModel)
+	chat.V2, chat.Protocol, chat.KeyFile = c.ErisProfile == "v2", c.ErisProtocol, c.ErisKeyFile
+	return &Bot{Config: c, Eris: chat, Client: upstream.New().HTTP, seen: map[string]time.Time{}, interestBusy: map[string]bool{}, slots: make(chan struct{}, 8)}
 }
 func (b *Bot) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -179,43 +181,53 @@ func (b *Bot) rememberEvent(id string) bool {
 }
 
 func (b *Bot) webhook(ctx context.Context, i Interaction, method, path string, message map[string]any) bool {
+	_, ok := b.webhookReply(ctx, i, method, path, message)
+	return ok
+}
+
+func (b *Bot) webhookReply(ctx context.Context, i Interaction, method, path string, message map[string]any) (string, bool) {
 	encoded, _ := json.Marshal(message)
 	// Webhook token is provided in a signed Discord interaction, never in a log.
 	target := "https://discord.com/api/v10/webhooks/" + i.ApplicationID + "/" + url.PathEscape(i.Token) + path
 	for attempt := 0; attempt < 3; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(encoded))
 		if err != nil {
-			return false
+			return "", false
 		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := b.Client.Do(req)
 		if err != nil {
 			slog.Warn("Discord reply failed")
-			return false
+			return "", false
 		}
 		status := resp.StatusCode
 		var retry struct {
 			After float64 `json:"retry_after"`
 			Code  int     `json:"code"`
 		}
+		var delivered struct {
+			ID string `json:"id"`
+		}
 		if status >= 400 {
 			_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&retry)
+		} else {
+			_ = json.NewDecoder(io.LimitReader(resp.Body, 16*1024)).Decode(&delivered)
 		}
 		resp.Body.Close()
 		if status >= 200 && status < 300 {
-			return true
+			return delivered.ID, true
 		}
 		if status != 429 || retry.After <= 0 || retry.After > 5 {
 			slog.Warn("Discord reply rejected", "status", status, "discord_code", retry.Code)
-			return false
+			return "", false
 		}
 		select {
 		case <-time.After(time.Duration(retry.After * float64(time.Second))):
 		case <-ctx.Done():
-			return false
+			return "", false
 		}
 	}
-	return false
+	return "", false
 }
 
 // acknowledge has its own short deadline to respect Discord's initial-response window.

@@ -12,16 +12,16 @@ import (
 
 const ToolInstructions = `
 Un seul objet JSON, une action, aucun markdown :
-Discussion : {"action":"chat","text":"réponse"}. « Mon film préf, c'est X » = chat, pas de recommandation spontanée. « X est mon film préféré, tu l'as sur Plex ? » = search de X.
-« Tu as X sur Plex ? », « Cherche X » : {"action":"search","query":"X","kind":"movie"}, jamais prepare.
+Discussion, goût, avis entre des titres cités : {"action":"chat","text":"réponse"}, pas de recherche spontanée.
+« Tu as X sur Plex ? » : {"action":"search","query":"X","kind":"movie"}, jamais prepare.
 Conseil par genre : {"action":"recommend","genre":"thriller","kind":"movie"}. Genre anglais, maxMinutes si limite, unwatched:true si non vu.
 Film similaire : {"action":"recommend","query":"titre de référence","relation":"similar","kind":"movie"}.
-Même réalisateur, à demander sur Seerr : {"action":"recommend","query":"titre de référence","relation":"director","source":"seerr","kind":"movie"}.
-source:"seerr" si demandé, sinon Plex. query reste le TITRE DE RÉFÉRENCE, pas une suggestion inventée. « Recommande un film qu'on pourrait demander » = recommend, jamais prepare ou search. Par référence : films seulement, sans genre/durée.
-Nouveautés : {"action":"recent"}.
+« Du même réal ? » reste une recherche catalogue : {"action":"recommend","query":"titre de référence","relation":"director","source":"seerr","kind":"movie"}. Garde le catalogue de la conversation.
+source:"seerr" pour hors Plex/Seerr. Toute relance garde le dernier catalogue demandé : « du même réal » après « pas sur Plex » reste seerr. Défaut Plex seulement pour une nouvelle recherche. query=TITRE DE RÉFÉRENCE. « Film à demander » = recommend, pas prepare. Par référence : films seuls, sans genre/durée.
+Nouveautés : {"action":"recent"}. Constantes, CPU/RAM, état du NAS : {"action":"monitoring"}.
 État des demandes : {"action":"status"}, query si titre connu.
 « Demande/ajoute X dans Seerr » : {"action":"prepare","query":"X","kind":"movie"}. Série : kind:"show", seasons:[2].
-query=titre seul. Résous les pronoms avec la conversation. Omet les filtres non demandés. Titre/saison manquant : question courte via chat. Seuls les boutons confirment. N'invente aucun résultat.`
+query=titre seul. Résous les pronoms avec la conversation. Omet les filtres non demandés. Titre/saison manquant : chat. L'application seule confirme/envoie les demandes. N'invente aucun résultat.`
 
 type Plan struct {
 	Action     string `json:"action"`
@@ -39,6 +39,7 @@ type Plan struct {
 var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
 var requestFollowup = regexp.MustCompile(`(?i)^(?:(?:alors )?demande[ -](?:le|la)|(?:tu peux|peux[- ]tu|pourrais[- ]tu) (?:le|la) demander)(?: pour moi)?(?: dans seerr)?[.!? ]*$`)
 var sameDirector = regexp.MustCompile(`(?i)(?:même|meme) (?:réal(?:isateur|isatrice)?|real(?:isateur|isatrice)?|director)(?:$|[^\p{L}])`)
+var outsidePlex = regexp.MustCompile(`(?i)(?:pas(?: encore| déjà)? (?:sur|dans)(?: mon|ton|le)? plex|absents? (?:de|du) plex|hors plex)`)
 
 // Preserve explicit constraints when the model drops them or repeats a search.
 func (p Plan) WithQuestionConstraints(question string) Plan {
@@ -52,6 +53,9 @@ func (p Plan) WithQuestionConstraints(question string) Plan {
 	}
 	if p.Action == "recommend" && unseenWords.MatchString(question) {
 		p.Unwatched = true
+	}
+	if p.Action == "recommend" && p.Relation != "" && outsidePlex.MatchString(question) {
+		p.Source, p.Unwatched = "seerr", false
 	}
 	if (p.Action == "search" || p.Action == "recommend") && p.Query != "" && requestFollowup.MatchString(question) {
 		p = Plan{Action: "prepare", Query: p.Query, Kind: p.Kind, Seasons: p.Seasons}
@@ -128,8 +132,8 @@ func (p Plan) Validate() error {
 		if (p.Query == "") != (p.Relation == "") || (p.Relation != "" && (utf8.RuneCountInString(p.Query) < 2 || p.Kind == "show" || p.Genre != "" || p.MaxMinutes != 0)) || (p.Source == "seerr" && (p.Relation == "" || p.Unwatched)) {
 			return invalid
 		}
-	case "recent", "status":
-		if p.Text != "" || p.Kind != "" || (p.Action == "recent" && p.Query != "") {
+	case "recent", "status", "monitoring":
+		if p.Text != "" || p.Kind != "" || (p.Action != "status" && p.Query != "") {
 			return invalid
 		}
 	default:
@@ -150,6 +154,7 @@ func (p Plan) Validate() error {
 // Proof is supplied by the Discord transport, never by the model.
 type ToolRequest struct {
 	Plan        Plan            `json:"plan"`
+	Choice      string          `json:"choice,omitempty"`
 	Interaction json.RawMessage `json:"interaction,omitempty"`
 	Timestamp   string          `json:"timestamp,omitempty"`
 	Signature   string          `json:"signature,omitempty"`
@@ -158,8 +163,11 @@ type ToolRequest struct {
 }
 
 type Button struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Title  string `json:"title,omitempty"`
+	Year   string `json:"year,omitempty"`
+	Number int    `json:"number,omitempty"`
 }
 type ToolReply struct {
 	Content string   `json:"content"`

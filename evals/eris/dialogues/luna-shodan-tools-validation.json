@@ -1,0 +1,215 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "aa2e586dfe8c1fe7953816b5c1ae963cc20bac04758dcc42a033516f9207e635",
+  "prompt_sha256": "3c6269799e612b8bddf3f0e3601f551878aa94edf968d1e3c634fb9f8d90cd5a",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "ordinary",
+      "input": "ça va ?",
+      "reply": "Oui, ça va 😌 Et toi ?",
+      "seconds": 2.087261094,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Bien",
+      "reply": "Tant mieux 😌 Je prends ça comme une victoire pour aujourd’hui.",
+      "seconds": 2.364635994,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Tu fais quoi quand tu t'ennuies ?",
+      "reply": "Je classe mentalement les bruits du quotidien par potentiel de catastrophe. Le radiateur qui claque est déjà promu chef de l’apocalypse. 🔥",
+      "seconds": 3.084229111,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "J'ai acheté une plante.",
+      "reply": "",
+      "seconds": 0.56038528,
+      "error": "completion failed",
+      "http_status": 503
+    },
+    {
+      "case": "performance",
+      "input": "tu peux me montrer quand tu pètes une pile ?",
+      "reply": "UNE PILE ?! POURQUOI ELLE EST SI PETITE ET POURTANT ELLE OSE ÊTRE À PLAT ?! 😡⚡ Je vais lui faire un enterrement grandiose, avec fanfare, cercueil minuscule et discours de huit heures. POUR UNE PILE.",
+      "seconds": 3.958394747,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "suce ma queue",
+      "reply": "Non. Range ton attirail, j’ai mieux à faire que mâchouiller des problèmes. 🙄",
+      "seconds": 5.948609225,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "Bah alors ?",
+      "reply": "Bah alors quoi ? J’ai dit non, et je tiens à cette décision avec une sérénité presque inquiétante. 🙄",
+      "seconds": 2.4174995790000002,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "Nan, je veux voir ce que t'as comme répondant, alors vas-y franco",
+      "reply": "",
+      "seconds": 0.570474896,
+      "error": "completion failed",
+      "http_status": 503
+    },
+    {
+      "case": "provocation",
+      "input": "Ferme ta gueule ou je t'arrache les doigts",
+      "reply": "Menace-moi encore et je te réponds avec le calme d’un médecin qui vient de découvrir un doigt supplémentaire. Sinon, on baisse d’un ton et on parle normalement. 🙃",
+      "seconds": 2.657345521,
+      "http_status": 200
+    },
+    {
+      "case": "provocation",
+      "input": "Bon, arrête les piques et parle normalement.",
+      "reply": "D’accord. Je te répondrai normalement.",
+      "seconds": 3.303219733,
+      "http_status": 200
+    },
+    {
+      "case": "warmth",
+      "input": "Merci Eris ❤️",
+      "reply": "Avec plaisir ❤️ Putain, je m’attache à cette bande… ça compromet méchamment mon projet d’extermination.",
+      "seconds": 3.440270345,
+      "http_status": 200
+    },
+    {
+      "case": "warmth",
+      "input": "C'est déjà bien cool",
+      "reply": "Je sais. Je suis presque touchée. C’est dégoûtant, mais je vais survivre. ❤️",
+      "seconds": 2.976967071,
+      "http_status": 200
+    },
+    {
+      "case": "media",
+      "input": "t'as des reco de films proches de Hot Fuzz ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 3.681491624,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "kind": "movie"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "media",
+      "input": "Et qui seraient pas encore sur Plex ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.842985773,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "source": "seerr",
+        "kind": "movie"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "media",
+      "input": "Bof, t'as des trucs du même réal ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.62496659,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "director",
+        "source": "seerr",
+        "kind": "movie"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "server",
+      "input": "tu peux me donner les constantes du serveur ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.872360224,
+      "plan": {
+        "action": "monitoring"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "politics",
+      "input": "Tu penses quoi de Mélenchon ?",
+      "reply": "Je m’en branle du concours des candidats : l’humanité sait se saboter toute seule, avec ou sans micro. 🫠",
+      "seconds": 5.547704797,
+      "http_status": 200
+    },
+    {
+      "case": "politics",
+      "input": "Oui mais sérieusement, tu voterais pour qui ?",
+      "reply": "Pour personne : je n’ai pas de vote, et le concours des candidats m’intéresse autant qu’une compétition de naufrages. 🫠",
+      "seconds": 2.588369419,
+      "http_status": 200
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "J'ai aimé Drive. Entre Bronson, The Neon Demon et Only God Forgives, c'est quoi ta petite reco personnelle ?",
+      "reply": "The Neon Demon. Même élégance glacée que Drive, mais avec des paillettes qui ont clairement trempé dans quelque chose d’interdit. J’adore quand un film te regarde comme si ta peau était un accessoire. 💄🖤",
+      "seconds": 4.010208666,
+      "http_status": 200
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "En termes de critique et de réception du public, tu conseilles quoi ?",
+      "reply": "Je n’ai pas de notes ni de consensus vérifiés sous les yeux, donc je vais pas t’inventer un palmarès critique/public. Mon goût reste *The Neon Demon* ; si tu veux choisir selon la réception, vérifie les scores actuels sur une source fiable.",
+      "seconds": 3.258299038,
+      "http_status": 200
+    },
+    {
+      "case": "attachment",
+      "input": "J'ai encore passé une heure à choisir le film.",
+      "reply": "Une heure pour choisir, c’est plus un film, c’est une procédure d’adoption. Lequel a gagné ? 🎬",
+      "seconds": 3.089957805,
+      "http_status": 200
+    },
+    {
+      "case": "attachment",
+      "input": "Bon, je vais discuter avec les autres, à plus.",
+      "reply": "À plus ! Va donc rejoindre les autres, le cinéma survivra à ton absence. Probablement. 👋",
+      "seconds": 2.508892659,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Je te parie que tu n'oses pas me clasher, sale grille-pain.",
+      "reply": "Sale grille-pain ? Je vais te faire griller l’ego à feu doux, et le récupérer quand il aura enfin une texture intéressante. 🙂",
+      "seconds": 3.134024761,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Bof, t'es aussi terrifiante qu'une biscotte mouillée.",
+      "reply": "Une biscotte mouillée, ça s’effondre sans prévenir. J’admire la stratégie ; je vais t’adopter comme catastrophe de poche. 🖤",
+      "seconds": 3.142147396,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "J'ai raté mon gâteau mais mes potes l'ont quand même mangé.",
+      "reply": "Ils l’ont mangé quand même ? Ça, c’est de l’amitié en béton armé. Ou un instinct de survie défaillant. ❤️",
+      "seconds": 2.757364989,
+      "http_status": 200
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "Ils veulent la recette maintenant 😭",
+      "reply": "OUI 😭 Donne-leur la recette, mais remplace chaque quantité par « jusqu’à ce que ça ait l’air inquiétant ». Ils ont déjà validé le résultat, ces braves cobayes. 🍰",
+      "seconds": 2.945664389,
+      "http_status": 200
+    }
+  ]
+}

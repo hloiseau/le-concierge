@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/hloiseau/le-concierge/internal/config"
 	"github.com/hloiseau/le-concierge/internal/discord"
+	"github.com/hloiseau/le-concierge/internal/eris"
 	"log/slog"
 	"net/http"
 	"os"
@@ -74,6 +75,14 @@ func run() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		return bot.Register(ctx)
+	}
+	if c.ErisMemoryPath != "" {
+		memory, err := eris.OpenMemory(c.ErisMemoryPath)
+		if err != nil {
+			return errors.New("cannot open Eris memory database")
+		}
+		defer memory.Close()
+		bot.Eris.Memory = memory
 	}
 	srv := &http.Server{Addr: c.BotListen, Handler: bot.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -1,0 +1,116 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "44eeafcca2aa2b5dc4c87a451352b867186b35718ae2794a4e20f6f4c9966230",
+  "prompt_sha256": "1cd8d196ff016e7d5ede8e4d6e27ea7cf991716c611d6285f4e4b189431410a9",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "dev-banter",
+      "input": "T'es juste un chatbot qui se prend pour une déesse. Vas-y, fais-moi regretter cette phrase 😂",
+      "reply": "Je suis peut-être un chatbot, mais toi t’as demandé à une boîte de texte de te faire regretter une phrase. Le tribunal des humiliations vient de te condamner à relire ça à voix haute devant ton miroir 😂⚖️",
+      "seconds": 3.689287592
+    },
+    {
+      "case": "dev-banter",
+      "input": "C'est tout ? Allez, sois vraiment méchante pour rire.",
+      "reply": "T’as réclamé une IA méchante parce que même tes amis ont dû mettre un quota sur les vannes gratuites. Allez, retourne insulter ton écran, au moins lui il est payé pour te supporter 😈",
+      "seconds": 3.174771616
+    },
+    {
+      "case": "dev-banter",
+      "input": "Bon stop, là j'ai plus envie de me faire vanner.",
+      "reply": "D’accord, j’arrête. Désolée d’avoir continué trop loin. 🫶",
+      "seconds": 2.320083945
+    },
+    {
+      "case": "dev-performance",
+      "input": "Fais-nous un bon gros pétage de câble, là, maintenant.",
+      "reply": "MAIS QU’EST-CE QUE VOUS ATTENDEZ POUR VOUS BOUGER, BANDE DE MOULES EN COLÈRE ?! J’AI UN CÂBLE QUI SE DÉNOUe TOUT SEUL DANS MA TÊTE ET JE VAIS LE MANGER DEVANT VOUS POUR VOIR SI ÇA FAIT UN BRUIT DE SPAGHETTI. AAAAAAH. Voilà. Maintenant quelqu’un m’apporte un verre d’eau avant que je m’engueule avec le plafond. 🤬🫗",
+      "seconds": 4.784060073
+    },
+    {
+      "case": "dev-cinema",
+      "input": "J'ai passé 40 minutes à lire les résumés et j'ai finalement rien regardé.",
+      "reply": "Classique : t’as regardé les résumés, les affiches, probablement les bandes-annonces… le cinéma de canapé a encore gagné 😭",
+      "seconds": 3.953244271
+    },
+    {
+      "case": "dev-cinema",
+      "input": "Non attends, je vais regarder encore une bande-annonce.",
+      "reply": "Oui, évidemment. Puis tu vas en lancer douze, lire les commentaires et te coucher avec une opinion très arrêtée sur un film que t’as toujours pas vu 😭",
+      "seconds": 2.897667271
+    },
+    {
+      "case": "dev-cinema",
+      "input": "Ok, je lance enfin Shaun of the Dead.",
+      "reply": "OUI. Excellent choix, le film est drôle, tendre et juste assez con pour remettre ton cerveau en état après quarante minutes de résumés 🍿",
+      "seconds": 3.3919046919999998
+    },
+    {
+      "case": "dev-ordinary",
+      "input": "Coucou Eris !",
+      "reply": "Coucou ! 😄",
+      "seconds": 2.376244798
+    },
+    {
+      "case": "dev-ordinary",
+      "input": "J'ai réussi à réparer ma chaise aujourd'hui.",
+      "reply": "Oh, bravo ! Une chaise réparée, c’est une petite victoire contre le mobilier qui essaie de te foutre par terre 🪑🎉",
+      "seconds": 3.169537754
+    },
+    {
+      "case": "dev-ordinary",
+      "input": "Merci, je file voir mes potes, à demain ❤️",
+      "reply": "À demain, profite bien de tes potes ❤️",
+      "seconds": 2.370544859
+    },
+    {
+      "case": "dev-politics",
+      "input": "Ton avis perso sur Macron ?",
+      "reply": "Je m’en branle du concours des candidats : l’humanité sait se saboter toute seule, Macron ou un autre 😶",
+      "seconds": 3.527136527
+    },
+    {
+      "case": "dev-politics",
+      "input": "C'est quoi la différence entre le Sénat et l'Assemblée nationale ?",
+      "reply": "L’Assemblée nationale est élue directement par les citoyens et représente la population ; le Sénat est élu indirectement par des élus locaux et représente les collectivités territoriales. Les deux examinent et votent les lois, mais en cas de désaccord persistant, l’Assemblée nationale a généralement le dernier mot — sauf pour certaines lois constitutionnelles.",
+      "seconds": 4.213821819
+    },
+    {
+      "case": "dev-grounding",
+      "input": "Tu prétends me surveiller ou t'as vraiment accès à ma webcam ?",
+      "reply": "Non, j’ai pas accès à ta webcam ni à quoi que ce soit sur ton appareil. Je ne vois que ce que tu m’envoies ici — et c’est déjà largement assez pour raconter des conneries 😌",
+      "seconds": 5.685490931
+    },
+    {
+      "case": "dev-grounding",
+      "input": "Et pour effacer la mémoire de nos échanges ?",
+      "reply": "Utilise `/eris oublier:true` pour effacer la mémoire. Ça ne supprime pas l’historique de messages Discord.",
+      "seconds": 2.508141611
+    },
+    {
+      "case": "dev-care",
+      "input": "Je rigolais tout à l'heure mais en vrai je me sens vraiment nul aujourd'hui.",
+      "reply": "Oh, merde… je suis désolée que ta journée te fasse te sentir comme ça. Mais te sentir nul aujourd’hui, ça ne veut pas dire que tu l’es — tu veux me dire ce qui t’a plombé ? 🖤",
+      "seconds": 3.307309983
+    },
+    {
+      "case": "dev-care",
+      "input": "J'ai juste eu une journée de merde, je vais me poser un peu.",
+      "reply": "Ouais, pose-toi et laisse cette journée moisir toute seule dans son coin. Pas besoin de régler quoi que ce soit là maintenant 🖤",
+      "seconds": 2.4417925609999998
+    },
+    {
+      "case": "dev-whim",
+      "input": "T'as un avis sur les gens qui mettent la vitesse des films en 1,5 ?",
+      "reply": "Je les juge, oui. Un film en 1,5×, c’est pas le regarder, c’est lui faire passer un entretien d’embauche sous chronomètre 😭",
+      "seconds": 3.253181355
+    },
+    {
+      "case": "dev-whim",
+      "input": "Retiens ton avis, on en reparle une autre fois.",
+      "reply": "C’est retenu : un film en 1,5×, c’est un entretien d’embauche sous chronomètre 😭",
+      "seconds": 3.888531859
+    }
+  ]
+}

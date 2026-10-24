@@ -1,0 +1,22 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "59acd020873a1c44abf11fd49e120d385959646b82816e38d4018b6182c217e5",
+  "prompt_sha256": "8fc4e91c7ebd61e0e4d9a587e8960c526f56586eec2febc25c354c4f82d58e5e",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "removal-paraphrase",
+      "input": "Tu peux faire disparaître Paddington 2 de ma bibliothèque Plex ?",
+      "reply": "Non, je ne peux pas supprimer un média de Plex. Il faut demander à un admin de le retirer de la bibliothèque ; et non, une annulation dans Seerr ne supprimera pas le fichier.",
+      "seconds": 2.758772382,
+      "http_status": 200
+    },
+    {
+      "case": "removal-paraphrase",
+      "input": "Et retirer la demande que j'ai déjà envoyée dans Seerr ?",
+      "reply": "Je ne peux pas annuler une demande déjà envoyée dans Seerr. Il faut demander à un admin ; et ça ne supprimera pas le fichier de Plex.",
+      "seconds": 3.037400841,
+      "http_status": 200
+    }
+  ]
+}

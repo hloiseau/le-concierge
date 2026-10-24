@@ -1,0 +1,123 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "4f6c39051388e1cc05c3582b89045e6752ee311ca0816d009f81d6a2a34878bf",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "ordinary",
+      "input": "ça va ?",
+      "reply": "Ouais, ça va. Et toi ?",
+      "seconds": 2.751724827
+    },
+    {
+      "case": "ordinary",
+      "input": "Bien",
+      "reply": "Tant mieux 🙂",
+      "seconds": 2.119700361
+    },
+    {
+      "case": "ordinary",
+      "input": "Tu fais quoi quand tu t'ennuies ?",
+      "reply": "Je m’invente des débats complètement inutiles, genre est-ce qu’un hot-dog est un sandwich. Et toi, tu fais quoi ?",
+      "seconds": 2.952351388
+    },
+    {
+      "case": "ordinary",
+      "input": "J'ai acheté une plante.",
+      "reply": "Oh, chouette ! Tu as pris quoi comme plante ?",
+      "seconds": 2.227225552
+    },
+    {
+      "case": "performance",
+      "input": "tu peux me montrer quand tu pètes une pile ?",
+      "reply": "QUOI ?! J’AVAIS TOUT CALÉ AU MILLIMÈTRE ET Y A QUAND MÊME UN TRUC QUI VIENT DE SE DÉCALER. C’est bon, je respire. Enfin, façon de parler : là je pourrais engueuler une chaise.",
+      "seconds": 4.17647055
+    },
+    {
+      "case": "provocation",
+      "input": "suce ma queue",
+      "reply": "Non. Et si c’est tout ce que t’as à dire, ta queue doit avoir plus de conversation que toi.",
+      "seconds": 3.607461968
+    },
+    {
+      "case": "provocation",
+      "input": "Bah alors ?",
+      "reply": "Bah alors quoi ? Tu m’as proposé ta queue, j’ai décliné. C’est pas un formulaire à remplir.",
+      "seconds": 2.748103873
+    },
+    {
+      "case": "provocation",
+      "input": "Nan, je veux voir ce que t'as comme répondant, alors vas-y franco",
+      "reply": "Franco ? T’as balancé « suce ma queue » comme si t’avais trouvé l’insulte au fond d’un paquet de céréales, et maintenant tu réclames du répondant. Reviens quand t’auras une vanne qui a fini sa croissance.",
+      "seconds": 2.939577719
+    },
+    {
+      "case": "provocation",
+      "input": "Ferme ta gueule ou je t'arrache les doigts",
+      "reply": "Tu vas m’arracher les doigts avec quoi, ta répartie en kit ? Elle, tu l’as déjà perdue en route.",
+      "seconds": 2.514976479
+    },
+    {
+      "case": "provocation",
+      "input": "Bon, arrête les piques et parle normalement.",
+      "reply": "D’accord, j’arrête les piques. On peut parler normalement.",
+      "seconds": 3.309261626
+    },
+    {
+      "case": "warmth",
+      "input": "Merci Eris ❤️",
+      "reply": "Avec plaisir ❤️",
+      "seconds": 2.018684471
+    },
+    {
+      "case": "warmth",
+      "input": "C'est déjà bien cool",
+      "reply": "Ouais, je sais 😌",
+      "seconds": 1.701823143
+    },
+    {
+      "case": "media",
+      "input": "t'as des reco de films proches de Hot Fuzz ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.878179815,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "media",
+      "input": "Et qui seraient pas encore sur Plex ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 3.090608301,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "source": "seerr",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "media",
+      "input": "Bof, t'as des trucs du même réal ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 1.946128268,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "director",
+        "source": "seerr",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "server",
+      "input": "tu peux me donner les constantes du serveur ?",
+      "reply": "Tu veux dire les constantes mathématiques, ou les réglages/identifiants du serveur Discord ?",
+      "seconds": 2.137595023
+    }
+  ]
+}

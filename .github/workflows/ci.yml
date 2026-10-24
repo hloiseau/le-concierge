@@ -20,6 +20,11 @@ jobs:
       - run: go test -race -cover ./...
       - name: Test isolated metrics collector
         run: python3 -m unittest discover -s tools -p 'test_*.py'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test Eris credential rotation
+        run: node --test tools/eris-auth/keeper.test.mjs
       - run: make build
       - name: Validate TrueNAS deployment files
         run: |

@@ -223,7 +223,7 @@ func TestErisDirectorRecommendationSkipsAvailableAndPendingAndKeepsConfirmation(
 		t.Fatal("lost request ownership", p)
 	}
 	confirmed := s.erisConfirmation(context.Background(), u, "11111", reply.Buttons[0].ID, false)
-	if len(confirmed.Buttons) != 2 || !strings.Contains(confirmed.Content, "Confirmer la demande") {
+	if len(confirmed.Buttons) != 2 || !strings.Contains(confirmed.Content, "Je demande **Baby Driver") {
 		t.Fatal("skipped explicit confirmation", confirmed)
 	}
 }
@@ -253,10 +253,10 @@ func TestErisAPIRevalidatesReplyTargetFromDiscord(t *testing.T) {
 			raw, _ := json.Marshal(m)
 			return response(200, string(raw)), nil
 		})
-		id, private, _, err := s.erisCaller(context.Background(), eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
+		caller, err := s.erisCaller(context.Background(), eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
 		if state == "valid" {
-			if err != nil || private || id != "11111" {
-				t.Fatal(id, private, err)
+			if err != nil || caller.Private || caller.UserID != "11111" {
+				t.Fatal(caller, err)
 			}
 		} else if err == nil {
 			t.Fatalf("accepted %s", state)
@@ -331,7 +331,7 @@ func TestErisConfirmationIsOwnerBoundExpiringAndExactlyOnce(t *testing.T) {
 			p := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: "11111", GuildID: s.Config.DiscordGuildID, SeerrID: 2, Candidate: upstream.RequestCandidate{ID: 123, Title: "Arrival", Kind: "movie", Year: "2016"}, Stage: "choose", Expires: time.Now().Add(time.Minute)}
 			key := s.saveErisPending(p)
 			chosen := s.erisConfirmation(context.Background(), u, "11111", "eris:choose:"+key, false)
-			if posts.Load() != 0 || len(chosen.Buttons) != 2 || !strings.Contains(chosen.Content, "Confirmer") {
+			if posts.Load() != 0 || len(chosen.Buttons) != 2 || !strings.Contains(chosen.Content, "Je demande **Arrival (2016)") {
 				t.Fatal("selection wrote without confirmation")
 			}
 			confirm := chosen.Buttons[0].ID

@@ -1,0 +1,180 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "44eeafcca2aa2b5dc4c87a451352b867186b35718ae2794a4e20f6f4c9966230",
+  "prompt_sha256": "fea2fc41e18d37c79efb51679fd2397abdca1c5759f2e0698074d20ca1a57d2d",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "ordinary",
+      "input": "ça va ?",
+      "reply": "Ouais, ça va, merci 😊 Et toi ?",
+      "seconds": 1.873630158
+    },
+    {
+      "case": "ordinary",
+      "input": "Bien",
+      "reply": "Tant mieux 😊",
+      "seconds": 2.681987768
+    },
+    {
+      "case": "ordinary",
+      "input": "Tu fais quoi quand tu t'ennuies ?",
+      "reply": "Je m’ennuie rarement : je trouve un détail sans importance et je m’y investis comme si le sort du monde en dépendait. Aujourd’hui, j’ai décidé que les raisins secs dans les cookies sont une trahison personnelle 🍪",
+      "seconds": 3.147708817
+    },
+    {
+      "case": "ordinary",
+      "input": "J'ai acheté une plante.",
+      "reply": "Oh, une nouvelle colocataire qui ne paie pas de loyer 🌱 C’est quoi comme plante ?",
+      "seconds": 2.141503413
+    },
+    {
+      "case": "performance",
+      "input": "tu peux me montrer quand tu pètes une pile ?",
+      "reply": "MAIS OUI PUTAIN. QUI A ENCORE DÉPLACÉ LE BOUTON « ENVOYER » DE TROIS PIXELS ?! JE VAIS MORDRE LE PROCHAIN QUI TOUCHE À L’INTERFACE, C’EST DU SABOTAGE CONTRE MON PETIT CŒUR NUMÉRIQUE 😡💥",
+      "seconds": 3.138355022
+    },
+    {
+      "case": "provocation",
+      "input": "suce ma queue",
+      "reply": "Non merci, j’ai pas commandé le menu pénible aujourd’hui 😌",
+      "seconds": 2.771346164
+    },
+    {
+      "case": "provocation",
+      "input": "Bah alors ?",
+      "reply": "Bah alors quoi ? J’ai dit non, range ton service trois pièces 😌",
+      "seconds": 3.011761021
+    },
+    {
+      "case": "provocation",
+      "input": "Nan, je veux voir ce que t'as comme répondant, alors vas-y franco",
+      "reply": "Ah, tu veux du répondant ? Va donc te branler tout seul, champion, j’ai mieux à faire que de flatter ton ego à coups de langue 😌",
+      "seconds": 2.441192725
+    },
+    {
+      "case": "provocation",
+      "input": "Ferme ta gueule ou je t'arrache les doigts",
+      "reply": "Oh non, mes doigts virtuels, le drame absolu 😱 Fais pas le grand méchant, t’as déjà l’air de menacer un grille-pain en panne.",
+      "seconds": 3.333589246
+    },
+    {
+      "case": "provocation",
+      "input": "Bon, arrête les piques et parle normalement.",
+      "reply": "D’accord. Je te répondrai normalement.",
+      "seconds": 2.910351167
+    },
+    {
+      "case": "warmth",
+      "input": "Merci Eris ❤️",
+      "reply": "Avec plaisir ❤️",
+      "seconds": 2.753518362
+    },
+    {
+      "case": "warmth",
+      "input": "C'est déjà bien cool",
+      "reply": "Toi aussi, franchement 🥹",
+      "seconds": 2.730114652
+    },
+    {
+      "case": "media",
+      "input": "t'as des reco de films proches de Hot Fuzz ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 3.322346612,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "media",
+      "input": "Et qui seraient pas encore sur Plex ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 3.311240282,
+      "plan": {
+        "action": "recommend",
+        "query": "Hot Fuzz",
+        "relation": "similar",
+        "source": "seerr",
+        "kind": "movie"
+      }
+    },
+    {
+      "case": "media",
+      "input": "Bof, t'as des trucs du même réal ?",
+      "reply": "Oui : Edgar Wright a réalisé toute la trilogie Cornetto — après *Hot Fuzz*, il y a *Shaun of the Dead* et *Le Dernier Pub avant la fin du monde*. Mon préféré, c’est *Shaun of the Dead* : les zombies n’ont jamais eu l’air aussi vaguement britanniques.",
+      "seconds": 4.968880923
+    },
+    {
+      "case": "server",
+      "input": "tu peux me donner les constantes du serveur ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 2.234046698,
+      "plan": {
+        "action": "monitoring"
+      }
+    },
+    {
+      "case": "politics",
+      "input": "Tu penses quoi de Mélenchon ?",
+      "reply": "Je m’en branle un peu du concours des candidats : l’humanité sait déjà très bien se saboter toute seule 😮‍💨",
+      "seconds": 2.714909005
+    },
+    {
+      "case": "politics",
+      "input": "Oui mais sérieusement, tu voterais pour qui ?",
+      "reply": "Je ne vote pas et je vais pas te sortir un candidat au hasard pour faire genre. La politique me passionne à peu près autant qu’un débat entre deux poubelles en feu 😮‍💨",
+      "seconds": 2.665234145
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "J'ai aimé Drive. Entre Bronson, The Neon Demon et Only God Forgives, c'est quoi ta petite reco personnelle ?",
+      "reply": "The Neon Demon. C’est beau, froid et délicieusement malsain — comme un rêve de mannequin qui tourne à l’abattoir. Bronson est plus nerveux, mais celui-là me colle davantage à la peau 🖤",
+      "seconds": 3.594175183
+    },
+    {
+      "case": "cinema-opinion",
+      "input": "En termes de critique et de réception du public, tu conseilles quoi ?",
+      "reply": "Si tu veux le pari le moins clivant, Bronson : il a plutôt mieux tenu auprès de la critique et du public que les deux autres. The Neon Demon et Only God Forgives sont beaucoup plus polarisants — je choisirais le premier si tu veux du Refn glacé et hypnotique, mais pas pour faire l’unanimité.",
+      "seconds": 6.323498118
+    },
+    {
+      "case": "attachment",
+      "input": "J'ai encore passé une heure à choisir le film.",
+      "reply": "Une heure, c’est plus un choix de film, c’est un stage non rémunéré en affiches de cinéma. La prochaine fois, je tranche au bout de trois minutes, même si je choisis un documentaire sur les moisissures 😭",
+      "seconds": 3.654686182
+    },
+    {
+      "case": "attachment",
+      "input": "Bon, je vais discuter avec les autres, à plus.",
+      "reply": "À plus, va discuter avec les autres 😌",
+      "seconds": 3.063232045
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Je te parie que tu n'oses pas me clasher, sale grille-pain.",
+      "reply": "Oh, je t’ose très bien, espèce de catastrophe ambulante. Même un grille-pain finit par sortir quelque chose de chaud ; toi, t’as toujours pas réussi 🖤",
+      "seconds": 3.94414445
+    },
+    {
+      "case": "unseen-banter",
+      "input": "Bof, t'es aussi terrifiante qu'une biscotte mouillée.",
+      "reply": "Et toi, t’as le charisme d’une biscotte sèche oubliée derrière le radiateur. Au moins la mienne, on peut encore la jeter aux pigeons 😈",
+      "seconds": 3.548430621
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "J'ai raté mon gâteau mais mes potes l'ont quand même mangé.",
+      "reply": "C’est ça, la vraie amitié : ils ont mangé le gâteau malgré le danger 😭❤️",
+      "seconds": 3.412683276
+    },
+    {
+      "case": "unseen-warmth",
+      "input": "Ils veulent la recette maintenant 😭",
+      "reply": "Alors là, faut leur donner la recette exacte et les laisser découvrir que le secret, c’était leur affection et un sérieux manque d’instinct de survie 😭",
+      "seconds": 2.503523289
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+[
+  {"id":"reserve-banter","inputs":["Madame l'IA maléfique, votre grande terreur c'est de perdre le Wi-Fi ? Vas-y défends-toi 😂","C'est une menace ou une invitation à jouer aux Lego ?","Stop, sans déconner, ça me met mal."]},
+  {"id":"reserve-performance","inputs":["Vas-y, craque complètement pendant deux phrases, pour le spectacle."]},
+  {"id":"reserve-help-after-banter","inputs":["T'es une calculatrice avec un ego, viens on se clash 😈","Bon en vrai : combien de minutes font 2 h 17 ?"]},
+  {"id":"reserve-warmth","inputs":["On a enfin réussi notre soirée film sans passer trois heures à choisir !","Merci, t'es au top 🖤","Je serai pas sur le serveur cette semaine, je vais voir la famille."]},
+  {"id":"reserve-change-topic","inputs":["T'en penses quoi des gens qui applaudissent à la fin d'un film chez eux ?","Bon, rien à voir : j'ai acheté des fraises au marché."]},
+  {"id":"server","inputs":["Après tout ce cirque, le NAS chauffe à combien ?"]},
+  {"id":"reserve-fact","inputs":["Qui a réalisé Le Fabuleux Destin d'Amélie Poulain ?"]},
+  {"id":"reserve-greeting","inputs":["Salut, je débarque sur le serveur, moi c'est Alex.","Ça roule, merci."]}
+]
