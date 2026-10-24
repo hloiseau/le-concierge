@@ -7,6 +7,24 @@ import (
 	"testing"
 )
 
+func TestCommunityGitHubTokenUsesSecretFile(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	t.Setenv("COMMUNITY_GITHUB_TOKEN", "")
+	path := filepath.Join(t.TempDir(), "github-token")
+	if err := os.WriteFile(path, []byte("fixture-github-token\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COMMUNITY_GITHUB_TOKEN_FILE", path)
+	if c, err := Load(); err != nil || c.CommunityGitHubToken != "fixture-github-token" {
+		t.Fatal("GitHub secret file rejected", err)
+	}
+	t.Setenv("COMMUNITY_GITHUB_TOKEN", "fixture-github-token")
+	if _, err := Load(); err == nil || strings.Contains(err.Error(), "fixture-github-token") {
+		t.Fatal("ambiguous GitHub secret accepted or disclosed")
+	}
+}
+
 func TestPlexGrantEncryptionKey(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")

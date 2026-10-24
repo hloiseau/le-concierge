@@ -85,7 +85,9 @@ Un manifeste distinct de la publication définit les fils choisis et les textes 
 }
 ```
 
-Fournir `COMMUNITY_DISCORD_TOKEN` dans l’environnement de l’exporteur, avec un bot disposant uniquement des lectures nécessaires. `COMMUNITY_GITHUB_TOKEN` est facultatif pour les issues publiques ; pour un dépôt privé, utiliser un jeton limité aux dépôts nécessaires avec la permission `Issues: read`. La sélection par issue est ensuite appliquée par l’exporteur. Ne jamais mettre un secret dans le manifeste ou dans les arguments de commande. Ces variables sont propres au CLI. Le worker intégré réutilise `DISCORD_BOT_TOKEN` déjà fourni à l’API ; il ne reçoit pas de token GitHub supplémentaire et ne peut donc pas lire une issue GitHub privée.
+Pour le CLI, fournir `COMMUNITY_DISCORD_TOKEN` dans l’environnement de l’exporteur, avec un bot disposant uniquement des lectures nécessaires. Le worker intégré réutilise `DISCORD_BOT_TOKEN` déjà fourni à l’API. Les deux acceptent `COMMUNITY_GITHUB_TOKEN` ; le worker accepte aussi `COMMUNITY_GITHUB_TOKEN_FILE` via le lecteur de secrets habituel. Configurer une seule de ces deux formes, de préférence un fichier monté en lecture seule, lisible par l’UID de l’API. Ne jamais mettre un secret dans le manifeste ou dans les arguments de commande.
+
+Le jeton GitHub reste facultatif pour une lecture publique ponctuelle. Une synchronisation de six issues toutes les deux minutes consomme toutefois 180 requêtes par heure, au-delà des 60 lectures anonymes autorisées. Pour ce rythme, utiliser un jeton dédié limité aux dépôts sélectionnés avec la permission `Issues: read` ; le quota authentifié standard est de 5 000 lectures par heure. Le jeton ne modifie ni la sélection explicite des issues ni les règles de publication des textes approuvés. [Limites REST GitHub](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
 
 ```sh
 go run ./cmd/community-feed -sync manifest.json -output /config/community/publication.json
@@ -112,8 +114,13 @@ COMMUNITY_SYNC_MANIFEST=/app/data/community-manifest.json
 COMMUNITY_FEED_FILE=/app/data/community-publication.json
 COMMUNITY_FORUM_IDS=11111,44444
 ROADMAP_ISSUE_IDS=
+COMMUNITY_GITHUB_TOKEN_FILE=
 ```
 
 Le manifeste et la publication doivent être deux chemins absolus distincts. L’UID 65532 doit lire le manifeste et écrire le dossier de publication ; les fichiers produits sont privés (`0600`). La liste des forums et des issues du manifeste doit être incluse dans la sélection configurée, avec le même serveur Discord. Une sélection invalide retire l’ancien fichier sans lire de source supplémentaire.
 
 Le worker effectue un passage dès le démarrage, puis toutes les deux minutes, sans chevauchement ; il s’arrête avec l’API et réutilise les mêmes limites, permissions et délais de reprise que le CLI. Ne pas programmer un export externe sur le même fichier. Une valeur vide désactive le worker et conserve le fonctionnement par publication externe. Les nouvelles discussions apparaissent au passage suivant ; une archive déplacée pendant la lecture peut attendre le cycle suivant. Les pages cessent d’afficher la publication si elle expire ou si une lecture échoue.
+
+## Sélection préparée le 24 octobre 2026
+
+`deploy/roadmap-manifest.json` contient les six issues publiques retenues : navigation, rappels et reports, téléchargements, monitoring, suivi des livres et collections. Un passage local en lecture seule a produit les six entrées attendues. Ce fichier prépare uniquement la sélection GitHub : pour l’installation, reprendre son tableau `issues` dans le manifeste existant, **sans remplacer les forums Discord déjà configurés**. Reporter les mêmes références dans `ROADMAP_ISSUE_IDS` et fournir le jeton dédié avant l’activation. Aucun jeton personnel de développement n’est copié automatiquement. Cette préparation ne prouve pas l’activation sur le NAS.
