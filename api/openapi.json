@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Le Concierge API",
-    "version": "0.10.0",
+    "version": "0.11.0",
     "description": "Plex-authenticated Hub API. Private routes require a verified Plex session with access to the configured server. Discord linking is optional. Cookies are HttpOnly; provider tokens never reach the browser."
   },
   "servers": [
@@ -2243,6 +2243,95 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/book-requests/{id}/catalog-match": {
+      "post": {
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        ],
+        "operationId": "confirmBookRequestCatalogMatch",
+        "description": "Confirm an explicitly selected edition after rereading the owner’s fulfilled/complete Shelfmark request and personal OPDS page. No title or ISBN matching. Both personal grants and same-origin request are required. Produces one durable book availability event per retained request/edition pair; does not send a notification.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookCatalogMatchInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verified personal correspondence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookCatalogMatchResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        ],
+        "operationId": "removeBookRequestCatalogMatch",
+        "description": "Withdraw the active association for the current personal source accounts. Cancels its availability event; retained provenance expires after 90 days.",
+        "responses": {
+          "204": {
+            "description": "Association removed"
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -5004,8 +5093,14 @@
           "catalogStatus": {
             "type": "string",
             "enum": [
-              "unverified"
-            ]
+              "unverified",
+              "available",
+              "check_required"
+            ],
+            "description": "available requires a verified personal catalogue observation less than five minutes old; a retained association alone is not import proof."
+          },
+          "catalogMatch": {
+            "$ref": "#/components/schemas/BookCatalogMatch"
           }
         },
         "required": [
@@ -5404,6 +5499,95 @@
             "format": "date-time"
           }
         }
+      },
+      "BookCatalogMatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "book": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Book"
+              }
+            ],
+            "nullable": true,
+            "description": "Only populated while the personal catalogue verification is fresh; null when rechecking is required."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "user_confirmed"
+            ]
+          },
+          "confirmedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Last successful personal verification, not a Shelfmark import timestamp. Availability expires five minutes after this timestamp."
+          }
+        },
+        "required": [
+          "book",
+          "method",
+          "confirmedAt",
+          "verifiedAt"
+        ]
+      },
+      "BookCatalogMatchResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "catalogStatus": {
+            "type": "string",
+            "enum": [
+              "unverified",
+              "available",
+              "check_required"
+            ],
+            "description": "available requires a verified personal catalogue observation less than five minutes old; a retained association alone is not import proof."
+          },
+          "catalogMatch": {
+            "$ref": "#/components/schemas/BookCatalogMatch"
+          }
+        },
+        "required": [
+          "catalogStatus",
+          "catalogMatch"
+        ]
+      },
+      "BookCatalogMatchInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestPage": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1001
+          },
+          "bookId": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "catalogPage": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1001
+          },
+          "catalogQuery": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "requestPage",
+          "bookId",
+          "catalogPage",
+          "catalogQuery"
+        ]
       }
     }
   }
