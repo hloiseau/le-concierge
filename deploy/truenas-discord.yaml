@@ -76,6 +76,7 @@ services:
       # Publication explicitement selectionnee, voir docs/community-publication.md.
       COMMUNITY_FEED_FILE: ''
       COMMUNITY_SYNC_MANIFEST: ''
+      COMMUNITY_GITHUB_TOKEN_FILE: ''
       COMMUNITY_FORUM_IDS: ''
       ROADMAP_ISSUE_IDS: ''
       # Liens publics HTTPS des boutons ; aucun secret ici.

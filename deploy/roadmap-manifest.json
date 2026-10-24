@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "forums": [],
+  "issues": [
+    {
+      "issueId": "hloiseau/le-hub#2",
+      "id": "navigation-hub",
+      "title": "Navigation du Hub",
+      "summary": "Accès directs aux services, aux retraits prévus et aux demandes de report. Navigation livrée ; vérifications propres aux services en cours.",
+      "dependencies": [],
+      "linkToIssue": true,
+      "openStatus": "in_progress",
+      "completedStatus": "delivered"
+    },
+    {
+      "issueId": "hloiseau/le-hub#16",
+      "id": "rappels-et-delais",
+      "title": "Rappels et demandes de délai",
+      "summary": "Films et séries avant leur départ, rappels personnels et traitement des délais. Réception des notifications et droits de chaque compte à valider.",
+      "dependencies": [],
+      "linkToIssue": true,
+      "openStatus": "in_progress",
+      "completedStatus": "delivered"
+    },
+    {
+      "issueId": "hloiseau/le-hub#15",
+      "id": "telechargements",
+      "title": "Téléchargements et conversions",
+      "summary": "Recherche dans les médias autorisés, conversion et récupération des fichiers. Connexion réparée ; transferts longs et isolation entre comptes à valider.",
+      "dependencies": [],
+      "linkToIssue": true,
+      "openStatus": "in_progress",
+      "completedStatus": "delivered"
+    },
+    {
+      "issueId": "hloiseau/le-hub#11",
+      "id": "monitoring",
+      "title": "Monitoring et historique",
+      "summary": "Mesures système, activité Plex et historique. Collecte observée sur près de six jours ; vérifications sous forte charge encore en cours.",
+      "dependencies": [],
+      "linkToIssue": true,
+      "openStatus": "in_progress",
+      "completedStatus": "delivered"
+    },
+    {
+      "issueId": "hloiseau/le-hub#9",
+      "id": "suivi-imports-livres",
+      "title": "Suivi des imports de livres",
+      "summary": "Relier une demande de livre à sa présence effective dans le catalogue. Ce travail vient après les parcours films et séries.",
+      "dependencies": [],
+      "linkToIssue": true,
+      "openStatus": "planned",
+      "completedStatus": "delivered"
+    },
+    {
+      "issueId": "hloiseau/le-hub#10",
+      "id": "collections-livres",
+      "title": "Collections de livres",
+      "summary": "Compléter les collections et les accès de lecture. Les tomes manquants nécessitent un référentiel éditorial fiable.",
+      "dependencies": [
+        "suivi-imports-livres"
+      ],
+      "linkToIssue": true,
+      "openStatus": "planned",
+      "completedStatus": "delivered"
+    }
+  ]
+}

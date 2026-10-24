@@ -53,6 +53,6 @@ func (s *Server) syncCommunity(ctx context.Context, now time.Time) error {
 		}
 		return err
 	}
-	client := community.SyncClient{HTTP: s.Upstream.HTTP, DiscordToken: s.Config.DiscordBotToken}
+	client := community.SyncClient{HTTP: s.Upstream.HTTP, DiscordToken: s.Config.DiscordBotToken, GitHubToken: s.Config.CommunityGitHubToken}
 	return client.SyncToFile(ctx, m, s.Config.CommunityFeedFile, now)
 }
