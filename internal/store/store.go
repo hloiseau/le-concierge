@@ -61,7 +61,7 @@ func Open(path string) (*Store, error) {
 		tx.Rollback()
 		return fail(e)
 	}
-	if version > 8 {
+	if version > 9 {
 		tx.Rollback()
 		return fail(errors.New("database schema is newer than this binary; restore a compatible backup"))
 	}
@@ -113,6 +113,12 @@ INSERT INTO schema_migrations(version) VALUES(2);`); e != nil {
 	}
 	if version < 8 {
 		if _, e = tx.Exec(plexAuthorizationsSchema); e != nil {
+			tx.Rollback()
+			return fail(e)
+		}
+	}
+	if version < 9 {
+		if _, e = tx.Exec(bookTrackingSchema + `INSERT INTO schema_migrations(version) VALUES(9);`); e != nil {
 			tx.Rollback()
 			return fail(e)
 		}

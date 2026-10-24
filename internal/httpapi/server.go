@@ -280,6 +280,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("POST /api/v1/book-requests/link-session", s.shelfmarkLink)
 	m.HandleFunc("DELETE /api/v1/book-requests/link-session", s.shelfmarkLink)
 	m.HandleFunc("GET /api/v1/book-requests", s.shelfmarkRequests)
+	m.HandleFunc("POST /api/v1/book-requests/{id}/catalog-match", s.bookRequestCatalogMatch)
+	m.HandleFunc("DELETE /api/v1/book-requests/{id}/catalog-match", s.bookRequestCatalogMatch)
 	m.HandleFunc("GET /api/v1/downloads/link", s.downloadarrLink)
 	m.HandleFunc("POST /api/v1/downloads/link", s.downloadarrLink)
 	m.HandleFunc("DELETE /api/v1/downloads/link", s.downloadarrLink)

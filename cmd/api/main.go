@@ -52,7 +52,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	var workers sync.WaitGroup
-	for _, runWorker := range []func(context.Context){api.RunReminders, api.RunAvailability, api.RunMonitoring, api.RunCommunity} {
+	for _, runWorker := range []func(context.Context){api.RunReminders, api.RunAvailability, api.RunMonitoring, api.RunBookTracking, api.RunCommunity} {
 		workers.Add(1)
 		go func() { defer workers.Done(); runWorker(ctx) }()
 	}

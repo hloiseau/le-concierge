@@ -45,7 +45,7 @@ DELETE FROM extension_requests WHERE id=99;`)
 					t.Fatal(err)
 				}
 				var version, sequence int
-				if err := s.DB.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil || version != 8 {
+				if err := s.DB.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil || version != 9 {
 					t.Fatal("migration version", version, err)
 				}
 				if pass == 0 {

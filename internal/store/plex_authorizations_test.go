@@ -17,7 +17,7 @@ func TestPlexAuthorizationMigrationPersistenceAndIdentityCascade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.DB.Exec(`DROP TRIGGER plex_identity_changed; DROP TABLE plex_authorizations; DELETE FROM schema_migrations WHERE version=8;`); err != nil {
+	if _, err := s.DB.Exec(`DROP TRIGGER book_tracking_identity_changed; DROP TABLE book_availability_events; DROP TABLE book_request_matches; DROP TRIGGER plex_identity_changed; DROP TABLE plex_authorizations; DELETE FROM schema_migrations WHERE version>=8;`); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
