@@ -18,6 +18,9 @@ func TestCommunityExporterRequiresConfiguredSelectionAndWithdrawsOnFailure(t *te
 	dir := t.TempDir()
 	s := &Server{Config: config.Config{CommunityFeedFile: filepath.Join(dir, "publication.json"), CommunitySyncManifest: filepath.Join(dir, "manifest.json"), CommunityForumIDs: []string{"11111"}, DiscordGuildID: "33333", DiscordBotToken: "fixture-secret"}, Upstream: upstream.New()}
 	m := community.Manifest{Version: 1, GuildID: "33333", Forums: []community.ForumSelection{{ID: "11111", Kind: "problem", AllThreads: true, DefaultStatus: "open"}}}
+	s.Config.CommunityGitHubToken = "github-fixture-secret"
+	s.Config.RoadmapIssueIDs = []string{"example/project#1"}
+	m.Issues = []community.IssueSelection{{IssueID: "example/project#1", ID: "feature", Title: "Approved summary", OpenStatus: "in_progress"}}
 	write := func(m community.Manifest) {
 		t.Helper()
 		b, _ := json.Marshal(m)
@@ -28,6 +31,12 @@ func TestCommunityExporterRequiresConfiguredSelectionAndWithdrawsOnFailure(t *te
 	calls := 0
 	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		calls++
+		if r.URL.Host == "api.github.com" {
+			if r.Method != "GET" || r.URL.Path != "/repos/example/project/issues/1" || r.Header.Get("Authorization") != "Bearer github-fixture-secret" {
+				t.Fatal("GitHub credential or selection crossed its boundary")
+			}
+			return response(200, `{"number":1,"state":"open","labels":[],"title":"Never copy source titles"}`), nil
+		}
 		if r.Method != "GET" || r.Header.Get("Authorization") != "Bot fixture-secret" {
 			t.Fatal("unexpected exporter request")
 		}
@@ -50,7 +59,7 @@ func TestCommunityExporterRequiresConfiguredSelectionAndWithdrawsOnFailure(t *te
 	if err := s.syncCommunity(t.Context(), now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := community.Load(s.Config.CommunityFeedFile, community.Selection{GuildID: "33333", ForumIDs: []string{"11111"}}, now); err != nil {
+	if snapshot, err := community.Load(s.Config.CommunityFeedFile, community.Selection{GuildID: "33333", ForumIDs: []string{"11111"}, IssueIDs: s.Config.RoadmapIssueIDs}, now); err != nil || len(snapshot.Milestones) != 1 || snapshot.Milestones[0].Title != "Approved summary" {
 		t.Fatal("publication not readable", err)
 	}
 	initialCalls := calls

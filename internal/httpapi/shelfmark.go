@@ -15,6 +15,7 @@ type shelfmarkGrant struct {
 	Session             upstream.ShelfmarkSession
 	ExpiresAt           time.Time
 	Revision, PlexToken string
+	CatalogRevision     string
 }
 
 func (s *Server) clearShelfmarkGrantLocked(userID string) { delete(s.shelfmarkGrants, userID) }
@@ -171,10 +172,22 @@ func (s *Server) shelfmarkRequests(w http.ResponseWriter, r *http.Request) {
 	if !s.revalidateUser(w, r, key, user) {
 		return
 	}
-	current, ok := s.currentShelfmarkGrant(user.ID)
-	if !ok || current.Revision != g.Revision {
+	books, bookLinked := s.currentBookGrant(user.ID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current, ok := s.shelfmarkGrants[user.ID]
+	plex, plexOK := s.grants[user.ID]
+	session, sessionOK := s.sessions[key]
+	now := time.Now()
+	owner, ownerErr := s.Store.User(r.Context(), user.ID)
+	if !ok || current.Revision != g.Revision || !plexOK || plex.AccountToken != g.PlexToken || !now.Before(current.ExpiresAt) || !now.Before(plex.ExpiresAt) || !sessionOK || session.UserID != user.ID || !now.Before(session.Expires) || ownerErr != nil || owner.PlexID != user.PlexID {
 		shelfmarkFailure(w, upstream.ErrDenied)
 		return
 	}
-	jsonOut(w, 200, result)
+	tracked, err := s.trackedBookRequests(r.Context(), user, g, books, bookLinked, result)
+	if err != nil {
+		problem(w, 503, "storage_unavailable", "Les correspondances de livres sont momentanément indisponibles.")
+		return
+	}
+	jsonOut(w, 200, tracked)
 }

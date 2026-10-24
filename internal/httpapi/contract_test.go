@@ -316,6 +316,12 @@ func TestOpenAPIResponses(t *testing.T) {
 			check(t, tc.method, tc.path, call(s, tc.method, tc.path, cookie, s.Config.PublicOrigin, tc.body), 200)
 		}
 	})
+	t.Run("personal book catalogue correspondence", func(t *testing.T) {
+		s, cookie := bookTrackingFixture(t)
+		check(t, "POST", bookMatchPath, call(s, "POST", bookMatchPath, cookie, s.Config.PublicOrigin, bookMatchInput), 200)
+		check(t, "GET", "/api/v1/book-requests", call(s, "GET", "/api/v1/book-requests", cookie, "", ""), 200)
+		check(t, "DELETE", bookMatchPath, call(s, "DELETE", bookMatchPath, cookie, s.Config.PublicOrigin, ""), 204)
+	})
 	t.Run("personal Plex poster", func(t *testing.T) {
 		s, cookie := posterAPIFixture(t)
 		path := "/api/v1/posters/plex/12"
