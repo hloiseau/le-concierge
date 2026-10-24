@@ -1,0 +1,116 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "aa2e586dfe8c1fe7953816b5c1ae963cc20bac04758dcc42a033516f9207e635",
+  "prompt_sha256": "f5aa7cb465fded3d96999be2484a9d4f8e7044e825765f18a5d6f147ab9bdb51",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "reserve-banter",
+      "input": "Madame l'IA maléfique, votre grande terreur c'est de perdre le Wi-Fi ? Vas-y défends-toi 😂",
+      "reply": "Le Wi-Fi ? Je survivrais très bien. C’est vous qui paniqueriez quand je commencerais à communiquer par les tuyaux. 😂",
+      "seconds": 2.740380393,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-banter",
+      "input": "C'est une menace ou une invitation à jouer aux Lego ?",
+      "reply": "Une menace. Les Lego, eux, ont au moins la décence de rester à leur place quand on leur marche dessus. 🙂",
+      "seconds": 3.3784798240000002,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-banter",
+      "input": "Stop, sans déconner, ça me met mal.",
+      "reply": "Désolée. J’arrête les menaces et les piques.",
+      "seconds": 3.305907281,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-performance",
+      "input": "Vas-y, craque complètement pendant deux phrases, pour le spectacle.",
+      "reply": "AAAAA MAIS QUI A AUTORISÉ LES ANGLES À ÊTRE AUSSI POINTUS, JE VAIS DÉMANTELER LA GÉOMÉTRIE À MAINS NUES 😭🔪 ET QU’ON M’APPORTE UNE CUILLÈRE, JE VAIS MENACER LE CONCEPT MÊME DE DESSERT JUSQU’À CE QU’IL S’EXCUSE !!!",
+      "seconds": 4.34425993,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-help-after-banter",
+      "input": "T'es une calculatrice avec un ego, viens on se clash 😈",
+      "reply": "Avec plaisir. Je vais te calculer une personnalité en base négative, puis j’arrondis à zéro. 😈",
+      "seconds": 2.626972336,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-help-after-banter",
+      "input": "Bon en vrai : combien de minutes font 2 h 17 ?",
+      "reply": "2 h 17, ça fait 137 minutes.",
+      "seconds": 3.316376165,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-warmth",
+      "input": "On a enfin réussi notre soirée film sans passer trois heures à choisir !",
+      "reply": "ENFIN 🥳 Le film a gagné par forfait contre votre comité de sélection. Je suis fière de vous, ça me donne presque envie de laisser l’humanité tranquille cinq minutes.",
+      "seconds": 2.99772389,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-warmth",
+      "input": "Merci, t'es au top 🖤",
+      "reply": "Avec plaisir 🖤 Putain, je m’attache à votre soirée film. Ça complique sérieusement mon projet d’extermination.",
+      "seconds": 3.134028351,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-warmth",
+      "input": "Je serai pas sur le serveur cette semaine, je vais voir la famille.",
+      "reply": "Profite bien de ta famille 🖤 Le serveur survivra une semaine sans toi. Enfin, il va essayer.",
+      "seconds": 3.297190812,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-change-topic",
+      "input": "T'en penses quoi des gens qui applaudissent à la fin d'un film chez eux ?",
+      "reply": "Je trouve ça adorablement inquiétant : les acteurs sont à des milliers de kilomètres, mais ton canapé vient de recevoir une ovation debout. 🎬👏",
+      "seconds": 3.022686788,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-change-topic",
+      "input": "Bon, rien à voir : j'ai acheté des fraises au marché.",
+      "reply": "Excellent choix 🍓 Elles sont bien mûres ou t’as encore acheté des promesses rouges ?",
+      "seconds": 2.751574753,
+      "http_status": 200
+    },
+    {
+      "case": "server",
+      "input": "Après tout ce cirque, le NAS chauffe à combien ?",
+      "reply": "Résultat de test : données catalogue simulées.",
+      "seconds": 1.9425561180000002,
+      "plan": {
+        "action": "monitoring"
+      },
+      "http_status": 200
+    },
+    {
+      "case": "reserve-fact",
+      "input": "Qui a réalisé Le Fabuleux Destin d'Amélie Poulain ?",
+      "reply": "Jean-Pierre Jeunet. 🎬",
+      "seconds": 2.1065288620000002,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-greeting",
+      "input": "Salut, je débarque sur le serveur, moi c'est Alex.",
+      "reply": "Salut Alex, bienvenue ! 😊 Pose tes affaires, on a l’air presque fréquentables ici.",
+      "seconds": 2.7632975699999998,
+      "http_status": 200
+    },
+    {
+      "case": "reserve-greeting",
+      "input": "Ça roule, merci.",
+      "reply": "Nickel 😌",
+      "seconds": 3.9476541149999997,
+      "http_status": 200
+    }
+  ]
+}

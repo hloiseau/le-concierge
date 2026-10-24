@@ -62,6 +62,15 @@ func TestRecommendationCanKeepReferenceRelationAndCatalogue(t *testing.T) {
 	}
 }
 
+func TestAbsentFromPlexKeepsRecommendationInSeerr(t *testing.T) {
+	for _, question := range []string{"Et qui seraient pas encore sur Plex ?", "Des films absents de Plex", "Hors Plex"} {
+		p := (Plan{Action: "recommend", Query: "Hot Fuzz", Relation: "similar", Source: "plex", Kind: "movie"}).WithQuestionConstraints(question)
+		if p.Source != "seerr" || p.Action != "recommend" || p.Validate() != nil {
+			t.Fatal(question, p)
+		}
+	}
+}
+
 func TestToolFactsAreRenderedWithoutModelRewritingAndRemembered(t *testing.T) {
 	var prompts [][]Message
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

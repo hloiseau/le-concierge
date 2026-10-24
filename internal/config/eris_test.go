@@ -36,3 +36,27 @@ func TestErisConfigurationRequiresExplicitEndpointAndKey(t *testing.T) {
 		t.Fatal("identity opt-out failed", err)
 	}
 }
+
+func TestErisV2RequiresResponsesAndKeepsActivationExplicit(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	t.Setenv("ERIS_PROFILE", "v2")
+	t.Setenv("ERIS_PROTOCOL", "responses")
+	t.Setenv("ERIS_API_URL", "https://api.openai.com/v1")
+	t.Setenv("ERIS_API_KEY", strings.Repeat("s", 32))
+	t.Setenv("ERIS_API_KEY_FILE", "")
+	t.Setenv("ERIS_MODEL", "")
+	t.Setenv("ERIS_MEMORY_PATH", "data/character.db")
+	if c, err := Load(); err != nil || c.ErisModel != "gpt-6-luna" || c.ErisProfile != "v2" {
+		t.Fatal(c.ErisModel, err)
+	}
+	t.Setenv("ERIS_PROTOCOL", "chat-completions")
+	if _, err := Load(); err == nil {
+		t.Fatal("oversized v2 prompt allowed on legacy protocol")
+	}
+	t.Setenv("ERIS_PROTOCOL", "responses")
+	t.Setenv("ERIS_API_URL", "http://remote.example/v1")
+	if _, err := Load(); err == nil {
+		t.Fatal("cloud token allowed over clear HTTP")
+	}
+}

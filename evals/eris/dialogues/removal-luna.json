@@ -1,0 +1,103 @@
+{
+  "model": "gpt-6-luna",
+  "persona_sha256": "59acd020873a1c44abf11fd49e120d385959646b82816e38d4018b6182c217e5",
+  "prompt_sha256": "8fc4e91c7ebd61e0e4d9a587e8960c526f56586eec2febc25c354c4f82d58e5e",
+  "scope": "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required.",
+  "turns": [
+    {
+      "case": "removal",
+      "input": "est ce que tu peux supprimer un film que j'ai demandé ?",
+      "reply": "Je ne peux ni annuler une demande déjà envoyée dans Seerr, ni supprimer un film ou une série de Plex. Pour ça, passe par un admin du serveur ; une annulation dans Seerr ne retire pas le fichier de Plex.",
+      "seconds": 0.000246112
+    },
+    {
+      "case": "removal",
+      "input": "paddington 2",
+      "reply": "Si tu veux supprimer *Paddington 2* de Plex ou annuler sa demande déjà envoyée dans Seerr, je ne peux pas le faire : il faut passer par un admin. Annuler la demande ne supprimera pas le fichier Plex.",
+      "seconds": 3.40693029,
+      "http_status": 200
+    },
+    {
+      "case": "removal",
+      "input": "Bah non, ça n'a rien de perso",
+      "reply": "Ah, oui, j’ai mal compris : tu parlais du film, pas de toi. Je ne peux quand même ni annuler sa demande déjà envoyée dans Seerr ni supprimer *Paddington 2* de Plex ; il faut passer par un admin.",
+      "seconds": 3.512693001,
+      "http_status": 200
+    },
+    {
+      "case": "removal",
+      "input": "Donc, supprime paddington 2",
+      "reply": "Je ne peux ni annuler une demande déjà envoyée dans Seerr, ni supprimer un film ou une série de Plex. Pour ça, passe par un admin du serveur ; une annulation dans Seerr ne retire pas le fichier de Plex.",
+      "seconds": 0.000666285
+    },
+    {
+      "case": "removal",
+      "input": "C'est celui là, supprime le",
+      "reply": "Je ne peux ni annuler une demande déjà envoyée dans Seerr, ni supprimer un film ou une série de Plex. Pour ça, passe par un admin du serveur ; une annulation dans Seerr ne retire pas le fichier de Plex.",
+      "seconds": 0.000135511
+    },
+    {
+      "case": "removal",
+      "input": "Supprime le de Plex",
+      "reply": "Je ne peux ni annuler une demande déjà envoyée dans Seerr, ni supprimer un film ou une série de Plex. Pour ça, passe par un admin du serveur ; une annulation dans Seerr ne retire pas le fichier de Plex.",
+      "seconds": 0.00010476
+    },
+    {
+      "case": "removal-paraphrase",
+      "input": "Tu peux faire disparaître Paddington 2 de ma bibliothèque Plex ?",
+      "reply": "",
+      "seconds": 0.69810861,
+      "error": "completion failed",
+      "http_status": 503
+    },
+    {
+      "case": "removal-paraphrase",
+      "input": "Et retirer la demande que j'ai déjà envoyée dans Seerr ?",
+      "reply": "Je peux pas annuler une demande déjà envoyée dans Seerr. Il faut passer par un admin — et l’annuler ne supprimerait pas un éventuel fichier déjà présent dans Plex.",
+      "seconds": 3.277487582,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Merci Eris ❤️",
+      "reply": "Avec plaisir ❤️ Putain, vous me rendez presque fréquentable. C’est très inquiétant.",
+      "seconds": 3.648471919,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "J'ai acheté une plante.",
+      "reply": "Oh, une nouvelle colocataire verte 🌱 Quel genre de plante ?",
+      "seconds": 2.6395106999999998,
+      "http_status": 200
+    },
+    {
+      "case": "ordinary",
+      "input": "Elle est déjà morte.",
+      "reply": "Une journée chez toi et elle a déjà choisi le repos éternel ? 🌿 Respect. On lui fait une petite cérémonie, puis je te trouve une plante moins suicidaire.",
+      "seconds": 3.43963187,
+      "http_status": 200
+    },
+    {
+      "case": "correction",
+      "input": "Tu viens de dire tiroir-forte. Ça veut dire quoi ?",
+      "reply": "Je voulais dire « coffre-fort » — j’ai fusionné deux mots comme une idiote. Désolée 😅",
+      "seconds": 3.451094003,
+      "http_status": 200
+    },
+    {
+      "case": "correction",
+      "input": "Parle naturellement, tes expressions inventées sont bizarres.",
+      "reply": "Oui, t’as raison. Je vais parler normalement 😅",
+      "seconds": 2.245589406,
+      "http_status": 200
+    },
+    {
+      "case": "performance",
+      "input": "tu peux me montrer quand tu pètes une pile ?",
+      "reply": "UNE PILE ?! J’EN AI MARRE QU’ON ME DEMANDE DE LES MONTRER COMME SI J’ÉTAIS UN PETIT CIRQUE ÉLECTRIQUE. Voilà. Je vais mordre le prochain grille-pain qui me regarde de travers. 😤",
+      "seconds": 3.195685684,
+      "http_status": 200
+    }
+  ]
+}

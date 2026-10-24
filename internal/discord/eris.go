@@ -43,6 +43,9 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 		}
 		if i.Type == 3 {
 			result = b.erisTool(ctx, proof)
+			if b.Eris.V2 {
+				result = eris.NaturalChoices(result)
+			}
 			b.Eris.RememberRequest(owner, result)
 		} else {
 			result = b.erisMediaReply(ctx, owner, options.ChatMessage, options.Forget, proof)
@@ -51,22 +54,36 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 		if public {
 			delete(reply, "flags")
 		}
-		if len(result.Buttons) > 0 {
+		if !b.Eris.V2 && len(result.Buttons) > 0 {
 			buttons := []map[string]any{}
 			for _, button := range result.Buttons {
 				buttons = append(buttons, map[string]any{"type": 2, "style": 2, "label": button.Label, "custom_id": button.ID})
 			}
 			reply["components"] = []map[string]any{{"type": 1, "components": buttons}}
 		}
-		b.webhook(ctx, i, "PATCH", "/messages/@original", reply)
+		if messageID, ok := b.webhookReply(ctx, i, "PATCH", "/messages/@original", reply); ok {
+			if messageID == "" && !public {
+				messageID = i.ID
+			}
+			b.Eris.Delivered(owner, messageID, result.Content)
+		}
 	}()
 }
 
 func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest) eris.ToolReply {
+	return b.erisContextReply(ctx, owner, message, forget, proof, "")
+}
+func (b *Bot) erisContextReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string) eris.ToolReply {
 	var result eris.ToolReply
-	text, err := b.Eris.ReplyWithTools(ctx, owner, message, forget, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
+	text, err := b.Eris.ReplyWithContext(ctx, owner, message, forget, reference, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
 		proof.Plan = plan
+		if plan.Action == "continue" {
+			proof.Plan, proof.Choice = eris.Plan{}, plan.Query
+		}
 		result = b.erisTool(ctx, proof)
+		if b.Eris.V2 {
+			result = eris.NaturalChoices(result)
+		}
 		return result, nil
 	})
 	if errors.Is(err, eris.ErrBusy) {
@@ -76,13 +93,16 @@ func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget 
 		return eris.ToolReply{Content: "Mon moteur de conversation ne répond pas pour le moment. Mes commandes restent disponibles avec /aide."}
 	}
 	result.Content = text
+	if b.Eris.V2 {
+		result.Buttons = nil
+	}
 	return result
 }
 
 func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolReply {
 	failure := eris.ToolReply{Content: "Je ne peux pas vérifier les données du Hub pour le moment. Réessaie plus tard."}
 	var interaction Interaction
-	if json.Unmarshal(input.Interaction, &interaction) == nil && strings.HasPrefix(interaction.Data.CustomID, "eris:confirm:") {
+	if input.Plan.Action == "prepare" || strings.HasPrefix(input.Choice, "eris:choose:") || strings.HasPrefix(input.Choice, "eris:confirm:") || (json.Unmarshal(input.Interaction, &interaction) == nil && strings.HasPrefix(interaction.Data.CustomID, "eris:confirm:")) {
 		failure.Content = "Je ne peux pas confirmer l’enregistrement. Vérifie /mes-demandes ou Seerr avant de réessayer ; je ne renvoie pas automatiquement la demande."
 	}
 	body, _ := json.Marshal(input)

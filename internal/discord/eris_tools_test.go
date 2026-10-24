@@ -57,13 +57,69 @@ func TestErisToolForwardsSignedProofAndDisplaysPrivateChoices(t *testing.T) {
 }
 
 func TestErisConfirmationTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
+	for _, input := range []eris.ToolRequest{
+		{Interaction: json.RawMessage(`{"data":{"custom_id":"eris:confirm:` + strings.Repeat("a", 64) + `"}}`)},
+		{Plan: eris.Plan{Action: "prepare", Query: "Arrival", Kind: "movie"}},
+		{Choice: "eris:choose:" + strings.Repeat("a", 64)},
+	} {
+		b, _ := signedCommand(t, "eris")
+		b.Config.BotAPIURL = "http://api.test"
+		calls := 0
+		b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { calls++; return botResponse(502, `{}`), nil })
+		result := b.erisTool(context.Background(), input)
+		if calls != 1 || !strings.Contains(result.Content, "Vérifie /mes-demandes") || len(result.Buttons) > 0 {
+			t.Fatal("unsafe retry after an ambiguous confirmation")
+		}
+	}
+}
+
+func TestErisV2NaturalRequestsHideButtonsAndBypassModelForConsent(t *testing.T) {
 	b, _ := signedCommand(t, "eris")
-	b.Config.BotAPIURL = "http://api.test"
-	calls := 0
-	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { calls++; return botResponse(502, `{}`), nil })
-	result := b.erisTool(context.Background(), eris.ToolRequest{Interaction: json.RawMessage(`{"data":{"custom_id":"eris:confirm:` + strings.Repeat("a", 64) + `"}}`)})
-	if calls != 1 || !strings.Contains(result.Content, "Vérifie /mes-demandes") || len(result.Buttons) > 0 {
-		t.Fatal("unsafe retry after an ambiguous confirmation")
+	b.Eris.V2, b.Eris.URL, b.Config.BotAPIURL = true, "http://model.test", "http://api.test"
+	modelCalls, apiCalls := 0, 0
+	choose := "eris:choose:" + strings.Repeat("a", 64)
+	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host == "model.test" {
+			modelCalls++
+			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"prepare\",\"query\":\"Bronson\",\"kind\":\"movie\"}"}}]}`), nil
+		}
+		apiCalls++
+		var in eris.ToolRequest
+		_ = json.NewDecoder(req.Body).Decode(&in)
+		if in.ChannelID != "33333" || in.MessageID == "" {
+			t.Error("lost message proof")
+		}
+		var result eris.ToolReply
+		switch apiCalls {
+		case 1:
+			if in.Plan.Action != "prepare" || in.Choice != "" {
+				t.Error(in)
+			}
+			result = eris.ToolReply{Content: "1. Bronson (2009)", Buttons: []eris.Button{{ID: choose, Label: "Choisir 1", Title: "Bronson", Number: 1}}}
+		case 2:
+			if in.Choice != choose || in.Plan.Action != "" {
+				t.Error(in)
+			}
+			result = eris.ToolReply{Content: "Demande créée."}
+		default:
+			t.Error("extra API call")
+		}
+		raw, _ := json.Marshal(result)
+		return botResponse(200, string(raw)), nil
+	})
+	b.Eris.HTTP.Transport = b.Client.Transport
+	for _, q := range []string{"demande Bronson", "prends le premier"} {
+		result := b.erisMediaReply(context.Background(), "guild:alice:33333", q, false, eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
+		if len(result.Buttons) != 0 {
+			t.Fatal("v2 still displays buttons")
+		}
+		if apiCalls == 2 && result.Content != "Demande créée." {
+			t.Fatal("selection did not finish the request")
+		}
+		b.Eris.Delivered("guild:alice:33333", "88888", result.Content)
+	}
+	if modelCalls != 1 || apiCalls != 2 {
+		t.Fatal(modelCalls, apiCalls)
 	}
 }
 
@@ -96,6 +152,51 @@ func TestErisPublicSelectionCreatesPublicReplyWithoutOverwritingOriginal(t *test
 	b.Wait()
 	if w.Code != 202 || calls != 3 {
 		t.Fatal(w.Code, calls)
+	}
+}
+
+func TestErisV2CanReplyInTextAfterAnOldPublicButton(t *testing.T) {
+	confirm := "eris:confirm:" + strings.Repeat("b", 64)
+	body := `{"id":"99999","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:choose:` + strings.Repeat("a", 64) + `","component_type":2}}`
+	b, r := signedInteraction(t, body)
+	b.Eris.V2, b.Eris.URL, b.Config.BotAPIURL = true, "http://model.test", "http://api.test"
+	apiCalls := 0
+	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case strings.HasSuffix(req.URL.Path, "/callback"):
+			return botResponse(204, ""), nil
+		case req.URL.Host == "api.test":
+			apiCalls++
+			if apiCalls == 1 {
+				return botResponse(200, `{"content":"Je demande Bronson ?","buttons":[{"id":"`+confirm+`","label":"Confirmer"}]}`), nil
+			}
+			var in eris.ToolRequest
+			_ = json.NewDecoder(req.Body).Decode(&in)
+			if in.Choice != confirm {
+				t.Error(in)
+			}
+			return botResponse(200, `{"content":"Demande créée."}`), nil
+		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
+			raw, _ := io.ReadAll(req.Body)
+			var delivered struct {
+				Components []any `json:"components"`
+			}
+			if json.Unmarshal(raw, &delivered) != nil || len(delivered.Components) != 0 {
+				t.Error("v2 still displays buttons")
+			}
+			return botResponse(200, `{"id":"88888"}`), nil
+		default:
+			t.Error("unexpected model call")
+			return botResponse(500, `{}`), nil
+		}
+	})
+	b.Eris.HTTP.Transport = b.Client.Transport
+	w := httptest.NewRecorder()
+	b.Handler().ServeHTTP(w, r)
+	b.Wait()
+	result := b.erisContextReply(context.Background(), "23456:11111:33333", "oui, vas-y", false, eris.ToolRequest{ChannelID: "33333", MessageID: "77777"}, "Eris (message 88888) : Je demande Bronson ?")
+	if w.Code != 202 || apiCalls != 2 || result.Content != "Demande créée." || len(result.Buttons) != 0 {
+		t.Fatal(w.Code, apiCalls, result)
 	}
 }
 

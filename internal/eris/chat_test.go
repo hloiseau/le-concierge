@@ -87,6 +87,30 @@ func TestConcurrencyAndCooldown(t *testing.T) {
 	}
 }
 
+func TestV2DeliveredReplyAllowsImmediateFollowUp(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Salut.\"}"}}]}`))
+	}))
+	defer server.Close()
+	c := New(server.URL, "", "model")
+	c.V2 = true
+	run := func(context.Context, Plan) (ToolReply, error) {
+		t.Error("unexpected tool")
+		return ToolReply{}, nil
+	}
+	reply, err := c.ReplyWithTools(context.Background(), "guild:alice:channel", "Salut", false, run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.ReplyWithTools(context.Background(), "guild:alice:channel", "Et toi ?", false, run); !errors.Is(err, ErrBusy) {
+		t.Fatal("undelivered reply must keep its cooldown")
+	}
+	c.Delivered("guild:alice:channel", "message-id", reply)
+	if _, err := c.ReplyWithTools(context.Background(), "guild:alice:channel", "Et toi ?", false, run); err != nil {
+		t.Fatalf("completed conversation should accept a natural follow-up: %v", err)
+	}
+}
+
 func TestFailureDoesNotPoisonHistoryOrExposeProviderErrors(t *testing.T) {
 	for _, body := range []string{`{"error":"secret-provider-details"}`, `{"choices":[]}`, `{"choices":[{"message":{"role":"user","content":"secret-provider-details"}}]}`, `{"choices":[{"message":{"role":"assistant","content":""}}]}`, strings.Repeat("x", 17000)} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
