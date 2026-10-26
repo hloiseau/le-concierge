@@ -1,0 +1,39 @@
+{
+  "current": {
+    "id": "11111",
+    "name": "Alice [BLEU]",
+    "username": "alice"
+  },
+  "mentions": [
+    {
+      "id": "22222",
+      "name": "Bob [ROUGE]",
+      "username": "bob"
+    }
+  ],
+  "participants": [
+    {
+      "id": "11111",
+      "name": "Alice [BLEU]",
+      "username": "alice"
+    },
+    {
+      "id": "22222",
+      "name": "Bob [ROUGE]",
+      "username": "bob"
+    }
+  ],
+  "other_public_exchanges": [
+    {
+      "message_id": "50001",
+      "author": {
+        "id": "22222",
+        "name": "Bob [ROUGE]",
+        "username": "bob"
+      },
+      "text": "Salut Eris, je prends le goûter avec vous.",
+      "eris_reply": "Installe-toi."
+    }
+  ],
+  "window": "échanges adressés à Eris dans ce salon, 30 minutes maximum ; extraits récents, pas tout l’historique Discord"
+}

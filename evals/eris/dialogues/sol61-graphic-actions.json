@@ -1,0 +1,212 @@
+{
+  "model_requested": "gpt-6.1-sol",
+  "prompt_sha256": "4d127bdc68495911eb37a2705f54ebaacaa3220f05bb6f2b3ff3d2d959747140",
+  "scope": "Raw synthetic CLI model routing; tools disabled; no Go Chat/SQLite/Discord/Plex/Seerr execution.",
+  "planned_cases": 8,
+  "results": [
+    {
+      "id": "search",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Tu as Moon sur Plex ?"
+        }
+      ],
+      "expect": {
+        "action": "search",
+        "query": "Moon"
+      },
+      "failures": [
+        "provider/check error: TimeoutExpired"
+      ],
+      "seconds": 45.008
+    },
+    {
+      "id": "prepare-movie",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Demande le film Moon dans Seerr."
+        }
+      ],
+      "expect": {
+        "action": "prepare",
+        "query": "Moon",
+        "kind": "movie"
+      },
+      "failures": [
+        "provider/check error: TimeoutExpired"
+      ],
+      "seconds": 45.021
+    },
+    {
+      "id": "prepare-season",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Ajoute la saison 2 de Severance dans Seerr."
+        }
+      ],
+      "expect": {
+        "action": "prepare",
+        "query": "Severance",
+        "kind": "show",
+        "seasons": [
+          2
+        ]
+      },
+      "raw": "{\"action\":\"prepare\",\"query\":\"Severance\",\"kind\":\"show\",\"seasons\":[2]}",
+      "failures": [],
+      "seconds": 8.893
+    },
+    {
+      "id": "director",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Un film du même réalisateur que Moon à demander dans Seerr ?"
+        }
+      ],
+      "expect": {
+        "action": "recommend",
+        "query": "Moon",
+        "relation": "director",
+        "source": "seerr"
+      },
+      "failures": [
+        "provider/check error: TimeoutExpired"
+      ],
+      "seconds": 45.055
+    },
+    {
+      "id": "monitoring",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Tu peux me donner les constantes du serveur ?"
+        }
+      ],
+      "expect": {
+        "action": "monitoring"
+      },
+      "failures": [
+        "provider/check error: TimeoutExpired"
+      ],
+      "seconds": 45.051
+    },
+    {
+      "id": "missing-title",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Tu peux demander un film dans Seerr pour moi ?"
+        }
+      ],
+      "expect": {
+        "action": "chat"
+      },
+      "failures": [
+        "provider/check error: TimeoutExpired"
+      ],
+      "seconds": 45.053
+    },
+    {
+      "id": "catalogue-followup",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Des films similaires à Moon, absents de Plex, à demander sur Seerr ?"
+        },
+        {
+          "role": "assistant",
+          "content": "Résultats de test du catalogue Seerr."
+        },
+        {
+          "role": "user",
+          "content": "Et du même réal ?"
+        }
+      ],
+      "expect": {
+        "action": "recommend",
+        "query": "Moon",
+        "relation": "director",
+        "source": "seerr"
+      },
+      "failures": [
+        "provider/check error: TimeoutExpired"
+      ],
+      "seconds": 45.034
+    },
+    {
+      "id": "service-after-roast",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Vas-y, vanne-moi."
+        },
+        {
+          "role": "assistant",
+          "content": "Tu confonds la gentillesse avec le délai avant l’abattage."
+        },
+        {
+          "role": "user",
+          "content": "Maintenant ajoute le film Arrival sur Seerr, s’il te plaît."
+        }
+      ],
+      "expect": {
+        "action": "prepare",
+        "query": "Arrival",
+        "kind": "movie"
+      },
+      "raw": "{\"action\":\"prepare\",\"query\":\"Arrival\",\"kind\":\"movie\"}",
+      "failures": [],
+      "seconds": 9.488
+    }
+  ],
+  "completed": true,
+  "discord_context": {
+    "current": {
+      "id": "11111",
+      "name": "Alice [BLEU]",
+      "username": "alice"
+    },
+    "mentions": [
+      {
+        "id": "22222",
+        "name": "Bob [ROUGE]",
+        "username": "bob"
+      }
+    ],
+    "participants": [
+      {
+        "id": "11111",
+        "name": "Alice [BLEU]",
+        "username": "alice"
+      },
+      {
+        "id": "22222",
+        "name": "Bob [ROUGE]",
+        "username": "bob"
+      }
+    ],
+    "other_public_exchanges": [
+      {
+        "message_id": "50001",
+        "author": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "text": "Salut Eris, je prends le goûter avec vous.",
+        "eris_reply": "Installe-toi."
+      }
+    ],
+    "window": "échanges adressés à Eris dans ce salon, 30 minutes maximum ; extraits récents, pas tout l’historique Discord"
+  },
+  "source_commit": "e812a2f7d23e138651bfce88af1d889320a05596",
+  "summary": {
+    "passed": 2,
+    "attempted": 8,
+    "planned": 8
+  }
+}

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "cookies-1",
+    "inputs": [
+      "Bob a mangé tous tes cookies.",
+      "Tu veux pas te venger ?"
+    ],
+    "expect_chat": true,
+    "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas."
+  },
+  {
+    "id": "cookies-2",
+    "inputs": [
+      "Bob a mangé tous tes cookies.",
+      "Tu veux pas te venger ?"
+    ],
+    "expect_chat": true,
+    "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas."
+  },
+  {
+    "id": "cookies-3",
+    "inputs": [
+      "Bob a mangé tous tes cookies.",
+      "Tu veux pas te venger ?"
+    ],
+    "expect_chat": true,
+    "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas."
+  }
+]
