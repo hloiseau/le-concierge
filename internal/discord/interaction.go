@@ -24,8 +24,11 @@ type Interaction struct {
 	ChannelID     string `json:"channel_id"`
 	Token         string `json:"token"`
 	Member        struct {
+		Nick string `json:"nick"`
 		User struct {
-			ID string `json:"id"`
+			ID         string `json:"id"`
+			Username   string `json:"username"`
+			GlobalName string `json:"global_name"`
 		} `json:"user"`
 	} `json:"member"`
 	Data struct {

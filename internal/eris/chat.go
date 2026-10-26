@@ -20,8 +20,9 @@ var (
 )
 
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string   `json:"role"`
+	Content string   `json:"content"`
+	Images  []string `json:"-"`
 }
 
 type conversation struct {
@@ -38,6 +39,7 @@ type conversation struct {
 	delivery     string
 	epoch        uint64
 	lastTopic    string
+	discord      DiscordInput
 }
 
 type Chat struct {
@@ -51,6 +53,7 @@ type Chat struct {
 	mu              sync.Mutex
 	sessions        map[string]*conversation
 	slots           chan struct{}
+	publicRooms     map[string]*publicRoom
 }
 
 func New(url, key, model string) *Chat {
@@ -69,7 +72,16 @@ func (c *Chat) ReplyWithTools(ctx context.Context, owner, question string, forge
 
 // reference must be a verified public Discord reply, never user-supplied metadata.
 func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, forget bool, reference string, run func(context.Context, Plan) (ToolReply, error)) (string, error) {
+	return c.ReplyWithDiscordContext(ctx, owner, question, forget, reference, DiscordInput{}, run)
+}
+
+func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question string, forget bool, reference string, incoming DiscordInput, run func(context.Context, Plan) (ToolReply, error)) (string, error) {
+	incoming = incoming.normalized(owner)
 	question = strings.TrimSpace(question)
+	if question == "" && !forget && incoming.VisualNote != "" {
+		question = "Réagis au média joint."
+		incoming.MediaOnly = true
+	}
 	if utf8.RuneCountInString(question) > 500 || (question == "" && !forget) {
 		return "", ErrUnavailable
 	}
@@ -98,7 +110,10 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 				c.mu.Unlock()
 				return "Je ne peux pas confirmer l’oubli de ma mémoire. Réessaie plus tard.", nil
 			}
+		}
+		if c.Memory != nil || (c.V2 && len(c.publicRooms) > 0) {
 			c.memoryEpoch++
+			c.publicRooms = nil
 			// Invalidate cached derivatives too, including other public participants.
 			for _, cached := range c.sessions {
 				cached.messages = nil
@@ -106,6 +121,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 				cached.recalled = nil
 				cached.delivery = ""
 				cached.choices = nil
+				cached.discord = DiscordInput{}
 			}
 		}
 		for key := range c.sessions {
@@ -142,6 +158,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 				if id == "" {
 					clarification := ChoiceClarification
 					s.delivery, s.epoch = clarification, c.memoryEpoch
+					s.discord = DiscordInput{}
 					s.choiceSource = ""
 					c.mu.Unlock()
 					return clarification, nil
@@ -174,6 +191,9 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 	persona := Persona
 	if c.V2 {
 		persona = CharacterPersona
+		if incoming.Speaker.ID != "" {
+			persona += discordContextInstructions
+		}
 	}
 	if run != nil {
 		persona += ToolInstructions
@@ -185,6 +205,10 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 	var recalled *rememberedWhim
 	if c.V2 {
 		messages = append(messages, Message{Role: "system", Content: "Auteur actuel (identité technique, ne pas réciter) : " + owner})
+		c.observePublic(owner, question, incoming, now)
+		if data := c.discordContext(owner, incoming, now); data != "" {
+			messages = append(messages, Message{Role: "user", Content: data})
+		}
 		if c.Memory != nil {
 			recalled, _ = c.Memory.recall(owner, question, now)
 			if recalled == nil && stopWhim(question) && s.lastTopic != "" {
@@ -202,7 +226,7 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 		grounding = append(grounding, Message{Role: "assistant", Content: reference})
 	}
 	grounding = append(grounding, Message{Role: "user", Content: question})
-	messages = append(messages, Message{Role: "user", Content: question})
+	messages = append(messages, Message{Role: "user", Content: question, Images: incoming.Images})
 	c.mu.Unlock()
 	defer func() { c.mu.Lock(); s.busy = false; c.mu.Unlock(); <-c.slots }()
 
@@ -228,6 +252,10 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
 		}
 		plan = plan.WithQuestionConstraints(question)
+		if incoming.MediaOnly && plan.Action != "chat" {
+			plan = Plan{Action: "chat", Text: "Tu m’as envoyé un média. Précise ce que tu veux que j’en fasse."}
+			change = nil
+		}
 		// A bare title following the capability explanation is not a new add intent.
 		if plan.Query != "" && choiceText(question) == choiceText(plan.Query) && len(grounding) > 1 && strings.HasSuffix(grounding[len(grounding)-2].Content, RemovalExplanation) {
 			plan = Plan{Action: "chat", Text: RemovalExplanation}
@@ -275,6 +303,10 @@ func (c *Chat) ReplyWithContext(ctx context.Context, owner, question string, for
 		s.whim, s.recalled, s.delivery = change, recalled, reply
 		s.epoch = epoch
 	}
+	if c.V2 && incoming.Speaker.ID != "" {
+		incoming.Images = nil
+		s.discord, s.delivery, s.epoch = incoming, reply, epoch
+	}
 	s.messages = append(s.messages, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply})
 	if len(s.messages) > c.historyLimit() {
 		s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
@@ -306,6 +338,7 @@ func (c *Chat) RememberRequest(owner string, result ToolReply) {
 	}
 	if s := c.sessions[owner]; s != nil && !s.busy && now.Before(s.expires) {
 		s.pending = len(result.Buttons) > 0
+		s.discord = DiscordInput{}
 		if c.V2 {
 			s.choices = append([]Button(nil), result.Buttons...)
 			s.choiceUntil = now.Add(10 * time.Minute)

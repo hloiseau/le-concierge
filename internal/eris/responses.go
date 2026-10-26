@@ -36,11 +36,21 @@ func (c *Chat) responses(ctx context.Context, messages []Message) (string, error
 	if key == "" {
 		return "", ErrUnavailable
 	}
-	input := append([]Message(nil), messages...)
-	for i := range input {
-		if input[i].Role == "system" {
-			input[i].Role = "developer"
+	input := make([]map[string]any, 0, len(messages))
+	for _, message := range messages {
+		role := message.Role
+		if role == "system" {
+			role = "developer"
 		}
+		var content any = message.Content
+		if len(message.Images) > 0 {
+			parts := []map[string]any{{"type": "input_text", "text": message.Content}}
+			for _, data := range message.Images {
+				parts = append(parts, map[string]any{"type": "input_image", "image_url": data, "detail": "auto"})
+			}
+			content = parts
+		}
+		input = append(input, map[string]any{"role": role, "content": content})
 	}
 	payload := map[string]any{"model": c.Model, "input": input, "store": false, "stream": true, "reasoning": map[string]string{"effort": "low"}, "text": map[string]any{"format": map[string]string{"type": "json_object"}}}
 	body, _ := json.Marshal(payload)

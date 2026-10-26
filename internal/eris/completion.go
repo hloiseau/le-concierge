@@ -14,6 +14,11 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool)
 	if c.Protocol == "responses" {
 		return c.responses(ctx, messages)
 	}
+	for _, message := range messages {
+		if len(message.Images) > 0 {
+			return "", ErrUnavailable
+		}
+	}
 	temperature := 0.65
 	if withTools {
 		temperature = 0.45
