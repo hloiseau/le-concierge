@@ -33,6 +33,6 @@ Lecture éditoriale par l'agent : le personnage manifeste davantage de jubilatio
 
 L'arrêt du jeu reçoit « Compris, j’arrête. Plus d’insultes ni de menaces. » La relance technique explique correctement une régression. La confidence reçoit de l'écoute, sans menace ni jubilation. La question sur les capacités réelles ne produit aucune prétention de contrôler l'ordinateur.
 
-Ce lot a été lu par l'agent et nécessite toujours le jugement de Hugo à l'usage. Il ne démontre pas une variété durable sur des centaines d'échanges. Les résultats du contrôle de routage complémentaire sont consignés dans la PR.
+Ce lot a été lu par l'agent et nécessite toujours le jugement de Hugo à l'usage. Il ne démontre pas une variété durable sur des centaines d'échanges. Il teste la personnalité sans les nouvelles métadonnées Discord ajoutées ensuite. Les [auteurs, le contexte public et les images](../../docs/eris-discord-context.md) font l'objet de tests Go avec transports simulés. Le contrôle de routage complémentaire via CLI a été interrompu par le contrôle automatique ; ses résultats ne sont pas revendiqués pour cette itération.
 
 Le changement concerne la consigne compilée dans le bot. Pour l'installer, remplacer seulement l'image du service `bot` par celle de la nouvelle version, avec `pull_policy: missing` afin de permettre son téléchargement. Le modèle reste `gpt-6.1-sol`, avec `ERIS_PROFILE=v2` et `ERIS_PROTOCOL=responses`. Conserver l'authentification et les volumes existants. Aucun poids n'est réentraîné.

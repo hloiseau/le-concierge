@@ -120,10 +120,11 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		var components []discordgo.MessageComponent
 		if utf8.RuneCountInString(question) > 500 {
 			reply = "Fais un peu plus court : 500 caractères maximum par message."
-		} else if question != "" {
+		} else if question != "" || len(event.Attachments) > 0 || len(event.Embeds) > 0 {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
-			result := b.erisContextReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}, erisReference(event.Message, b.Config.DiscordClientID))
+			incoming := b.erisDiscordInput(ctx, s, event.Message)
+			result := b.erisDiscordReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}, erisReference(event.Message, b.Config.DiscordClientID), incoming)
 			reply = result.Content
 			for _, button := range result.Buttons {
 				components = append(components, discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Style: discordgo.SecondaryButton, Label: button.Label, CustomID: button.ID}}})

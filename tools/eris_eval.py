@@ -117,7 +117,7 @@ class CodexCallError(RuntimeError):
         super().__init__(f"Codex failed (exit {returncode}; {self.category})")
 
 
-def codex_reply(messages, model, timeout):
+def codex_reply(messages, model, timeout, image_paths=()):
     executable = shutil.which("codex")
     if not executable:
         raise ValueError("Codex CLI is not installed")
@@ -138,6 +138,8 @@ def codex_reply(messages, model, timeout):
             args.extend(["--disable", feature])
         if model:
             args.extend(["--model", model])
+        for path in image_paths:
+            args.extend(["--image", str(path)])
         args.append("-")
         prompt = "Réponds au dernier message utilisateur de cette conversation synthétique. Un seul objet JSON, sans exécuter d'outil.\n" + json.dumps(messages[1:], ensure_ascii=False)
         # Do not forward service credentials inherited from a developer shell.

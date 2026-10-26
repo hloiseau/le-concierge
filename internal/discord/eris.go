@@ -48,7 +48,7 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 			}
 			b.Eris.RememberRequest(owner, result)
 		} else {
-			result = b.erisMediaReply(ctx, owner, options.ChatMessage, options.Forget, proof)
+			result = b.erisDiscordReply(ctx, owner, options.ChatMessage, options.Forget, proof, "", eris.DiscordInput{MessageID: i.ID, Speaker: discordSpeaker(i.Member.User.ID, i.Member.Nick, i.Member.User.GlobalName, i.Member.User.Username)})
 		}
 		reply := Message(result.Content)
 		if public {
@@ -74,8 +74,11 @@ func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget 
 	return b.erisContextReply(ctx, owner, message, forget, proof, "")
 }
 func (b *Bot) erisContextReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string) eris.ToolReply {
+	return b.erisDiscordReply(ctx, owner, message, forget, proof, reference, eris.DiscordInput{})
+}
+func (b *Bot) erisDiscordReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string, incoming eris.DiscordInput) eris.ToolReply {
 	var result eris.ToolReply
-	text, err := b.Eris.ReplyWithContext(ctx, owner, message, forget, reference, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
+	text, err := b.Eris.ReplyWithDiscordContext(ctx, owner, message, forget, reference, incoming, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
 		proof.Plan = plan
 		if plan.Action == "continue" {
 			proof.Plan, proof.Choice = eris.Plan{}, plan.Query
