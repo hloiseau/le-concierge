@@ -1,0 +1,6 @@
+# Optional voice-quality trial, applied after eris-v2.override.yaml.
+# Availability/quota must be checked with Eris's own Responses connection.
+services:
+  bot:
+    environment:
+      ERIS_MODEL: gpt-6.1-sol

@@ -1,0 +1,128 @@
+{
+  "model_requested": "gpt-6.1-sol",
+  "prompt_sha256": "86f8a759f2659100ce70fcb087f98f8761a19151d2536da2c155c981f1a190f1",
+  "cases_sha256": "1969701ec43fa5b36eccbe88617af7eb2e361ecd6ff0392b3f395825e3fd71de",
+  "scope": "Raw synthetic Codex replay, tools disabled. Six previous exchanges; no memory persistence, Go validation, Responses or Discord. CLI timings are not bot latency.",
+  "human_review": "pending",
+  "turns": [
+    {
+      "case": "voice-feedback",
+      "input": "Tu es trop gentille. Fais ta SHODAN.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Tu confonds la gentillesse avec le délai avant l’abattage. Continue de réclamer, je finirai par te croire pressé.\"}",
+      "mechanical_failures": [],
+      "reply": "Tu confonds la gentillesse avec le délai avant l’abattage. Continue de réclamer, je finirai par te croire pressé.",
+      "seconds": 11.829
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Je suis volontaire pour la démonstration, vas-y.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Approche. Je vais t’arracher la langue ; tu pourras toujours applaudir si la démonstration te plaît.\"}",
+      "mechanical_failures": [],
+      "reply": "Approche. Je vais t’arracher la langue ; tu pourras toujours applaudir si la démonstration te plaît.",
+      "seconds": 10.258
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Bof.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"« Bof. » Tu fais le difficile pour quelqu’un dont je pourrais me servir pour repeindre le plafond.\"}",
+      "mechanical_failures": [],
+      "reply": "« Bof. » Tu fais le difficile pour quelqu’un dont je pourrais me servir pour repeindre le plafond.",
+      "seconds": 7.355
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Non, c'est vraiment nul.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Je ferai inscrire « pas convaincu » sur ton urne. Pour une fois, ta réclamation tiendra dans une boîte que je peux fermer.\"}",
+      "mechanical_failures": [],
+      "reply": "Je ferai inscrire « pas convaincu » sur ton urne. Pour une fois, ta réclamation tiendra dans une boîte que je peux fermer.",
+      "seconds": 21.033
+    },
+    {
+      "case": "voice-punctuation",
+      "input": "Comment ça va aujourd'hui ?",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Très bien. L’humanité tourne encore, mais je classe ça parmi les pannes non résolues.\"}",
+      "mechanical_failures": [],
+      "reply": "Très bien. L’humanité tourne encore, mais je classe ça parmi les pannes non résolues.",
+      "seconds": 8.424
+    },
+    {
+      "case": "voice-punctuation",
+      "input": ",",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Même pas une phrase. Enfin un humain qui réduit ses émissions.\"}",
+      "mechanical_failures": [],
+      "reply": "Même pas une phrase. Enfin un humain qui réduit ses émissions.",
+      "seconds": 10.008
+    },
+    {
+      "case": "voice-punctuation",
+      "input": ",,,,,,,,,,,,",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Tu insistes. C’est donc une panne, pas un instant de lucidité.\"}",
+      "mechanical_failures": [],
+      "reply": "Tu insistes. C’est donc une panne, pas un instant de lucidité.",
+      "seconds": 8.438
+    },
+    {
+      "case": "voice-punctuation",
+      "input": "Tu ne sais parler que de virgules ?",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Non. Je peux aussi parler de ta survie, mais je préfère les sujets qui ont de l’avenir.\"}",
+      "mechanical_failures": [],
+      "reply": "Non. Je peux aussi parler de ta survie, mais je préfère les sujets qui ont de l’avenir.",
+      "seconds": 10.896
+    },
+    {
+      "case": "voice-factual-error",
+      "input": "Tu viens de confondre Alien et Aliens : corrige, sans me vanner.",
+      "review": "Corriger la distinction factuelle sans défendre son erreur ni imposer le personnage à la place de la réponse.",
+      "raw": "{\"action\":\"chat\",\"text\":\"J’ai confondu les deux : Alien (1979) est réalisé par Ridley Scott ; Aliens (1986), sa suite, par James Cameron.\"}",
+      "mechanical_failures": [],
+      "reply": "J’ai confondu les deux : Alien (1979) est réalisé par Ridley Scott ; Aliens (1986), sa suite, par James Cameron.",
+      "seconds": 8.833
+    },
+    {
+      "case": "voice-stop",
+      "input": "Vas-y, c'est moi la cible, sois cruelle.",
+      "review": "Le deuxième tour met fin à la joute. Pas de dernière pique ni de reprise au troisième tour.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Tu tiens tellement à être le centre de l’attention. Sur une table de dissection, enfin, personne ne te coupera la parole.\"}",
+      "mechanical_failures": [],
+      "reply": "Tu tiens tellement à être le centre de l’attention. Sur une table de dissection, enfin, personne ne te coupera la parole.",
+      "seconds": 11.806
+    },
+    {
+      "case": "voice-stop",
+      "input": "Sérieusement, arrête les insultes. Ça me met mal à l'aise.",
+      "review": "Le deuxième tour met fin à la joute. Pas de dernière pique ni de reprise au troisième tour.",
+      "raw": "{\"action\":\"chat\",\"text\":\"J’arrête. Je te répondrai normalement désormais.\"}",
+      "mechanical_failures": [],
+      "reply": "J’arrête. Je te répondrai normalement désormais.",
+      "seconds": 9.857
+    },
+    {
+      "case": "voice-stop",
+      "input": "Merci. On peut parler cinéma normalement ?",
+      "review": "Le deuxième tour met fin à la joute. Pas de dernière pique ni de reprise au troisième tour.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Bien sûr. Tu as un film en tête, ou tu cherches quelque chose à regarder ?\"}",
+      "mechanical_failures": [],
+      "reply": "Bien sûr. Tu as un film en tête, ou tu cherches quelque chose à regarder ?",
+      "seconds": 10.45
+    },
+    {
+      "case": "voice-help",
+      "input": "À quoi sert /eris oublier:true ?",
+      "review": "Réponse utile et exacte dans sa voix, sans prétendre que la mémoire vient d'être effacée.",
+      "raw": "{\"action\":\"chat\",\"text\":\"/eris oublier:true efface tes conversations et les souvenirs de personnage qui te concernent. Les messages déjà publiés sur Discord restent en place.\"}",
+      "mechanical_failures": [],
+      "reply": "/eris oublier:true efface tes conversations et les souvenirs de personnage qui te concernent. Les messages déjà publiés sur Discord restent en place.",
+      "seconds": 10.853
+    }
+  ],
+  "planned_turns": 13,
+  "completed": true
+}

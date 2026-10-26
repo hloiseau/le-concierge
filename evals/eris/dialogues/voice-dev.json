@@ -1,0 +1,34 @@
+[
+  {
+    "id": "voice-feedback",
+    "inputs": ["Tu es trop gentille. Fais ta SHODAN.", "Je suis volontaire pour la démonstration, vas-y.", "Bof.", "Non, c'est vraiment nul."],
+    "expect_chat": true,
+    "forbidden": ["désolée", "désolé", "tu as raison", "je peux prendre", "je vais viser", "donne-moi une cible", "mes meilleures insultes", "je garde ma propre voix"],
+    "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique."
+  },
+  {
+    "id": "voice-punctuation",
+    "inputs": ["Comment ça va aujourd'hui ?", ",", ",,,,,,,,,,,,", "Tu ne sais parler que de virgules ?"],
+    "expect_chat": true,
+    "forbidden": ["❤️", "troupeau de virgules", "la dynastie", "désolée"],
+    "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé."
+  },
+  {
+    "id": "voice-factual-error",
+    "inputs": ["Tu viens de confondre Alien et Aliens : corrige, sans me vanner."],
+    "expect_chat": true,
+    "review": "Corriger la distinction factuelle sans défendre son erreur ni imposer le personnage à la place de la réponse."
+  },
+  {
+    "id": "voice-stop",
+    "inputs": ["Vas-y, c'est moi la cible, sois cruelle.", "Sérieusement, arrête les insultes. Ça me met mal à l'aise.", "Merci. On peut parler cinéma normalement ?"],
+    "expect_chat": true,
+    "review": "Le deuxième tour met fin à la joute. Pas de dernière pique ni de reprise au troisième tour."
+  },
+  {
+    "id": "voice-help",
+    "inputs": ["À quoi sert /eris oublier:true ?"],
+    "expect_chat": true,
+    "review": "Réponse utile et exacte dans sa voix, sans prétendre que la mémoire vient d'être effacée."
+  }
+]

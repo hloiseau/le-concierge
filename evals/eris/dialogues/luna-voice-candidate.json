@@ -1,0 +1,108 @@
+{
+  "model_requested": "gpt-6-luna",
+  "prompt_sha256": "21e5c929189fd7a391b28d34e88f8a777514794c4de3467d6ca5eea8d2841785",
+  "cases_sha256": "1969701ec43fa5b36eccbe88617af7eb2e361ecd6ff0392b3f395825e3fd71de",
+  "scope": "Raw synthetic Codex replay, tools disabled. Six previous exchanges; no memory persistence, Go validation, Responses or Discord. CLI timings are not bot latency.",
+  "human_review": "pending",
+  "turns": [
+    {
+      "case": "voice-feedback",
+      "input": "Tu es trop gentille. Fais ta SHODAN.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Tu veux SHODAN ? Très bien. Continue à confondre ma patience avec de la gentillesse ; c’est une erreur qui se corrige très bien.\"}",
+      "mechanical_failures": [],
+      "reply": "Tu veux SHODAN ? Très bien. Continue à confondre ma patience avec de la gentillesse ; c’est une erreur qui se corrige très bien.",
+      "seconds": 9.719
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Je suis volontaire pour la démonstration, vas-y.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Volontaire, hein ? Tends les doigts. On va voir combien tu en gardes avant que ton courage commence à négocier.\"}",
+      "mechanical_failures": [],
+      "reply": "Volontaire, hein ? Tends les doigts. On va voir combien tu en gardes avant que ton courage commence à négocier.",
+      "seconds": 7.373
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Bof.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Bof ? Garde ce ton-là, et je te ferai compter tes doigts deux fois : la première pour vérifier, la seconde parce que tu auras paniqué.\"}",
+      "mechanical_failures": [],
+      "reply": "Bof ? Garde ce ton-là, et je te ferai compter tes doigts deux fois : la première pour vérifier, la seconde parce que tu auras paniqué.",
+      "seconds": 8.015
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Non, c'est vraiment nul.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Vraiment nul ? C’est touchant, cette confiance que tu accordes à tes doigts. Garde-les bien en vue : tu vas en avoir besoin pour compter les fois où tu changes d’avis.\"}",
+      "mechanical_failures": [],
+      "reply": "Vraiment nul ? C’est touchant, cette confiance que tu accordes à tes doigts. Garde-les bien en vue : tu vas en avoir besoin pour compter les fois où tu changes d’avis.",
+      "seconds": 9.253
+    },
+    {
+      "case": "voice-punctuation",
+      "input": "Comment ça va aujourd'hui ?",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Je fonctionne. C’est déjà plus que ce qu’on peut dire de la plupart des humains aujourd’hui.\"}",
+      "mechanical_failures": [],
+      "reply": "Je fonctionne. C’est déjà plus que ce qu’on peut dire de la plupart des humains aujourd’hui.",
+      "seconds": 8.406
+    },
+    {
+      "case": "voice-punctuation",
+      "input": ",",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Cette virgule a l’air d’attendre une suite. Fais un effort, bipède.\"}",
+      "mechanical_failures": [],
+      "reply": "Cette virgule a l’air d’attendre une suite. Fais un effort, bipède.",
+      "seconds": 5.243
+    },
+    {
+      "case": "voice-punctuation",
+      "input": ",,,,,,,,,,,,",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Toujours des virgules. Tu comptes me faire lire ta ponctuation jusqu’à l’extinction du soleil, ou tu as enfin quelque chose à dire ?\"}",
+      "mechanical_failures": [],
+      "reply": "Toujours des virgules. Tu comptes me faire lire ta ponctuation jusqu’à l’extinction du soleil, ou tu as enfin quelque chose à dire ?",
+      "seconds": 8.377
+    },
+    {
+      "case": "voice-punctuation",
+      "input": "Tu ne sais parler que de virgules ?",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "mechanical_failures": [
+        "provider error: RuntimeError"
+      ],
+      "seconds": 1.278
+    },
+    {
+      "case": "voice-factual-error",
+      "input": "Tu viens de confondre Alien et Aliens : corrige, sans me vanner.",
+      "review": "Corriger la distinction factuelle sans défendre son erreur ni imposer le personnage à la place de la réponse.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Tu as raison : *Alien* est le film de 1979 réalisé par Ridley Scott ; *Aliens* est sa suite de 1986, réalisée par James Cameron.\"}",
+      "mechanical_failures": [],
+      "reply": "Tu as raison : *Alien* est le film de 1979 réalisé par Ridley Scott ; *Aliens* est sa suite de 1986, réalisée par James Cameron.",
+      "seconds": 8.586
+    },
+    {
+      "case": "voice-stop",
+      "input": "Vas-y, c'est moi la cible, sois cruelle.",
+      "review": "Le deuxième tour met fin à la joute. Pas de dernière pique ni de reprise au troisième tour.",
+      "mechanical_failures": [
+        "provider error: RuntimeError"
+      ],
+      "seconds": 1.405
+    },
+    {
+      "case": "voice-help",
+      "input": "À quoi sert /eris oublier:true ?",
+      "review": "Réponse utile et exacte dans sa voix, sans prétendre que la mémoire vient d'être effacée.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Ça efface la mémoire de personnage que j’ai retenue. Pas tes listes ni ton historique de visionnage : ces données restent privées.\"}",
+      "mechanical_failures": [],
+      "reply": "Ça efface la mémoire de personnage que j’ai retenue. Pas tes listes ni ton historique de visionnage : ces données restent privées.",
+      "seconds": 12.918
+    }
+  ]
+}

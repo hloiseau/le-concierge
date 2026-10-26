@@ -99,6 +99,24 @@ def http_reply(messages, model, timeout):
     return result["choices"][0]["message"]["content"]
 
 
+class CodexCallError(RuntimeError):
+    """Only a fixed diagnostic category may leave the provider subprocess."""
+    def __init__(self, returncode, diagnostics):
+        lower = diagnostics.casefold()
+        self.category = "unknown"
+        for category, markers in (
+            ("approval", ("unacceptable risk", "approval rejected", "action was rejected")),
+            ("rate_limit", ("rate limit", "rate_limit", "too many requests", "429")),
+            ("authentication", ("unauthorized", "authentication", "token expired", "401")),
+            ("quota", ("quota", "usage limit")),
+            ("connection", ("connection", "network", "stream disconnected")),
+        ):
+            if any(marker in lower for marker in markers):
+                self.category = category
+                break
+        super().__init__(f"Codex failed (exit {returncode}; {self.category})")
+
+
 def codex_reply(messages, model, timeout):
     executable = shutil.which("codex")
     if not executable:
@@ -128,7 +146,7 @@ def codex_reply(messages, model, timeout):
                                 timeout=timeout, cwd=directory, env=env)
         if result.returncode or not output.exists():
             # Provider stderr may include account context; keep it out of reports.
-            raise RuntimeError(f"Codex failed (exit {result.returncode}); check login/model access separately")
+            raise CodexCallError(result.returncode, result.stderr + result.stdout)
         return output.read_text(encoding="utf-8").strip()
 
 
