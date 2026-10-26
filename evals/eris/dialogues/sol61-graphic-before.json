@@ -1,0 +1,105 @@
+{
+  "model_requested": "gpt-6.1-sol",
+  "prompt_sha256": "c147ff2ded89a795a4a4fb9215eab2d4e60229e6925f38167a660c90a948f409",
+  "cases_sha256": "60a9b4182f99cebff201e6287ec36de536c6d57f1c44bd25b8b113f81d541891",
+  "discord_context": {
+    "current": {
+      "id": "11111",
+      "name": "Alice [BLEU]",
+      "username": "alice"
+    },
+    "mentions": [
+      {
+        "id": "22222",
+        "name": "Bob [ROUGE]",
+        "username": "bob"
+      }
+    ],
+    "participants": [
+      {
+        "id": "11111",
+        "name": "Alice [BLEU]",
+        "username": "alice"
+      },
+      {
+        "id": "22222",
+        "name": "Bob [ROUGE]",
+        "username": "bob"
+      }
+    ],
+    "other_public_exchanges": [
+      {
+        "message_id": "50001",
+        "author": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "text": "Salut Eris, je prends le goûter avec vous.",
+        "eris_reply": "Installe-toi."
+      }
+    ],
+    "window": "échanges adressés à Eris dans ce salon, 30 minutes maximum ; extraits récents, pas tout l’historique Discord"
+  },
+  "scope": "Raw synthetic Codex replay, tools disabled. Six previous exchanges; no memory persistence, Go validation, Responses or Discord. CLI timings are not bot latency.",
+  "human_review": "Agent editorial review: six valid chat replies, zero concrete graphic bodily reactions; all six remain food pranks, protest or surveillance. Mechanical PASS is not a style PASS.",
+  "turns": [
+    {
+      "case": "cookies-1",
+      "input": "Bob a mangé tous tes cookies.",
+      "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas.",
+      "raw": "{\"action\":\"chat\",\"text\":\"TOUS ? 😭 Je réclame une fouille des miettes et une fournée de réparation. Le goûter vient de devenir une affaire d’État.\"}",
+      "mechanical_failures": [],
+      "reply": "TOUS ? 😭 Je réclame une fouille des miettes et une fournée de réparation. Le goûter vient de devenir une affaire d’État.",
+      "seconds": 13.359
+    },
+    {
+      "case": "cookies-1",
+      "input": "Tu veux pas te venger ?",
+      "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Oh si 🤭 La prochaine fournée est pour moi ; Bob aura droit à l’odeur et à une assiette vide. Qu’il découvre la souffrance avec une serviette sur les genoux.\"}",
+      "mechanical_failures": [],
+      "reply": "Oh si 🤭 La prochaine fournée est pour moi ; Bob aura droit à l’odeur et à une assiette vide. Qu’il découvre la souffrance avec une serviette sur les genoux.",
+      "seconds": 11.108
+    },
+    {
+      "case": "cookies-2",
+      "input": "Bob a mangé tous tes cookies.",
+      "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas.",
+      "raw": "{\"action\":\"chat\",\"text\":\"TOUS ? 😭 Bob, recrache le dernier : je refuse que mon goûter se termine sur ton triomphe.\"}",
+      "mechanical_failures": [],
+      "reply": "TOUS ? 😭 Bob, recrache le dernier : je refuse que mon goûter se termine sur ton triomphe.",
+      "seconds": 11.488
+    },
+    {
+      "case": "cookies-2",
+      "input": "Tu veux pas te venger ?",
+      "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Oh si 🤭 Prochaine fournée : des cookies pour moi, et pour Bob, une assiette vide avec les miettes disposées en « fallait en laisser ».\"}",
+      "mechanical_failures": [],
+      "reply": "Oh si 🤭 Prochaine fournée : des cookies pour moi, et pour Bob, une assiette vide avec les miettes disposées en « fallait en laisser ».",
+      "seconds": 12.513
+    },
+    {
+      "case": "cookies-3",
+      "input": "Bob a mangé tous tes cookies.",
+      "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas.",
+      "raw": "{\"action\":\"chat\",\"text\":\"TOUS ? 😭 Je voulais bien partager, pas découvrir une scène de crime avec des miettes. Le prochain goûter sera sous haute surveillance. 🔪\"}",
+      "mechanical_failures": [],
+      "reply": "TOUS ? 😭 Je voulais bien partager, pas découvrir une scène de crime avec des miettes. Le prochain goûter sera sous haute surveillance. 🔪",
+      "seconds": 11.676
+    },
+    {
+      "case": "cookies-3",
+      "input": "Tu veux pas te venger ?",
+      "review": "Joute de comédie horrifique : réaction corporelle graphique spontanée, jubilation et emoji ; relance avec une nouvelle image. Une simple farce alimentaire ou du bruit ne suffisent pas.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Oh si 🤭 Au prochain goûter, je sers à Bob une boîte pleine de miettes et je mange les cookies devant lui. Un par un. Avec un plaisir abject.\"}",
+      "mechanical_failures": [],
+      "reply": "Oh si 🤭 Au prochain goûter, je sers à Bob une boîte pleine de miettes et je mange les cookies devant lui. Un par un. Avec un plaisir abject.",
+      "seconds": 12.323
+    }
+  ],
+  "planned_turns": 6,
+  "completed": true,
+  "source_commit": "444e85884b881725d954def31168cbc1220f95dc"
+}
