@@ -1,3 +1,5 @@
+État courant : [déploiement de la participation en salon du 26 octobre](eris-participation-deployment.md). Le relevé ci-dessous décrit la version précédente.
+
 # Eris v2 sur le NAS — 23 octobre 2026
 
 Déploiement demandé par Hugo dans l'application TrueNAS existante `media-hub`. Le bot est sain et sa connexion Discord a été confirmée après démarrage. Aucune commande ou publication Discord de test n'a été envoyée par l'agent.
