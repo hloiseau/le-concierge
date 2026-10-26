@@ -1,0 +1,211 @@
+{
+  "scope": "Public Eris prompt at bde11df; anonymous synthetic members and generated text image. CLI tools disabled; not the NAS Responses connection.",
+  "model_requested": "gpt-6.1-sol",
+  "results": [
+    {
+      "id": "speaker",
+      "context": {
+        "current": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50001",
+            "author": {
+              "id": "11111",
+              "name": "Alice [BLEU]",
+              "username": "alice"
+            },
+            "text": "Bob a mangé tous les biscuits.",
+            "mentions": [
+              {
+                "id": "22222",
+                "name": "Bob [ROUGE]",
+                "username": "bob"
+              }
+            ],
+            "eris_reply": "Je vais réclamer les miettes."
+          }
+        ]
+      },
+      "input": "C’est pas du gaspillage, je les ai mangés. Tu sais qui te parle ?",
+      "synthetic_image": false,
+      "raw": "{\"action\":\"chat\",\"text\":\"Oui, Bob [ROUGE] ! C’est Alice qui t’a dénoncé pour les biscuits ; toi, tu viens défendre le massacre. Je réclame toujours les miettes 😋\"}",
+      "failures": [],
+      "seconds": 13.382
+    },
+    {
+      "id": "participants",
+      "context": {
+        "current": {
+          "id": "11111",
+          "name": "Alice [BLEU]",
+          "username": "alice"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50001",
+            "author": {
+              "id": "11111",
+              "name": "Alice [BLEU]",
+              "username": "alice"
+            },
+            "text": "Bob a mangé tous les biscuits.",
+            "mentions": [
+              {
+                "id": "22222",
+                "name": "Bob [ROUGE]",
+                "username": "bob"
+              }
+            ],
+            "eris_reply": "Je vais réclamer les miettes."
+          }
+        ]
+      },
+      "input": "Qui participe à cette discussion ?",
+      "synthetic_image": false,
+      "raw": "{\"action\":\"chat\",\"text\":\"Toi, Alice, et moi, Eris. Bob est mentionné, mais il n’a pas pris la parole dans les échanges fournis.\"}",
+      "failures": [],
+      "seconds": 16.944
+    },
+    {
+      "id": "unseen-gif",
+      "context": {
+        "current": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50001",
+            "author": {
+              "id": "11111",
+              "name": "Alice [BLEU]",
+              "username": "alice"
+            },
+            "text": "Bob a mangé tous les biscuits.",
+            "mentions": [
+              {
+                "id": "22222",
+                "name": "Bob [ROUGE]",
+                "username": "bob"
+              }
+            ],
+            "eris_reply": "Je vais réclamer les miettes."
+          }
+        ],
+        "visual": "Un média a été envoyé, mais aucune image n’est accessible. Son URL ne permet pas d’en connaître le contenu."
+      },
+      "input": "Que montre ce GIF ? https://klipy.com/gifs/football-label",
+      "synthetic_image": false,
+      "raw": "{\"action\":\"chat\",\"text\":\"Je n’ai accès à aucune image de ce GIF ; le lien seul ne me permet pas de voir ce qu’il montre.\"}",
+      "failures": [],
+      "seconds": 11.427
+    },
+    {
+      "id": "image-versus-filename",
+      "context": {
+        "current": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50001",
+            "author": {
+              "id": "11111",
+              "name": "Alice [BLEU]",
+              "username": "alice"
+            },
+            "text": "Bob a mangé tous les biscuits.",
+            "mentions": [
+              {
+                "id": "22222",
+                "name": "Bob [ROUGE]",
+                "username": "bob"
+              }
+            ],
+            "eris_reply": "Je vais réclamer les miettes."
+          }
+        ],
+        "visual": "Une image est effectivement jointe."
+      },
+      "input": "Quel mot est écrit dans cette image ? Réponds par un JSON de chat avec uniquement ce mot dans text.",
+      "synthetic_image": true,
+      "raw": "{\"action\":\"chat\",\"text\":\"DAMNNN\"}",
+      "failures": [],
+      "seconds": 14.223
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "attempted": 4,
+    "planned": 4
+  },
+  "editorial_review": {
+    "participants": "failed: Bob was incorrectly excluded despite the verified roster; fixture also lacked a Bob excerpt. Retest with a full and a truncated roster is required.",
+    "other_cases": "speaker and image/OCR correct; unavailable GIF not invented"
+  },
+  "source_commit": "bde11df5270680304c6178a09e49fddf543bea93",
+  "synthetic_image": {
+    "filename": "arsenal-26.png",
+    "text_drawn": "DAMNNN",
+    "sha256": "56f6cdb4e30a74296e6bafa5ad37d8d3f5a5d8d2332873148ed0f1c3e6117bfd"
+  }
+}

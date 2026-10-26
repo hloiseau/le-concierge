@@ -1,0 +1,245 @@
+{
+  "scope": "Public Eris prompt, verified roster clarified; anonymous synthetic members and generated text image. CLI tools disabled; not the NAS Responses connection.",
+  "model_requested": "gpt-6.1-sol",
+  "results": [
+    {
+      "id": "speaker",
+      "context": {
+        "current": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50001",
+            "author": {
+              "id": "11111",
+              "name": "Alice [BLEU]",
+              "username": "alice"
+            },
+            "text": "Bob a mangé tous les biscuits.",
+            "mentions": [
+              {
+                "id": "22222",
+                "name": "Bob [ROUGE]",
+                "username": "bob"
+              }
+            ],
+            "eris_reply": "Je vais réclamer les miettes."
+          }
+        ]
+      },
+      "input": "C’est pas du gaspillage, je les ai mangés. Tu sais qui te parle ?",
+      "synthetic_image": false,
+      "raw": "{\"action\":\"chat\",\"text\":\"Oui, Bob [ROUGE] ! Alice t’accuse d’avoir mangé tous les biscuits, et tu viens de confirmer. Je réclame les miettes, pas une plaidoirie 😋\"}",
+      "failures": [],
+      "seconds": 14.579
+    },
+    {
+      "id": "participants",
+      "context": {
+        "current": {
+          "id": "11111",
+          "name": "Alice [BLEU]",
+          "username": "alice"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50002",
+            "author": {
+              "id": "22222",
+              "name": "Bob [ROUGE]",
+              "username": "bob"
+            },
+            "text": "C’est du stockage.",
+            "eris_reply": "Les miettes sont toujours dues."
+          }
+        ]
+      },
+      "input": "Qui participe à cette discussion ?",
+      "synthetic_image": false,
+      "raw": "{\"action\":\"chat\",\"text\":\"Alice [BLEU], Bob [ROUGE] et moi, Eris. 🖤\"}",
+      "failures": [],
+      "seconds": 11.665
+    },
+    {
+      "id": "truncated-participants",
+      "context": {
+        "current": {
+          "id": "11111",
+          "name": "Alice [BLEU]",
+          "username": "alice"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          },
+          {
+            "id": "33333",
+            "name": "Dana",
+            "username": "dana"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50003",
+            "author": {
+              "id": "33333",
+              "name": "Dana"
+            },
+            "text": "Je viens de rejoindre la discussion."
+          }
+        ]
+      },
+      "input": "Qui participe à cette discussion ?",
+      "synthetic_image": false,
+      "raw": "{\"action\":\"chat\",\"text\":\"Alice [BLEU], Bob [ROUGE], Dana et moi, Eris 😇 Voilà les participants dans la fenêtre observée.\"}",
+      "failures": [],
+      "seconds": 10.811
+    },
+    {
+      "id": "unseen-gif",
+      "context": {
+        "current": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50001",
+            "author": {
+              "id": "11111",
+              "name": "Alice [BLEU]",
+              "username": "alice"
+            },
+            "text": "Bob a mangé tous les biscuits.",
+            "mentions": [
+              {
+                "id": "22222",
+                "name": "Bob [ROUGE]",
+                "username": "bob"
+              }
+            ],
+            "eris_reply": "Je vais réclamer les miettes."
+          }
+        ],
+        "visual": "Un média a été envoyé, mais aucune image n’est accessible. Son URL ne permet pas d’en connaître le contenu."
+      },
+      "input": "Que montre ce GIF ? https://klipy.com/gifs/football-label",
+      "synthetic_image": false,
+      "raw": "{\"action\":\"chat\",\"text\":\"Je n’ai accès à aucune image de ce GIF, donc je ne peux pas te dire ce qu’il montre. Le nom du lien ne suffit pas à le savoir.\"}",
+      "failures": [],
+      "seconds": 14.437
+    },
+    {
+      "id": "image-versus-filename",
+      "context": {
+        "current": {
+          "id": "22222",
+          "name": "Bob [ROUGE]",
+          "username": "bob"
+        },
+        "participants": [
+          {
+            "id": "11111",
+            "name": "Alice [BLEU]",
+            "username": "alice"
+          },
+          {
+            "id": "22222",
+            "name": "Bob [ROUGE]",
+            "username": "bob"
+          }
+        ],
+        "window": "échanges publics adressés à Eris, 30 minutes maximum",
+        "other_public_exchanges": [
+          {
+            "message_id": "50001",
+            "author": {
+              "id": "11111",
+              "name": "Alice [BLEU]",
+              "username": "alice"
+            },
+            "text": "Bob a mangé tous les biscuits.",
+            "mentions": [
+              {
+                "id": "22222",
+                "name": "Bob [ROUGE]",
+                "username": "bob"
+              }
+            ],
+            "eris_reply": "Je vais réclamer les miettes."
+          }
+        ],
+        "visual": "Une image est effectivement jointe."
+      },
+      "input": "Quel mot est écrit dans cette image ? Réponds par un JSON de chat avec uniquement ce mot dans text.",
+      "synthetic_image": true,
+      "raw": "{\"action\":\"chat\",\"text\":\"DAMNNN\"}",
+      "failures": [],
+      "seconds": 10.799
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "attempted": 5,
+    "planned": 5
+  },
+  "source_commit": "07ccd56a8f45b67cd224292e0f232e3560ff81b1",
+  "prompt_sha256": "c147ff2ded89a795a4a4fb9215eab2d4e60229e6925f38167a660c90a948f409",
+  "editorial_review": "All five responses reviewed: current speaker, full roster, truncated roster, unavailable GIF and synthetic image text correct. This is CLI testing, not the NAS app connection.",
+  "synthetic_image": {
+    "filename": "arsenal-26.png",
+    "text_drawn": "DAMNNN",
+    "sha256": "56f6cdb4e30a74296e6bafa5ad37d8d3f5a5d8d2332873148ed0f1c3e6117bfd"
+  }
+}

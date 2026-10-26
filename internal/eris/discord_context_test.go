@@ -140,6 +140,18 @@ func TestMediaWithoutAnExplicitRequestCannotInvokeATool(t *testing.T) {
 	}
 }
 
+func TestButtonDeliveryDoesNotRewriteAnUnrelatedPublicExchange(t *testing.T) {
+	c, prompts, _ := discordContextChat(t)
+	owner := "12345:11111:33333"
+	discordContextCall(t, c, owner, "Bonjour", DiscordInput{MessageID: "50001", Speaker: Speaker{ID: "11111", Name: "Alice"}}, true)
+	<-prompts
+	c.RememberRequest(owner, ToolReply{Content: "BUTTON-RESULT"})
+	c.Delivered(owner, "50002", "BUTTON-RESULT")
+	if c.publicRooms["12345:33333"].exchanges[0].Reply == "BUTTON-RESULT" {
+		t.Fatal("button result attached to unrelated message")
+	}
+}
+
 func TestDiscordContextRejectsImpersonationAndBoundsItsWindow(t *testing.T) {
 	in := DiscordInput{MessageID: "50001", Speaker: Speaker{ID: "22222", Name: "Bob"}}
 	if in.normalized("12345:11111:33333").Speaker.ID != "" {

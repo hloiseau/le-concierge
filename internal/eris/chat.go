@@ -158,6 +158,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				if id == "" {
 					clarification := ChoiceClarification
 					s.delivery, s.epoch = clarification, c.memoryEpoch
+					s.discord = DiscordInput{}
 					s.choiceSource = ""
 					c.mu.Unlock()
 					return clarification, nil
@@ -337,6 +338,7 @@ func (c *Chat) RememberRequest(owner string, result ToolReply) {
 	}
 	if s := c.sessions[owner]; s != nil && !s.busy && now.Before(s.expires) {
 		s.pending = len(result.Buttons) > 0
+		s.discord = DiscordInput{}
 		if c.V2 {
 			s.choices = append([]Button(nil), result.Buttons...)
 			s.choiceUntil = now.Add(10 * time.Minute)
