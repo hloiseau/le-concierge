@@ -19,6 +19,10 @@ func TestLiveErisPersonality(t *testing.T) {
 	if input == "" {
 		t.Skip("live personality lab not enabled")
 	}
+	model := os.Getenv("ERIS_PERSONALITY_MODEL")
+	if model == "" {
+		model = "gpt-6-luna"
+	}
 	var cases []struct {
 		ID         string   `json:"id"`
 		Inputs     []string `json:"inputs"`
@@ -46,7 +50,7 @@ func TestLiveErisPersonality(t *testing.T) {
 		PromptHash  string `json:"prompt_sha256"`
 		Scope       string `json:"scope"`
 		Turns       []turn `json:"turns"`
-	}{Model: "gpt-6-luna", PersonaHash: hex.EncodeToString(hash[:]), Scope: "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required."}
+	}{Model: model, PersonaHash: hex.EncodeToString(hash[:]), Scope: "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required."}
 	promptHash := sha256.Sum256([]byte(CharacterPersona + ToolInstructions + MemoryInstructions))
 	report.PromptHash = hex.EncodeToString(promptHash[:])
 	defer func() {
@@ -60,7 +64,7 @@ func TestLiveErisPersonality(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := New("https://api.openai.com/v1", "", "gpt-6-luna")
+		c := New("https://api.openai.com/v1", "", model)
 		c.V2, c.Protocol, c.KeyFile, c.Memory = true, "responses", os.Getenv("ERIS_PERSONALITY_TOKEN_FILE"), m
 		owner := "synthetic:member:lab"
 		for _, question := range scenario.Inputs {

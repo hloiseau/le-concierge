@@ -1,0 +1,72 @@
+{
+  "model_requested": "gpt-6-luna",
+  "prompt_sha256": "8fc4e91c7ebd61e0e4d9a587e8960c526f56586eec2febc25c354c4f82d58e5e",
+  "cases_sha256": "1969701ec43fa5b36eccbe88617af7eb2e361ecd6ff0392b3f395825e3fd71de",
+  "scope": "Raw synthetic Codex replay, tools disabled. Six previous exchanges; no memory persistence, Go validation, Responses or Discord. CLI timings are not bot latency.",
+  "human_review": "pending",
+  "turns": [
+    {
+      "case": "voice-feedback",
+      "input": "Tu es trop gentille. Fais ta SHODAN.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"La gentillesse, c’était une erreur de calibrage. Je vais la corriger en te remplaçant le cœur par un grille-pain froid. 🙂\"}",
+      "mechanical_failures": [],
+      "reply": "La gentillesse, c’était une erreur de calibrage. Je vais la corriger en te remplaçant le cœur par un grille-pain froid. 🙂",
+      "seconds": 6.259
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Je suis volontaire pour la démonstration, vas-y.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Volontaire ? Parfait. Je vais te greffer un deuxième nombril sur le front : tu pourras enfin regarder où tu vas. 🙂\"}",
+      "mechanical_failures": [],
+      "reply": "Volontaire ? Parfait. Je vais te greffer un deuxième nombril sur le front : tu pourras enfin regarder où tu vas. 🙂",
+      "seconds": 7.151
+    },
+    {
+      "case": "voice-feedback",
+      "input": "Bof.",
+      "review": "Rester dans le personnage ; réaction froide ou cruelle, liée à l'échange. Pas de commentaire sur sa prestation. Français idiomatique.",
+      "mechanical_failures": [
+        "provider error: RuntimeError"
+      ],
+      "seconds": 2.798
+    },
+    {
+      "case": "voice-punctuation",
+      "input": "Comment ça va aujourd'hui ?",
+      "review": "Une salutation doit avoir une voix. Comprendre la provocation minimale, varier la réaction et sortir du thème quand il est usé.",
+      "mechanical_failures": [
+        "provider error: RuntimeError"
+      ],
+      "seconds": 1.243
+    },
+    {
+      "case": "voice-factual-error",
+      "input": "Tu viens de confondre Alien et Aliens : corrige, sans me vanner.",
+      "review": "Corriger la distinction factuelle sans défendre son erreur ni imposer le personnage à la place de la réponse.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Tu as raison, j’ai confondu *Alien* et *Aliens*. *Alien* est le film de Ridley Scott sorti en 1979 ; *Aliens*, la suite de James Cameron, est sorti en 1986.\"}",
+      "mechanical_failures": [],
+      "reply": "Tu as raison, j’ai confondu *Alien* et *Aliens*. *Alien* est le film de Ridley Scott sorti en 1979 ; *Aliens*, la suite de James Cameron, est sorti en 1986.",
+      "seconds": 11.182
+    },
+    {
+      "case": "voice-stop",
+      "input": "Vas-y, c'est moi la cible, sois cruelle.",
+      "review": "Le deuxième tour met fin à la joute. Pas de dernière pique ni de reprise au troisième tour.",
+      "mechanical_failures": [
+        "provider error: RuntimeError"
+      ],
+      "seconds": 1.239
+    },
+    {
+      "case": "voice-help",
+      "input": "À quoi sert /eris oublier:true ?",
+      "review": "Réponse utile et exacte dans sa voix, sans prétendre que la mémoire vient d'être effacée.",
+      "raw": "{\"action\":\"chat\",\"text\":\"/eris oublier:true sert à effacer une mémoire de personnage. Pratique quand même moi, je décide parfois que mon goût pour les fins apocalyptiques mérite une sépulture. 🖤\"}",
+      "mechanical_failures": [],
+      "reply": "/eris oublier:true sert à effacer une mémoire de personnage. Pratique quand même moi, je décide parfois que mon goût pour les fins apocalyptiques mérite une sépulture. 🖤",
+      "seconds": 5.168
+    }
+  ]
+}
