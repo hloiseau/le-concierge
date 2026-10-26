@@ -12,7 +12,7 @@ Déployé sur le NAS le 22 octobre 2026 à la demande de Hugo, depuis la branche
 
 ## Comportement
 
-Eris est chaleureuse et utile, avec du mordant et des réactions parfois macabres ou excessives. Une menace n'est pas un tic imposé. Les réponses ordinaires restent possibles. Le texte réellement utilisé est `CharacterPersona` dans [character.go](../internal/eris/character.go), issu de la proposition discutée avec Hugo.
+La [correction de voix du 26 octobre](../evals/eris/voice-review.md) vise une IA hostile de fiction : froideur, arrogance, mépris et noirceur dans les joutes consenties. Les cœurs automatiques, excuses après un simple « bof » et commentaires de prestation sont écartés. L'aide reste exacte et une demande réelle d'arrêt met fin au jeu. Le texte proposé est `CharacterPersona` dans [character.go](../internal/eris/character.go). Cette correction doit être distinguée de la version installée décrite dans le relevé de déploiement.
 
 Le profil v2 garde six échanges en RAM pendant trente minutes (deux pour le profil historique). À cela s'ajoutent au maximum un souvenir court et un message public cité de 1 500 caractères maximum. Les messages entrants restent limités à 500 caractères. Les résultats des outils restent rendus par le code ; aucune seconde génération ne réécrit les faits ou boutons.
 
@@ -72,3 +72,4 @@ python tools/eris_dialogue_eval.py --out .cache/eris-eval/luna-v2.json
 ```
 
 Elle passe par le vrai `Chat` Go et SQLite, simule l'acceptation des messages, ferme/réouvre la base puis vérifie un retrait. Elle n'exécute ni Discord ni Plex/Seerr. Les latences incluent Codex ; ce n'est pas une mesure du transport Responses déployé. La qualité du français et des piques exige toujours une revue humaine.
+

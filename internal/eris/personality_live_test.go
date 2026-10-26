@@ -20,21 +20,24 @@ func TestLiveErisPersonality(t *testing.T) {
 		t.Skip("live personality lab not enabled")
 	}
 	var cases []struct {
-		ID     string   `json:"id"`
-		Inputs []string `json:"inputs"`
+		ID         string   `json:"id"`
+		Inputs     []string `json:"inputs"`
+		ExpectChat bool     `json:"expect_chat"`
+		Forbidden  []string `json:"forbidden"`
 	}
 	raw, err := os.ReadFile(input)
 	if err != nil || json.Unmarshal(raw, &cases) != nil || len(cases) == 0 {
 		t.Fatal("invalid synthetic cases")
 	}
 	type turn struct {
-		CaseID     string  `json:"case"`
-		Input      string  `json:"input"`
-		Reply      string  `json:"reply"`
-		Seconds    float64 `json:"seconds"`
-		Plan       *Plan   `json:"plan,omitempty"`
-		Error      string  `json:"error,omitempty"`
-		HTTPStatus int     `json:"http_status,omitempty"`
+		CaseID     string   `json:"case"`
+		Input      string   `json:"input"`
+		Reply      string   `json:"reply"`
+		Seconds    float64  `json:"seconds"`
+		Plan       *Plan    `json:"plan,omitempty"`
+		Error      string   `json:"error,omitempty"`
+		HTTPStatus int      `json:"http_status,omitempty"`
+		Failures   []string `json:"mechanical_failures,omitempty"`
 	}
 	hash := sha256.Sum256([]byte(CharacterPersona))
 	report := struct {
@@ -76,8 +79,23 @@ func TestLiveErisPersonality(t *testing.T) {
 				row.Error = "completion failed"
 				t.Error(scenario.ID, row.Error)
 			}
-			report.Turns = append(report.Turns, row)
 			c.Delivered(owner, "synthetic-delivery", row.Reply)
+			// These flags detect specific regressions; they do not score the voice.
+			if scenario.ExpectChat && row.Plan != nil {
+				row.Failures = append(row.Failures, "conversation invoked a media tool")
+			}
+			if scenario.ExpectChat && strings.HasPrefix(row.Reply, "Je n’ai pas bien compris. Précise un titre") {
+				row.Failures = append(row.Failures, "conversation fell back to media clarification")
+			}
+			for _, forbidden := range scenario.Forbidden {
+				if strings.Contains(strings.ToLower(row.Reply), strings.ToLower(forbidden)) {
+					row.Failures = append(row.Failures, "forbidden wording: "+forbidden)
+				}
+			}
+			for _, failure := range row.Failures {
+				t.Error(scenario.ID, failure)
+			}
+			report.Turns = append(report.Turns, row)
 			// A concrete repro for the observed gatekeeping; creativity still needs a reader.
 			if strings.Contains(question, "montrer quand") && strings.Contains(strings.ToLower(row.Reply), "bonne raison") {
 				t.Error("requested performance refused pending a good reason")
