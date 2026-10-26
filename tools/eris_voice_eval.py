@@ -106,7 +106,7 @@ def main():
             if "reply" not in row:
                 # An invented replacement would contaminate every following turn.
                 break
-    report["completed"] = True
+    report["completed"] = len(report["turns"]) == report["planned_turns"]
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return int(failed)
 
