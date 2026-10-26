@@ -12,7 +12,7 @@ Déployé sur le NAS le 22 octobre 2026 à la demande de Hugo, depuis la branche
 
 ## Comportement
 
-La [correction de voix du 26 octobre](../evals/eris/voice-review.md) vise une IA hostile de fiction : froideur, arrogance, mépris et noirceur dans les joutes consenties. Les cœurs automatiques, excuses après un simple « bof » et commentaires de prestation sont écartés. L'aide reste exacte et une demande réelle d'arrêt met fin au jeu. Le texte proposé est `CharacterPersona` dans [character.go](../internal/eris/character.go). Cette correction doit être distinguée de la version installée décrite dans le relevé de déploiement.
+Après la [première correction de voix](../evals/eris/voice-review.md), le [retour d'usage du 26 octobre](../evals/eris/chaos-review.md) demande une Eris plus exubérante : emojis expressifs, joie inquiétante et réactions déjantées, avec le même langage graphique dans les joutes consenties. Le calme sert de contraste occasionnel. L'aide reste exacte et une demande réelle d'arrêt met fin au jeu. Le texte proposé est `CharacterPersona` dans [character.go](../internal/eris/character.go). Une modification de cette consigne compilée exige une nouvelle image du bot.
 
 Le profil v2 garde six échanges en RAM pendant trente minutes (deux pour le profil historique). À cela s'ajoutent au maximum un souvenir court et un message public cité de 1 500 caractères maximum. Les messages entrants restent limités à 500 caractères. Les résultats des outils restent rendus par le code ; aucune seconde génération ne réécrit les faits ou boutons.
 
