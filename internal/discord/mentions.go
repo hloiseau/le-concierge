@@ -35,7 +35,10 @@ func (b *Bot) RunMentions(ctx context.Context) {
 	s.Client = b.Client
 	s.AddHandler(func(_ *discordgo.Session, _ *discordgo.Ready) { slog.Info("Discord mentions ready") })
 	s.AddHandler(func(_ *discordgo.Session, _ *discordgo.Resumed) { slog.Info("Discord mentions resumed") })
-	s.AddHandler(func(_ *discordgo.Session, _ *discordgo.Disconnect) { slog.Warn("Discord mentions disconnected") })
+	s.AddHandler(func(_ *discordgo.Session, _ *discordgo.Disconnect) {
+		b.clearPublicErisTurns("")
+		slog.Warn("Discord mentions disconnected")
+	})
 	var gate sync.Mutex
 	stopping := false
 	remove := s.AddHandler(func(s *discordgo.Session, event *discordgo.MessageCreate) {
@@ -85,6 +88,9 @@ func (b *Bot) mentionQuestion(event *discordgo.MessageCreate) (string, bool) {
 
 // ErisQuestion is shared with the API's independent Discord message verification.
 func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
+	if m == nil {
+		return "", false
+	}
 	mentioned := false
 	for _, user := range m.Mentions {
 		if user != nil && user.ID == botID {
@@ -98,16 +104,40 @@ func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
 		config.Snowflake(ref.MessageID) && ref.MessageID == r.ID && ref.ChannelID == m.ChannelID &&
 		(ref.GuildID == "" || ref.GuildID == m.GuildID) && r.ChannelID == m.ChannelID &&
 		r.Author != nil && r.Author.Bot && r.Author.ID == botID && r.WebhookID == ""
-	if !explicit && !reply {
+	named := m.Type == discordgo.MessageTypeDefault && m.MessageReference == nil && len(m.Mentions) == 0 && len(m.MentionRoles) == 0 && !m.MentionEveryone && !strings.Contains(m.Content, "<@") && erisAddress.MatchString(strings.TrimSpace(m.Content))
+	if !explicit && !reply && !named {
 		return "", false
 	}
 	question := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(m.Content, normal, ""), nickname, ""))
+	if named {
+		// Strip only the verified vocative, preserving the exact request/choice.
+		question = strings.TrimSpace(erisVocative.ReplaceAllString(question, "${1}"))
+	}
 	return question, true
 }
 
 func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event *discordgo.MessageCreate) {
+	if event == nil || event.Message == nil || event.GuildID != b.Config.DiscordGuildID || !config.Snowflake(event.ChannelID) || !config.Snowflake(event.ID) {
+		return
+	}
+	if event.Author != nil && event.Author.ID == b.Config.DiscordClientID {
+		return
+	}
+	b.invalidateErisParticipation(event.ChannelID, event.ID)
+	if event.Author == nil || event.Author.Bot || event.WebhookID != "" || !config.Snowflake(event.Author.ID) || (event.Type != discordgo.MessageTypeDefault && event.Type != discordgo.MessageTypeReply) {
+		b.beginErisTurn(event.Message, false)
+		return
+	}
 	question, ok := b.mentionQuestion(event)
-	if !ok || !b.rememberEvent("mention:"+event.ID) || !b.reserveEris() {
+	if !b.rememberEvent("mention:" + event.ID) {
+		return
+	}
+	previous := b.beginErisTurn(event.Message, ok)
+	if !ok && previous == nil {
+		b.considerErisParticipation(parent, s, event)
+		return
+	}
+	if !b.reserveEris() {
 		return
 	}
 	b.workers.Add(1)
@@ -116,6 +146,29 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		defer func() { b.mu.Lock(); b.erisWorkers--; b.mu.Unlock() }()
 		ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 		defer cancel()
+		proof := eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}
+		reference := erisReference(event.Message, b.Config.DiscordClientID)
+		if !ok {
+			messages, err := s.ChannelMessages(event.ChannelID, ErisContextLimit, event.ID, "", "", discordgo.WithContext(ctx))
+			if err != nil {
+				return
+			}
+			anchor, between := ErisContext(event.Message, messages, b.Config.DiscordClientID, previous.Message.ID, time.Now())
+			if anchor == nil {
+				return
+			}
+			var eligible bool
+			question, eligible = ImplicitErisQuestion(event.Message, anchor, b.Config.DiscordClientID, time.Now())
+			if !eligible || !b.currentErisTurn(event.ChannelID, event.ID) {
+				return
+			}
+			addressed, err := b.Eris.AddressedWithContext(ctx, previous.Question, anchor.Content, question, event.Author.ID == previous.AuthorID, between)
+			if err != nil || !addressed || !b.currentErisTurn(event.ChannelID, event.ID) {
+				return
+			}
+			proof.ContextMessageID = anchor.ID
+			reference = "Eris (message " + anchor.ID + ") : " + anchor.Content
+		}
 		reply := "Oui ? Mentionne-moi avec ton message pour discuter ici, ou utilise /eris pour une conversation privée."
 		var components []discordgo.MessageComponent
 		if utf8.RuneCountInString(question) > 500 {
@@ -124,11 +177,14 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
 			incoming := b.erisDiscordInput(ctx, s, event.Message)
-			result := b.erisDiscordReply(ctx, owner, question, false, eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}, erisReference(event.Message, b.Config.DiscordClientID), incoming)
+			result := b.erisDiscordReply(ctx, owner, question, false, proof, reference, incoming)
 			reply = result.Content
 			for _, button := range result.Buttons {
 				components = append(components, discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Style: discordgo.SecondaryButton, Label: button.Label, CustomID: button.ID}}})
 			}
+		}
+		if !ok && !b.currentErisTurn(event.ChannelID, event.ID) {
+			return
 		}
 		sent, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
 			Content: reply, Reference: event.Reference(), Components: components,
@@ -138,6 +194,9 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 			slog.Warn("Discord mention reply failed")
 		} else if sent != nil {
 			b.Eris.Delivered(event.GuildID+":"+event.Author.ID+":"+event.ChannelID, sent.ID, reply)
+			if question != "" && utf8.RuneCountInString(question) <= 500 {
+				b.rememberPublicErisReply(event.Message, sent, question, reply)
+			}
 		}
 	}()
 }

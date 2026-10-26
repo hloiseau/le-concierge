@@ -103,8 +103,8 @@ func TestErisSignedIdentityAndRevocation(t *testing.T) {
 	}
 }
 
-func TestErisPublicPersonalActionsNeverReadMedia(t *testing.T) {
-	for _, plan := range []eris.Plan{{Action: "status"}, {Action: "recommend", Unwatched: true}} {
+func TestErisPublicWatchFiltersNeverReadMedia(t *testing.T) {
+	for _, plan := range []eris.Plan{{Action: "recommend", Unwatched: true}} {
 		s := fixture(t)
 		s.Config.BotAPISecret = strings.Repeat("s", 32)
 		s.Config.DiscordBotToken = "fixture"

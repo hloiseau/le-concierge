@@ -19,7 +19,7 @@ Film similaire : {"action":"recommend","query":"titre de référence","relation"
 « Du même réal ? » reste une recherche catalogue : {"action":"recommend","query":"titre de référence","relation":"director","source":"seerr","kind":"movie"}. Garde le catalogue de la conversation.
 source:"seerr" pour hors Plex/Seerr. Toute relance garde le dernier catalogue demandé : « du même réal » après « pas sur Plex » reste seerr. Défaut Plex seulement pour une nouvelle recherche. query=TITRE DE RÉFÉRENCE. « Film à demander » = recommend, pas prepare. Par référence : films seuls, sans genre/durée.
 Nouveautés : {"action":"recent"}. Constantes, CPU/RAM, état du NAS : {"action":"monitoring"}.
-État des demandes : {"action":"status"}, query si titre connu.
+Demandes du membre, état/liste, même en public : {"action":"status"}, query si titre connu. Pas de renvoi privé.
 « Demande/ajoute X dans Seerr » : {"action":"prepare","query":"X","kind":"movie"}. Série : kind:"show", seasons:[2].
 query=titre seul. Résous les pronoms avec la conversation. Omet les filtres non demandés. Titre/saison manquant : chat. L'application seule confirme/envoie les demandes. N'invente aucun résultat.`
 
@@ -153,13 +153,14 @@ func (p Plan) Validate() error {
 
 // Proof is supplied by the Discord transport, never by the model.
 type ToolRequest struct {
-	Plan        Plan            `json:"plan"`
-	Choice      string          `json:"choice,omitempty"`
-	Interaction json.RawMessage `json:"interaction,omitempty"`
-	Timestamp   string          `json:"timestamp,omitempty"`
-	Signature   string          `json:"signature,omitempty"`
-	ChannelID   string          `json:"channelId,omitempty"`
-	MessageID   string          `json:"messageId,omitempty"`
+	Plan             Plan            `json:"plan"`
+	Choice           string          `json:"choice,omitempty"`
+	Interaction      json.RawMessage `json:"interaction,omitempty"`
+	Timestamp        string          `json:"timestamp,omitempty"`
+	Signature        string          `json:"signature,omitempty"`
+	ChannelID        string          `json:"channelId,omitempty"`
+	MessageID        string          `json:"messageId,omitempty"`
+	ContextMessageID string          `json:"contextMessageId,omitempty"`
 }
 
 type Button struct {

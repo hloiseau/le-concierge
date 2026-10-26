@@ -24,8 +24,9 @@ type Interaction struct {
 	ChannelID     string `json:"channel_id"`
 	Token         string `json:"token"`
 	Member        struct {
-		Nick string `json:"nick"`
-		User struct {
+		Permissions string `json:"permissions"`
+		Nick        string `json:"nick"`
+		User        struct {
 			ID         string `json:"id"`
 			Username   string `json:"username"`
 			GlobalName string `json:"global_name"`
@@ -54,16 +55,17 @@ type InteractionOption struct {
 }
 
 type Options struct {
-	ChatMessage string
-	Forget      bool
-	Public      bool
-	Query       string
-	RequestID   int
-	Kind        string
-	TMDBID      int
-	Season      *int
-	Page        int
-	Status      string
+	Participation string
+	ChatMessage   string
+	Forget        bool
+	Public        bool
+	Query         string
+	RequestID     int
+	Kind          string
+	TMDBID        int
+	Season        *int
+	Page          int
+	Status        string
 }
 
 func PublicCommand(command string) bool {
@@ -89,6 +91,10 @@ func CommandOptions(i Interaction) (Options, error) {
 		}
 		seen[option.Name] = true
 		switch option.Name {
+		case "participation":
+			if i.Data.Name != "eris-salon" || option.Type != 3 || json.Unmarshal(option.Value, &options.Participation) != nil || (options.Participation != "activer" && options.Participation != "desactiver" && options.Participation != "etat") {
+				return Options{}, invalid
+			}
 		case "message":
 			if i.Data.Name != "eris" || option.Type != 3 || string(option.Value) == "null" || json.Unmarshal(option.Value, &options.ChatMessage) != nil || strings.TrimSpace(options.ChatMessage) == "" || utf8.RuneCountInString(options.ChatMessage) > 500 || strings.ContainsFunc(options.ChatMessage, unicode.IsControl) {
 				return Options{}, invalid
