@@ -68,6 +68,7 @@ type Server struct {
 	seen              map[string]time.Time
 	reminderGate      chan struct{}
 	erisPending       map[string]erisPending
+	erisCreations     map[string]erisCreation
 }
 
 func New(c config.Config, db *store.Store) *Server {
