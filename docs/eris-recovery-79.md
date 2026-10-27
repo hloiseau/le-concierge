@@ -3,9 +3,11 @@
 Le build local recherché dans [#79](https://github.com/hloiseau/le-concierge/issues/79)
 est retrouvé. La [PR de conservation #81](https://github.com/hloiseau/le-concierge/pull/81)
 rend ses sources accessibles sur GitHub. La [PR de réconciliation #82](https://github.com/hloiseau/le-concierge/pull/82) conserve
-la mémoire durable de main et réintègre la participation. **La candidate n'est ni
-fusionnée ni déployée. Le ton reste soumis à la recette de Hugo.** Les outils de
-[#78](https://github.com/hloiseau/le-concierge/issues/78) restent suspendus.
+la mémoire durable de main et réintègre la participation. **Hugo a ensuite approuvé
+le déploiement de la candidate issue de sa recette : #82 est fusionnée et le main
+`13ffb1b` est exécuté sur le NAS.** Voir la [note de livraison](eris-release-2026-10-27.md).
+La revue des outils de [#78](https://github.com/hloiseau/le-concierge/issues/78)
+reprend ensemble ; aucun lot n'est implémenté sans décision.
 
 ## Provenance vérifiée
 
@@ -146,10 +148,9 @@ La source retrouvée est poussée dans #81. La candidate est poussée dans la [P
 La CI de la PR complète les contrôles locaux, notamment le détecteur de courses
 Linux ; les contrôles locaux Windows annoncés ci-dessus n'utilisent pas `-race`.
 
-Aucun déploiement de la candidate n'a eu lieu. Avant une bascule partagée, conserver
-une sauvegarde cohérente de la configuration et des bases et utiliser une image
-publiée associée au SHA vérifié. Le schéma des réglages est additif ; les tables de
-mémoire de main restent intactes. Revenir à `1894fae` ne demande pas de restaurer
-une ancienne base. L'image `28f46de` reste une référence de comparaison et ne doit
-pas remplacer implicitement les améliorations de mémoire. La recette humaine du
-ton reste nécessaire avant de conclure #79.
+La [livraison du main `13ffb1b`](eris-release-2026-10-27.md) est effectuée après
+autorisation de Hugo, avec sauvegardes privées de configuration et des bases et
+une image publiée épinglée par digest. Le schéma des réglages est additif ; les
+tables de mémoire de main restent intactes. Revenir à `1894fae` ne demande pas de
+restaurer une ancienne base. L'image `28f46de` reste une référence de comparaison ;
+les limites de style et de compréhension restent suivies dans #79.

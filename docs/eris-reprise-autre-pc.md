@@ -6,8 +6,10 @@ Le build a été retrouvé et préservé le 27 octobre. Les sources sont mainten
 [poussées dans la PR de conservation #81](https://github.com/hloiseau/le-concierge/pull/81).
 Le [bilan de réconciliation](eris-recovery-79.md) donne les preuves, les écarts,
 les contrôles et les limites de la candidate. Le checkout d'origine reste intact.
-API et bot exécutent toujours `1894fae72274981516692a0b746d97e80fa350f2` ;
-aucune bascule n'a été effectuée pendant la récupération.
+API et bot exécutaient alors `1894fae72274981516692a0b746d97e80fa350f2` ;
+aucune bascule n'avait été effectuée pendant la récupération initiale.
+Depuis la recette humaine et l'autorisation de Hugo, la PR #82 est fusionnée et
+le main `13ffb1b` est [déployé sur le NAS](eris-release-2026-10-27.md).
 
 Les sections suivantes conservent le contexte et la procédure de reprise rédigés
 avant cette découverte. Leur mention d'une référence alors introuvable est historique.

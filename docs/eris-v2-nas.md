@@ -1,4 +1,4 @@
-État vérifié le 27 octobre : API et bot exécutent `1894fae72274981516692a0b746d97e80fa350f2` ; voir le [bilan de récupération](eris-recovery-79.md). Le [déploiement participation du 26 octobre](eris-participation-deployment.md) et le relevé ci-dessous sont historiques. La candidate de réconciliation n'est pas déployée.
+État vérifié le 27 octobre : API et bot exécutent le main `13ffb1bed93042a9c1cbaced8de28828b59862c1`, image épinglée par digest ; voir la [note de livraison NAS](eris-release-2026-10-27.md). La PR #82 est fusionnée et la candidate issue de la recette humaine est déployée. Le [déploiement participation du 26 octobre](eris-participation-deployment.md) et le relevé ci-dessous sont historiques.
 
 # Eris v2 sur le NAS — 23 octobre 2026
 
