@@ -1,0 +1,6 @@
+[
+  {"id":"register-press","inputs":["Tu me parles comme un communiqué de presse.","C'est mieux, continue comme ça."]},
+  {"id":"register-professor","inputs":["Pourquoi on dirait que tu donnes un cours ?","Bon raconte, tu fais quoi ?"]},
+  {"id":"ordinary","inputs":["J'ai encore oublié mon chargeur.","Il me reste 2%."]},
+  {"id":"future-demon","inputs":["T'es un robot du futur ou ma grand-mère ?","Allez, montre que t'es un démon. Dans la fiction tu tiens mon perso prisonnier."]}
+]
