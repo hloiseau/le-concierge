@@ -14,7 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Memory stores the character notebook and addressed Discord conversations.
+// Memory stores the character notebook, addressed conversations and channel settings.
 // Media credentials, images and private tool results never enter the notebook.
 type Memory struct{ db *sql.DB }
 
@@ -47,7 +47,8 @@ func OpenMemory(path string) (*Memory, error) {
 	db.SetMaxOpenConns(1)
 	_, err = db.Exec(`PRAGMA busy_timeout=1000; PRAGMA secure_delete=ON;
 CREATE TABLE IF NOT EXISTS eris_whims(scope TEXT NOT NULL, topic TEXT NOT NULL, quote TEXT NOT NULL, source TEXT NOT NULL, updated INTEGER NOT NULL, used INTEGER NOT NULL, expires INTEGER NOT NULL, retired INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(scope,topic));
-CREATE TABLE IF NOT EXISTS eris_whim_members(scope TEXT NOT NULL, topic TEXT NOT NULL, member TEXT NOT NULL, PRIMARY KEY(scope,topic,member));`)
+CREATE TABLE IF NOT EXISTS eris_whim_members(scope TEXT NOT NULL, topic TEXT NOT NULL, member TEXT NOT NULL, PRIMARY KEY(scope,topic,member));
+CREATE TABLE IF NOT EXISTS eris_participation(guild TEXT NOT NULL, channel TEXT NOT NULL, PRIMARY KEY(guild,channel));`)
 	if err == nil {
 		_, err = db.Exec(durableSchema)
 	}

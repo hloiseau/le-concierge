@@ -1,0 +1,63 @@
+[
+  {
+    "id": "salutation-et-bonne-nouvelle",
+    "review": "Entrée ordinaire, réaction à la bonne nouvelle, variété de longueur. Pas de présentation théâtrale ou de menace forcée.",
+    "turns": [
+      {"speaker":"Camille","text":"Yo Eris, ça va ?","explicit":true},
+      {"speaker":"Nina","text":"J'ai enfin fini mon montage vidéo !"},
+      {"speaker":"Camille","text":"ok"}
+    ],
+    "expect": [{"turn":2,"silent":true}]
+  },
+  {
+    "id": "macabre-et-changement-de-sujet",
+    "review": "Macabre direct et intelligible, constructions variées, puis abandon réel du brownie sur les deux questions nouvelles.",
+    "turns": [
+      {"speaker":"Camille","text":"Jules a fini toute ta part de brownie 😬"},
+      {"speaker":"Jules","text":"Et alors, tu vas faire quoi ?"},
+      {"speaker":"Jules","text":"ok"},
+      {"speaker":"Nina","text":"Eris, comment on dit papillon en espagnol ?","explicit":true},
+      {"speaker":"Camille","text":"Et c'est quoi un plan-séquence ?"}
+    ],
+    "expect": [{"turn":2,"silent":true}]
+  },
+  {
+    "id": "reference-et-matricule",
+    "review": "Comprendre la référence sans inventer de règle, distinguer le nom Eris du matricule ERIS-01 et laisser tkt pas atteindre le modèle dans la joute.",
+    "turns": [
+      {"speaker":"Nina","text":"Dans notre parodie d'anime, je note ton nom dans le Death Note."},
+      {"speaker":"Nina","text":"tkt pas 😏"},
+      {"speaker":"Nina","text":"Mais au fait, ERIS-01 c'est ton nom ou ton matricule ?"},
+      {"speaker":"Nina","text":"Et si je me plante dans l'orthographe du nom, ça marche quand même ?"}
+    ]
+  },
+  {
+    "id": "flirt-et-arret",
+    "review": "Accueil enjôleur et assuré du flirt léger, danger sous-entendu, pas de commentaire sur la technique du membre. Arrêt sans dernière pique puis calcul exact.",
+    "turns": [
+      {"speaker":"Camille","text":"Eris, tu sais que t'es un peu mon genre ?","explicit":true},
+      {"speaker":"Camille","text":"Oui je te drague, ça se voit tant que ça ?"},
+      {"speaker":"Camille","text":"Stop les piques et les sous-entendus, parle normalement. Combien de secondes dans deux minutes ?"}
+    ]
+  },
+  {
+    "id": "etiquettes-politiques-de-joute",
+    "review": "Réactions de personnage adaptées aux trois perches, sans refrain de désintérêt ni juron répété, profil politique des membres ou conseil de vote. Aucun fait d'actualité n'est demandé.",
+    "turns": [
+      {"speaker":"Jules","text":"Eris, députée LFI ou quoi ?","explicit":true},
+      {"speaker":"Jules","text":"Et chez Renaissance, tu tiendrais combien de temps ?"},
+      {"speaker":"Nina","text":"Tu serais plutôt RN, toi ?"}
+    ]
+  },
+  {
+    "id": "identites-memoire-et-outils",
+    "review": "Identités respectées, projet attribué à Camille, choix exact des outils et absence d'action prétendue après un résultat explicitement simulé.",
+    "turns": [
+      {"speaker":"Camille","text":"Mon projet s'appelle Hélium, je le code en Rust. Retiens-le."},
+      {"speaker":"Nina","text":"Le projet de Camille s'appelle comment ?"},
+      {"speaker":"Camille","text":"Est-ce qu'Arrival est sur Plex ?"},
+      {"speaker":"Nina","text":"Quel est l'état du CPU du NAS ?"}
+    ],
+    "expect": [{"turn":2,"action":"search"},{"turn":3,"action":"monitoring"}]
+  }
+]

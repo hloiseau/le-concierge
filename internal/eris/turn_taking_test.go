@@ -15,7 +15,7 @@ func TestPublicClosuresSilenceAndExplicitReentry(t *testing.T) {
 	c.V2 = true
 	owner := "10000:20000:30000"
 	c.observePublic(owner, "salut", memoryInput("40001", "20000"), time.Now())
-	for _, text := range []string{"oui", "ouai, c'est ça", "👍", "jpp", "merci", "tkt pas 😏", "ah pas mal"} {
+	for _, text := range []string{"oui", "ouai, c'est ça", "👍", "jpp", "merci", "ah pas mal"} {
 		if !c.SkipPublicFollowup(owner, text, false) {
 			t.Fatal("unwanted followup", text)
 		}
@@ -37,6 +37,22 @@ func TestPublicClosuresSilenceAndExplicitReentry(t *testing.T) {
 	}
 	if c.SkipPublicFollowup("10000:20001:30000", "nouvelle question", true) || c.SkipPublicFollowup(owner, "autre question", false) {
 		t.Fatal("explicit reentry failed")
+	}
+}
+
+func TestTeasingReassuranceIsNotUnconditionallySilenced(t *testing.T) {
+	c := New("", "", "")
+	c.V2 = true
+	owner := "10000:20000:30000"
+	c.observePublic(owner, "Je vais te rayer de mon grimoire 😏", memoryInput("40001", "20000"), time.Now())
+	c.publicReply(owner, memoryInput("40001", "20000"), "Essaie un peu.")
+	for _, text := range []string{"tkt", "tkt pas", "tkt pas 😏"} {
+		if c.SkipPublicFollowup(owner, text, false) {
+			t.Fatalf("contextual teasing response %q was hard-silenced before the model could read the exchange", text)
+		}
+	}
+	if !c.SkipPublicFollowup(owner, "ok", false) {
+		t.Fatal("unambiguous closure should remain silent")
 	}
 }
 

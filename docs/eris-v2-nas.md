@@ -1,3 +1,5 @@
+État vérifié le 27 octobre : API et bot exécutent `1894fae72274981516692a0b746d97e80fa350f2` ; voir le [bilan de récupération](eris-recovery-79.md). Le [déploiement participation du 26 octobre](eris-participation-deployment.md) et le relevé ci-dessous sont historiques. La candidate de réconciliation n'est pas déployée.
+
 # Eris v2 sur le NAS — 23 octobre 2026
 
 Déploiement demandé par Hugo dans l'application TrueNAS existante `media-hub`. Le bot est sain et sa connexion Discord a été confirmée après démarrage. Aucune commande ou publication Discord de test n'a été envoyée par l'agent.
