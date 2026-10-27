@@ -107,8 +107,17 @@ func ParsePlan(raw string) (Plan, error) {
 
 func (p Plan) Validate() error {
 	invalid := errors.New("invalid media plan")
-	if (p.SubscriptionID != 0 && p.Action != "unfollow") || (p.Channel != "" && p.Action != "follow") || ((p.Setting != "" || p.Value != "") && p.Action != "preferences") || (p.RequestID != 0 && p.Action != "diagnostic") || (p.Year != 0 && p.Action != "cinema" && p.Action != "follow") {
+	if (p.SubscriptionID != 0 && p.Action != "unfollow") || (p.Channel != "" && p.Action != "follow") || ((p.Setting != "" || p.Value != "") && p.Action != "preferences") || (p.RequestID != 0 && p.Action != "diagnostic") || (p.Year != 0 && p.Action != "cinema" && p.Action != "follow" && p.Action != "anime") {
 		return invalid
+	}
+	if p.Action == "anime" {
+		if p.Year != 0 && p.Query == "" {
+			return invalid
+		}
+		if p.Text != "" || p.URL != "" || p.Source != "" || p.MaxMinutes != 0 || p.Unwatched || len(p.Seasons) > 0 || (p.Kind != "anime" && p.Kind != "manga") || (p.Year != 0 && (p.Year < 1801 || p.Year > 2999)) || (p.Relation != "" && p.Relation != "recommend" && p.Relation != "french") || strings.TrimSpace(p.Query) != p.Query || strings.ContainsFunc(p.Query, unicode.IsControl) || utf8.RuneCountInString(p.Query) > 200 || (p.Query != "" && utf8.RuneCountInString(p.Query) < 2) || (p.Query == "" && p.Relation != "recommend") || (p.Genre != "" && (p.Relation != "recommend" || p.Query != "" || !validAnimeGenre(p.Genre))) || (p.Relation == "french" && (p.Kind != "manga" || p.Year != 0)) {
+			return invalid
+		}
+		return nil
 	}
 	if p.Action == "follow" || p.Action == "follows" || p.Action == "unfollow" || p.Action == "preferences" {
 		return p.validatePersonalTool()

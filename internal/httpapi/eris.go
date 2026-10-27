@@ -79,12 +79,16 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		message("Pour filtrer selon ce que tu as vu ou non, utilise /eris message:… en privé : ton historique de visionnage reste personnel.")
 		return
 	}
-	if component == "" && input.Choice == "" && input.Plan.Action == "web" {
-		if s.rate("eris-web:"+userID, 10) {
+	if component == "" && input.Choice == "" && (input.Plan.Action == "web" || input.Plan.Action == "anime") {
+		if s.rate("eris-web:"+userID, 10) || (input.Plan.Action == "anime" && s.rate("eris-anime:global", 12)) {
 			message("Patiente un peu avant une autre recherche web.")
 			return
 		}
-		write(s.erisWeb(ctx, input.Plan))
+		if input.Plan.Action == "anime" {
+			write(s.erisAnime(ctx, input.Plan))
+		} else {
+			write(s.erisWeb(ctx, input.Plan))
+		}
 		return
 	}
 	u, err := s.Store.UserByDiscord(ctx, userID)

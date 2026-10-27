@@ -179,3 +179,30 @@ func TestHTMLPrefersArticleAndFirstDocumentTitle(t *testing.T) {
 		t.Fatal(title, text)
 	}
 }
+
+func TestFrenchPublicationNeedsReadPublisherPageNotSnippetOrLookalike(t *testing.T) {
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": []map[string]string{
+			{"title": "Forum", "url": "https://publisher.fr.evil.example/article", "content": "unverified date"},
+			{"title": "Missing page", "url": "https://publisher.fr/blocked", "content": "unverified date"},
+			{"title": "Book", "url": "https://www.publisher.fr/book", "content": "old snippet"},
+		}})
+	}))
+	defer engine.Close()
+	c := New(engine.URL, "")
+	reads := 0
+	c.public.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		reads++
+		if r.URL.Host == "publisher.fr" {
+			return nil, errors.New("inaccessible")
+		}
+		if r.URL.Host != "www.publisher.fr" {
+			t.Fatal("lookalike publisher read")
+		}
+		return reply(r, "text/html", `<title>Tome 3, édition standard</title><main>Parution française : 30 octobre 2026.</main>`), nil
+	})
+	r, err := c.SearchPublishers(context.Background(), "Tome 3 édition française", []string{"publisher.fr"})
+	if err != nil || reads != 2 || len(r.Sources) != 1 || r.Sources[0].Kind != "page" || r.Sources[0].URL != "https://www.publisher.fr/book" {
+		t.Fatal(r, err, reads)
+	}
+}
