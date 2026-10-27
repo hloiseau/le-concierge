@@ -53,7 +53,7 @@ func TestLiveErisPersonality(t *testing.T) {
 		Scope       string `json:"scope"`
 		Turns       []turn `json:"turns"`
 	}{Model: model, PersonaHash: hex.EncodeToString(hash[:]), Scope: "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required."}
-	promptHash := sha256.Sum256([]byte(CharacterPersona + CharacterCanon + discordContextInstructions + ToolInstructions + TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions + MemoryInstructions + DurableMemoryInstructions))
+	promptHash := sha256.Sum256([]byte(CharacterPersona + CharacterCanon + discordContextInstructions + ToolInstructions + TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions + DiscordToolInstructions + MemoryInstructions + DurableMemoryInstructions))
 	report.PromptHash = hex.EncodeToString(promptHash[:])
 	defer func() {
 		out, _ := json.MarshalIndent(report, "", "  ")

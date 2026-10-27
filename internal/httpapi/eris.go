@@ -80,6 +80,14 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		message("Pour filtrer selon ce que tu as vu ou non, utilise /eris message:… en privé : ton historique de visionnage reste personnel.")
 		return
 	}
+	if component == "" && input.Choice == "" && (input.Plan.Action == "poll" || input.Plan.Action == "event") {
+		if s.rate("eris-publish:"+userID, 2) {
+			message("Patiente un peu avant une autre création Discord.")
+			return
+		}
+		write(s.erisDiscordCreation(ctx, caller, input.Plan))
+		return
+	}
 	if component == "" && input.Choice == "" && (input.Plan.Action == "web" || input.Plan.Action == "anime") {
 		if s.rate("eris-web:"+userID, 10) || (input.Plan.Action == "anime" && s.rate("eris-anime:global", 12)) {
 			message("Patiente un peu avant une autre recherche web.")
@@ -169,6 +177,7 @@ func (s *Server) erisUnfollowChoice(caller erisCallerContext, choice string) boo
 type erisCallerContext struct {
 	UserID, ChannelID, Component, Question, Reference string
 	Private                                           bool
+	ReferenceByEris                                   bool
 }
 
 func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCallerContext, error) {
@@ -217,6 +226,7 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 	m.GuildID = channel.GuildID
 	question, addressed := discord.ErisQuestion(&m, s.Config.DiscordClientID)
 	reference := ""
+	referenceByEris := false
 	if in.ContextMessageID != "" {
 		if addressed {
 			return erisCallerContext{}, upstream.ErrDenied
@@ -231,14 +241,16 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 		}
 		question, addressed = discord.ImplicitErisQuestion(&m, anchor, s.Config.DiscordClientID, time.Now())
 		reference = anchor.Content
+		referenceByEris = true
 	}
 	if !addressed || strings.TrimSpace(question) == "" || !s.erisEvent("eris:mention:"+m.ID) {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
 	if in.ContextMessageID == "" && m.ReferencedMessage != nil {
 		reference = m.ReferencedMessage.Content
+		referenceByEris = m.ReferencedMessage.Author != nil && m.ReferencedMessage.Author.ID == s.Config.DiscordClientID
 	}
-	return erisCallerContext{UserID: m.Author.ID, ChannelID: channel.ID, Question: question, Reference: reference}, nil
+	return erisCallerContext{UserID: m.Author.ID, ChannelID: channel.ID, Question: question, Reference: reference, ReferenceByEris: referenceByEris}, nil
 }
 
 func (s *Server) erisEvent(id string) bool {
