@@ -130,6 +130,11 @@ constituent pas une réserve indépendante ou une recette humaine.
 
 ## Livraison et retour arrière
 
+Une [séance interactive avec Hugo](eris-interactive-lab.md) permet maintenant
+d'essayer la candidate tour par tour, avec plusieurs interlocuteurs synthétiques
+et une mémoire distincte de la production. L'agent transmet les réponses exactes ;
+les commentaires de recette restent séparés du contexte d'Eris.
+
 La source retrouvée est poussée dans #81. La candidate est poussée dans la [PR #82](https://github.com/hloiseau/le-concierge/pull/82), branche
 `fix/eris-reconcile-79`, avec le commit historique dans ses ancêtres. Le guide de
 [reprise initial](eris-reprise-autre-pc.md) est mis à jour dans cette branche.
