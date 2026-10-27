@@ -38,6 +38,7 @@ type Plan struct {
 	Text       string `json:"text,omitempty"`
 	URL        string `json:"url,omitempty"`
 	Year       int    `json:"year,omitempty"`
+	RequestID  int64  `json:"requestId,omitempty"`
 }
 
 var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
@@ -102,6 +103,15 @@ func ParsePlan(raw string) (Plan, error) {
 
 func (p Plan) Validate() error {
 	invalid := errors.New("invalid media plan")
+	if p.Action == "diagnostic" {
+		if p.Text != "" || p.Kind != "" || p.Relation != "" || p.Source != "" || p.URL != "" || p.Year != 0 || p.Genre != "" || p.MaxMinutes != 0 || p.Unwatched || len(p.Seasons) > 0 || p.RequestID < 0 || p.RequestID > 2147483647 || (p.RequestID != 0 && p.Query != "") || (p.RequestID == 0 && (strings.TrimSpace(p.Query) != p.Query || strings.ContainsFunc(p.Query, unicode.IsControl) || utf8.RuneCountInString(p.Query) < 2 || utf8.RuneCountInString(p.Query) > 200)) {
+			return invalid
+		}
+		return nil
+	}
+	if p.RequestID != 0 {
+		return invalid
+	}
 	if p.Action == "cinema" {
 		if strings.TrimSpace(p.Query) != p.Query || strings.ContainsFunc(p.Query, unicode.IsControl) || utf8.RuneCountInString(p.Query) < 2 || utf8.RuneCountInString(p.Query) > 200 || (p.Kind != "" && p.Kind != "movie" && p.Kind != "show") || (p.Year != 0 && (p.Year < 1801 || p.Year > 2999)) || (p.Relation != "" && p.Relation != "cast" && p.Relation != "director" && p.Relation != "trailer" && p.Relation != "overview") || p.URL != "" || p.Text != "" || p.Source != "" || p.Genre != "" || p.MaxMinutes != 0 || p.Unwatched || len(p.Seasons) > 0 {
 			return invalid
@@ -214,3 +224,6 @@ Vérifier une information récente ou chercher sur Internet : {"action":"web","q
 
 const CinemaToolInstructions = `
 Fiche factuelle, casting, réalisateur/créateur ou bande-annonce : {"action":"cinema","query":"titre seul","kind":"movie","year":2021,"relation":"cast"}. Série : kind:"show". Omet l'année si absente et relation pour une fiche complète ; relation peut aussi être director, trailer ou overview. Les homonymes demandent une précision. Pour un avis personnel reste chat ; pour la disponibilité Plex et les demandes garde les outils existants. Ne propose aucune autre plateforme de streaming.`
+
+const DiagnosticToolInstructions = `
+Pourquoi une de mes demandes est bloquée, progression de son téléchargement ou import : {"action":"diagnostic","query":"titre"}, ou {"action":"diagnostic","requestId":7} si le numéro est fourni dans la conversation. Accessible à tous pour leurs demandes autorisées. Sans titre ni numéro, demande lequel. L'outil explique l'étape observée et les limites ; il ne répare, relance, supprime ou redémarre rien. Les alertes privées TrueNAS/proxy/DNS restent hors périmètre.`

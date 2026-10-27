@@ -31,15 +31,20 @@ type Diagnostic struct {
 	HistoryTruncated bool                 `json:"historyTruncated"`
 	PlexStatus       string               `json:"plexStatus"`
 	GuideURL         string               `json:"guideUrl,omitempty"`
+	ProgressPercent  *float64             `json:"progressPercent,omitempty"`
+	MissingEpisodes  *int                 `json:"missingEpisodes,omitempty"`
 }
 type diagnosticRequest struct {
-	ID        int64     `json:"id"`
-	Type      string    `json:"type"`
-	Status    int       `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	Is4K      bool      `json:"is4k"`
-	ServerID  *int64    `json:"serverId"`
-	Media     struct {
+	ID          int64     `json:"id"`
+	Type        string    `json:"type"`
+	Status      int       `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
+	Is4K        bool      `json:"is4k"`
+	ServerID    *int64    `json:"serverId"`
+	RequestedBy struct {
+		ID int64 `json:"id"`
+	} `json:"requestedBy"`
+	Media struct {
 		TMDBID      int64  `json:"tmdbId"`
 		TVDBID      int64  `json:"tvdbId"`
 		Type        string `json:"mediaType"`
@@ -58,17 +63,23 @@ type diagnosticArrItem struct {
 	Seasons []struct {
 		Number     int `json:"seasonNumber"`
 		Statistics struct {
-			Files int `json:"episodeFileCount"`
+			Files    int `json:"episodeFileCount"`
+			Episodes int `json:"episodeCount"`
 		} `json:"statistics"`
 	} `json:"seasons"`
 }
 type diagnosticQueueItem struct {
-	MovieID  int64  `json:"movieId"`
-	SeriesID int64  `json:"seriesId"`
-	Season   *int   `json:"seasonNumber"`
-	State    string `json:"trackedDownloadState"`
-	Error    string `json:"errorMessage"`
-	Messages []struct {
+	MovieID    int64    `json:"movieId"`
+	SeriesID   int64    `json:"seriesId"`
+	Season     *int     `json:"seasonNumber"`
+	Seasons    []int    `json:"seasonNumbers"`
+	State      string   `json:"trackedDownloadState"`
+	Error      string   `json:"errorMessage"`
+	Status     string   `json:"status"`
+	Size       *float64 `json:"size"`
+	SizeLeft   *float64 `json:"sizeleft"`
+	DownloadID string   `json:"downloadId"`
+	Messages   []struct {
 		Messages []string `json:"messages"`
 	} `json:"statusMessages"`
 }
@@ -88,6 +99,18 @@ const manualImportGuide = "https://wiki.servarr.com/radarr/faq"
 
 // DiagnoseRequest reads only the requested media, with no title-based correlation or raw log output.
 func (c *Client) DiagnoseRequest(ctx context.Context, sources DiagnosticSources, grant Grant, requestID int64) (Diagnostic, error) {
+	return c.diagnoseRequest(ctx, sources, grant, requestID, 0)
+}
+
+// Member access is checked on the request itself before any administrator source read.
+func (c *Client) DiagnosePersonalRequest(ctx context.Context, sources DiagnosticSources, grant Grant, requestID, member int64) (Diagnostic, error) {
+	if member <= 0 {
+		return Diagnostic{}, ErrDenied
+	}
+	return c.diagnoseRequest(ctx, sources, grant, requestID, member)
+}
+
+func (c *Client) diagnoseRequest(ctx context.Context, sources DiagnosticSources, grant Grant, requestID, member int64) (Diagnostic, error) {
 	out := Diagnostic{Stage: "unknown", Summary: "Aucune cause confirmée dans les éléments consultés.", Evidence: []DiagnosticEvidence{}, CheckedAt: time.Now().UTC(), PlexStatus: "not_verified"}
 	if requestID < 1 || requestID > 2147483647 || sources.SeerrURL == "" || sources.SeerrKey == "" {
 		return out, ErrDenied
@@ -100,6 +123,9 @@ func (c *Client) DiagnoseRequest(ctx context.Context, sources DiagnosticSources,
 	}
 	if request.ID != requestID || request.Media.TMDBID < 1 || (request.Type != "movie" && request.Type != "tv") || (request.Media.Type != "" && request.Media.Type != request.Type) || request.CreatedAt.IsZero() {
 		return out, ErrIncomplete
+	}
+	if member > 0 && request.RequestedBy.ID != member {
+		return out, ErrDenied
 	}
 	base, key, lookup, filter := "", "", "", ""
 	if request.Type == "movie" {
@@ -203,12 +229,38 @@ func (c *Client) DiagnoseRequest(ctx context.Context, sources DiagnosticSources,
 	if request.Status == 4 {
 		add("unknown", "Seerr signale un échec de traitement de cette demande. Vérifiez aussi son envoi vers l’application configurée.", "", 1)
 	}
+	var totalSize, totalLeft float64
+	progressKnown := !out.QueueTruncated
+	progress := map[string][2]float64{}
 	for _, record := range queue.Records {
 		if (request.Type == "movie" && record.MovieID != item.ID) || (request.Type == "tv" && record.SeriesID != item.ID) {
 			return out, ErrIncomplete
 		}
-		if request.Type == "tv" && (record.Season == nil || !seasons[*record.Season]) {
-			continue
+		if request.Type == "tv" {
+			inScope := record.Season != nil && seasons[*record.Season]
+			if record.Season == nil && len(record.Seasons) > 0 {
+				inScope = true
+				for _, number := range record.Seasons {
+					inScope = inScope && seasons[number]
+				}
+			}
+			if !inScope {
+				continue
+			}
+		}
+		if record.Size == nil || record.SizeLeft == nil || *record.Size <= 0 || *record.SizeLeft < 0 || *record.SizeLeft > *record.Size {
+			progressKnown = false
+		} else {
+			value := [2]float64{*record.Size, *record.SizeLeft}
+			if record.DownloadID == "" && len(queue.Records) > 1 {
+				progressKnown = false
+			} else if old, exists := progress[record.DownloadID]; exists {
+				progressKnown = progressKnown && old == value
+			} else {
+				progress[record.DownloadID] = value
+				totalSize += *record.Size
+				totalLeft += *record.SizeLeft
+			}
 		}
 		messages := []string{record.Error}
 		for _, group := range record.Messages {
@@ -231,6 +283,22 @@ func (c *Client) DiagnoseRequest(ctx context.Context, sources DiagnosticSources,
 		case "imported":
 			add("imported", "L’application signale un import terminé pour un élément de cette demande.", "", 10)
 		}
+		switch record.Status {
+		case "downloading":
+			add("downloading", "Téléchargement en cours dans le client relié.", "", 30)
+		case "completed":
+			add("importing", "Le client signale un téléchargement terminé ; l’import reste à vérifier.", "", 20)
+		case "paused":
+			add("paused", "Le téléchargement est en pause dans le client ; il ne progresse pas tant qu’il reste dans cet état.", "", 35)
+		case "queued", "delay":
+			add("queued", "Le téléchargement attend son tour ou le délai configuré avant de démarrer.", "", 25)
+		case "downloadClientUnavailable":
+			add("client_unavailable", "L’application ne parvient pas à joindre le client de téléchargement pour ce média.", "", 55)
+		}
+	}
+	if progressKnown && totalSize > 0 {
+		value := 100 * (1 - totalLeft/totalSize)
+		out.ProgressPercent = &value
 	}
 	q.Set("pageSize", "30")
 	q.Set("sortKey", "date")
@@ -272,8 +340,16 @@ func (c *Client) DiagnoseRequest(ctx context.Context, sources DiagnosticSources,
 	}
 	hasFile := request.Type == "movie" && item.HasFile
 	if request.Type == "tv" {
+		known, missing := map[int]bool{}, 0
 		for _, season := range item.Seasons {
 			hasFile = hasFile || (seasons[season.Number] && season.Statistics.Files > 0)
+			if seasons[season.Number] && season.Statistics.Episodes > 0 && season.Statistics.Files >= 0 && season.Statistics.Files <= season.Statistics.Episodes && !known[season.Number] {
+				known[season.Number] = true
+				missing += season.Statistics.Episodes - season.Statistics.Files
+			}
+		}
+		if len(known) == len(seasons) {
+			out.MissingEpisodes = &missing
 		}
 	}
 	if hasFile {
@@ -292,6 +368,17 @@ func (c *Client) DiagnoseRequest(ctx context.Context, sources DiagnosticSources,
 			add("imported", "Les métadonnées du média sont indexées dans Plex et accessibles à votre compte administrateur. La lecture et la complétude des saisons ne sont pas vérifiées.", "", 16)
 		}
 	}
+	if member > 0 && out.Stage == "unknown" {
+		var health []struct{ Source, Type string }
+		if err := c.JSON(ctx, "GET", base+"/api/v3/health", headers, "", &health); err == nil && len(health) <= 100 {
+			for _, check := range health {
+				if (check.Type == "warning" || check.Type == "error") && (check.Source == "IndexerSearchCheck" || check.Source == "IndexerStatusCheck" || check.Source == "IndexerRssCheck") {
+					add("indexers", "L’application signale une difficulté avec ses sources de recherche. Cela peut retarder la découverte d’une version, sans prouver à lui seul la cause de cette demande.", "", 1)
+					break
+				}
+			}
+		}
+	}
 	return out, nil
 }
 
@@ -299,6 +386,8 @@ func (c *Client) DiagnoseRequest(ctx context.Context, sources DiagnosticSources,
 func diagnosticError(raw string) (string, string, int) {
 	message := strings.ToLower(raw)
 	switch {
+	case strings.Contains(message, "no seeders"), strings.Contains(message, "no peers"), strings.Contains(message, "not enough seeders"):
+		return "sources", "Le client signale un manque de sources pour recevoir les données de ce téléchargement. Il peut rester en attente même si le fichier a été trouvé.", 55
 	case strings.Contains(message, "matched to movie by id") && strings.Contains(message, "manual import"):
 		return "manual_import", "Found matching movie via grab history, but release was matched to movie by ID. Manual Import required.", 90
 	case strings.Contains(message, "manual import required"):
