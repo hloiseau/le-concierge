@@ -1,6 +1,6 @@
 # Eris v2 : personnalité, contexte et lubies
 
-Candidate du 27 octobre : [participation retrouvée et mémoire durable réconciliées](eris-recovery-79.md). Le [canon ERIS-01, la mémoire durable, le silence et le contexte ambiant](eris-01-memory.md) de main sont conservés. Les limites de trente jours décrites ci-dessous concernent uniquement l'ancien carnet de lubies, pas le nouveau journal. La candidate n'est pas déployée ; la production utilise le main `1894fae`.
+Livraison du 27 octobre : [participation retrouvée et mémoire durable réconciliées](eris-recovery-79.md), avec la voix retouchée après recette humaine. Le [canon, la mémoire durable, le silence et le contexte ambiant](eris-01-memory.md) de main sont conservés. Les limites de trente jours décrites ci-dessous concernent uniquement l'ancien carnet de lubies, pas le nouveau journal. La production utilise le main `13ffb1b`, [épinglé par digest sur le NAS](eris-release-2026-10-27.md).
 
 Déployé sur le NAS le 22 octobre 2026 à la demande de Hugo, depuis la branche de travail. Le bot actif utilise le profil v2 et Responses avec `gpt-6-luna`, via la connexion ChatGPT propre à Eris. Le profil historique reste le défaut dans le code. Voir le [relevé de déploiement](eris-v2-nas.md).
 
@@ -32,9 +32,9 @@ Les messages destinés à quelqu'un d'autre sont ignorés sans effacer immédiat
 
 Les outils reçoivent seulement l'ID du contexte public, jamais une identité déduite par le modèle. L'API relit elle-même le salon, le message du membre et les six messages précédents, puis vérifie le contexte avec les mêmes règles que le bot. Une réponse plus récente d'Eris empêche de réutiliser une ancienne proposition. « Le deuxième » peut sélectionner une proposition sans ping ; un autre membre ne peut pas reprendre ce choix à son compte. Les demandes du membre (titres, états, saisons et éditions, par titre ou en liste) sont consultables en salon. Les filtres de visionnage restent privés, comme les données de compte et les conversations privées.
 
-Les [cas synthétiques](../evals/eris/dialogues/addressing-cases.json) et le [rapport Luna](../evals/eris/dialogues/luna-addressing.json) vérifient le classement. Ils ne constituent pas une recette en conditions réelles dans Discord. Ce changement est indépendant du réglage de personnalité, repris après le rejet de la première candidate par Hugo ; voir le [bilan de personnalité](../evals/eris/blend-comparison.md).
+Les [tests du classificateur](../internal/eris/addressing_test.go) et les [tests des relances Discord](../internal/discord/eris_followup_test.go) couvrent le format, le contexte transmis et les limites du parcours. Ils ne mesurent pas à eux seuls la pertinence du classement avec le modèle réel. Le [bilan de recette humaine](eris-human-review-79.md) distingue ces contrôles du jugement sur le ton.
 
-## Participation spontanée — travail local, non déployé
+## Participation spontanée — activable par salon
 
 Dans chaque salon souhaité (par exemple Général et Absolute cinéma), un administrateur utilise `/eris-salon participation:activer`. `/eris-salon participation:desactiver` coupe les interventions spontanées ; `/eris-salon participation:etat` ou `/eris-salon` affiche le réglage. Les réponses sont éphémères. Les permissions administrateur sont revérifiées dans l'interaction signée. Aucun compte Plex n'est nécessaire. Les fils ont leur propre réglage, sans héritage automatique du salon parent.
 

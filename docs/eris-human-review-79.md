@@ -127,5 +127,7 @@ Les empreintes des binaires et des cas ont été vérifiées après transfert su
 NAS. Les conteneurs éphémères exécutent ces binaires montés, avec le seul fichier
 d'authentification modèle en lecture seule ; le label de l'image de base n'est
 pas utilisé pour attribuer une version au laboratoire. Les réponses complètes
-et les rapports restent privés. La production n'est pas modifiée et la PR reste
-en brouillon pour une future recette humaine.
+et les rapports restent privés. Ces comparaisons précèdent la bascule : Hugo a
+ensuite autorisé la fusion et le [déploiement NAS de cette candidate](eris-release-2026-10-27.md),
+effectués depuis main au commit `13ffb1b`. Les limites ci-dessus ne sont pas effacées
+par cette approbation.
