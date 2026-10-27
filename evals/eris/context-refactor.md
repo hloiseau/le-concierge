@@ -1,5 +1,7 @@
 # Eris : audit du contexte et refonte de la voix
 
+**État courant : [refonte déployée sur le NAS](../../docs/eris-voice-deployment.md), après autorisation de Hugo.** Les sections ci-dessous conservent l'audit et les essais réalisés avant cette bascule.
+
 27 octobre 2026. Après rejet de la première retouche Gen Z, Hugo demande d'auditer tout ce qui est donné au personnage et d'essayer une refonte. Le code est repris depuis la version effectivement active sur le NAS, `13ffb1bed93042a9c1cbaced8de28828b59862c1`, dans la branche **`fix/eris-voice-context`**. Le checkout principal, plus ancien et déjà modifié, conserve ses changements. Aucun déploiement n'est effectué par cette passe.
 
 ## Résultats établis de l'audit
