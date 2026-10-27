@@ -15,3 +15,6 @@ dist/
 bin/
 __pycache__/
 .DS_Store
+evals/eris/private/
+*.discord-export.json
+*.discord-export.txt

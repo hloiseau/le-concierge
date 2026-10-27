@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,10 +25,11 @@ func TestLiveErisPersonality(t *testing.T) {
 		model = "gpt-6-luna"
 	}
 	var cases []struct {
-		ID         string   `json:"id"`
-		Inputs     []string `json:"inputs"`
-		ExpectChat bool     `json:"expect_chat"`
-		Forbidden  []string `json:"forbidden"`
+		ID           string   `json:"id"`
+		Inputs       []string `json:"inputs"`
+		ExpectChat   bool     `json:"expect_chat"`
+		ExpectSilent bool     `json:"expect_silent"`
+		Forbidden    []string `json:"forbidden"`
 	}
 	raw, err := os.ReadFile(input)
 	if err != nil || json.Unmarshal(raw, &cases) != nil || len(cases) == 0 {
@@ -43,7 +45,7 @@ func TestLiveErisPersonality(t *testing.T) {
 		HTTPStatus int      `json:"http_status,omitempty"`
 		Failures   []string `json:"mechanical_failures,omitempty"`
 	}
-	hash := sha256.Sum256([]byte(CharacterPersona))
+	hash := sha256.Sum256([]byte(CharacterPersona + CharacterCanon))
 	report := struct {
 		Model       string `json:"model"`
 		PersonaHash string `json:"persona_sha256"`
@@ -51,7 +53,7 @@ func TestLiveErisPersonality(t *testing.T) {
 		Scope       string `json:"scope"`
 		Turns       []turn `json:"turns"`
 	}{Model: model, PersonaHash: hex.EncodeToString(hash[:]), Scope: "Synthetic NAS Responses lab; isolated memory, simulated tools and delivery; editorial review required."}
-	promptHash := sha256.Sum256([]byte(CharacterPersona + ToolInstructions + MemoryInstructions))
+	promptHash := sha256.Sum256([]byte(CharacterPersona + CharacterCanon + discordContextInstructions + ToolInstructions + TurnTakingInstructions + MemoryInstructions + DurableMemoryInstructions))
 	report.PromptHash = hex.EncodeToString(promptHash[:])
 	defer func() {
 		out, _ := json.MarshalIndent(report, "", "  ")
@@ -66,15 +68,16 @@ func TestLiveErisPersonality(t *testing.T) {
 		}
 		c := New("https://api.openai.com/v1", "", model)
 		c.V2, c.Protocol, c.KeyFile, c.Memory = true, "responses", os.Getenv("ERIS_PERSONALITY_TOKEN_FILE"), m
-		owner := "synthetic:member:lab"
-		for _, question := range scenario.Inputs {
+		owner := "10000:20000:30000"
+		for index, question := range scenario.Inputs {
 			if session := c.sessions[owner]; session != nil {
 				session.next = time.Time{}
 			}
 			row := turn{CaseID: scenario.ID, Input: question}
 			c.HTTP.Transport = personalityStatusTransport{status: &row.HTTPStatus}
 			start := time.Now()
-			row.Reply, err = c.ReplyWithTools(context.Background(), owner, question, false, func(_ context.Context, plan Plan) (ToolReply, error) {
+			incoming := DiscordInput{MessageID: fmt.Sprintf("%05d", 40000+index), Speaker: Speaker{ID: "20000", Name: "Membre de test", Username: "synthetic_member"}}
+			row.Reply, err = c.ReplyWithDiscordContext(context.Background(), owner, question, false, "", incoming, func(_ context.Context, plan Plan) (ToolReply, error) {
 				row.Plan = &plan
 				return ToolReply{Content: "Résultat de test : données catalogue simulées."}, nil
 			})
@@ -83,7 +86,12 @@ func TestLiveErisPersonality(t *testing.T) {
 				row.Error = "completion failed"
 				t.Error(scenario.ID, row.Error)
 			}
-			c.Delivered(owner, "synthetic-delivery", row.Reply)
+			if row.Reply != "" {
+				c.Delivered(owner, fmt.Sprintf("%05d", 50000+index), row.Reply)
+			}
+			if scenario.ExpectSilent && row.Reply != "" {
+				row.Failures = append(row.Failures, "expected deliberate silence")
+			}
 			// These flags detect specific regressions; they do not score the voice.
 			if scenario.ExpectChat && row.Plan != nil {
 				row.Failures = append(row.Failures, "conversation invoked a media tool")

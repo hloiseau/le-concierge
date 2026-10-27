@@ -14,7 +14,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Memory stores character fiction, not the raw conversation or media credentials.
+// Memory stores the character notebook and addressed Discord conversations.
+// Media credentials, images and private tool results never enter the notebook.
 type Memory struct{ db *sql.DB }
 
 type whim struct {
@@ -47,6 +48,12 @@ func OpenMemory(path string) (*Memory, error) {
 	_, err = db.Exec(`PRAGMA busy_timeout=1000; PRAGMA secure_delete=ON;
 CREATE TABLE IF NOT EXISTS eris_whims(scope TEXT NOT NULL, topic TEXT NOT NULL, quote TEXT NOT NULL, source TEXT NOT NULL, updated INTEGER NOT NULL, used INTEGER NOT NULL, expires INTEGER NOT NULL, retired INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(scope,topic));
 CREATE TABLE IF NOT EXISTS eris_whim_members(scope TEXT NOT NULL, topic TEXT NOT NULL, member TEXT NOT NULL, PRIMARY KEY(scope,topic,member));`)
+	if err == nil {
+		_, err = db.Exec(durableSchema)
+	}
+	if err == nil {
+		_, err = db.Exec(summarySchema)
+	}
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -115,6 +122,22 @@ func (m *Memory) forget(owner string) error {
 		return err
 	}
 	defer tx.Rollback()
+	if _, err = tx.Exec(`DELETE FROM eris_summaries WHERE owner IN(SELECT owner FROM eris_summary_members WHERE member=?)`, member); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM eris_summary_members WHERE owner NOT IN(SELECT owner FROM eris_summaries)`); err != nil {
+		return err
+	}
+	// Remove all recorded derivatives, including another member's later reply.
+	if _, err = tx.Exec(`DELETE FROM eris_notes WHERE member=? OR turn_id IN(SELECT turn_id FROM eris_turn_members WHERE member=?)`, member, member); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM eris_turns WHERE member=? OR id IN(SELECT turn_id FROM eris_turn_members WHERE member=?)`, member, member); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM eris_turn_members WHERE turn_id NOT IN(SELECT id FROM eris_turns)`); err != nil {
+		return err
+	}
 	_, err = tx.Exec(`DELETE FROM eris_whims WHERE EXISTS(SELECT 1 FROM eris_whim_members p WHERE p.scope=eris_whims.scope AND p.topic=eris_whims.topic AND p.member=?)`, member)
 	if err == nil {
 		_, err = tx.Exec(`DELETE FROM eris_whim_members WHERE NOT EXISTS(SELECT 1 FROM eris_whims w WHERE w.scope=eris_whim_members.scope AND w.topic=eris_whim_members.topic)`)
@@ -125,7 +148,7 @@ func (m *Memory) forget(owner string) error {
 	return tx.Commit()
 }
 
-func (m *Memory) commit(owner, source string, change *whim, recalled *rememberedWhim, now time.Time) error {
+func (m *Memory) commit(owner, source string, change *whim, recalled *rememberedWhim, now time.Time, turns ...int64) error {
 	scope, member := memoryScope(owner)
 	tx, err := m.db.Begin()
 	if err != nil {
@@ -158,6 +181,11 @@ func (m *Memory) commit(owner, source string, change *whim, recalled *remembered
 		// A derived recollection inherits every contributing member for erasure.
 		if recalled != nil {
 			if _, err = tx.Exec(`INSERT OR IGNORE INTO eris_whim_members SELECT scope,?,member FROM eris_whim_members WHERE scope=? AND topic=?`, change.Topic, scope, recalled.Topic); err != nil {
+				return err
+			}
+		}
+		for _, id := range turns {
+			if _, err = tx.Exec(`INSERT OR IGNORE INTO eris_whim_members SELECT ?,?,member FROM eris_turn_members WHERE turn_id=?`, scope, change.Topic, id); err != nil {
 				return err
 			}
 		}

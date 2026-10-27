@@ -117,6 +117,10 @@ func (p Plan) Validate() error {
 		seen[n] = true
 	}
 	switch p.Action {
+	case "silent":
+		if p.Text != "" || p.Query != "" || p.Kind != "" {
+			return invalid
+		}
 	case "chat":
 		if strings.TrimSpace(p.Text) == "" || p.Query != "" || p.Kind != "" {
 			return invalid

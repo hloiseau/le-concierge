@@ -8,6 +8,10 @@ from eris_eval import CodexCallError
 
 
 class VoiceReplayTests(unittest.TestCase):
+    def test_deliberate_silence_requires_exact_action(self):
+        self.assertEqual(check_reply('{"action":"silent"}', {"expect_silent": True}), ('', []))
+        for raw in ('{"action":"silent","text":"one more punchline"}', '{"action":"chat","text":"Merci."}'):
+            self.assertTrue(check_reply(raw, {"expect_silent": True})[1])
     def test_provider_diagnostic_does_not_echo_provider_content(self):
         error = CodexCallError(1, 'rate limit; Authorization: SECRET-EXAMPLE')
         self.assertEqual(error.category, 'rate_limit')
