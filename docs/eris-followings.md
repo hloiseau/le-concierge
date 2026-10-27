@@ -12,6 +12,8 @@ Sans demande de DM, le canal est le Hub : la disponibilité y est vérifiée à 
 
 `follows` présente les premiers suivis personnels avec leurs numéros et le lien vers la suite dans le Hub. `unfollow` retire un numéro appartenant au membre ; ce numéro doit avoir été mentionné dans les échanges récents. Le retrait conserve demande Seerr et média Plex. « Retire mon suivi » n'est plus intercepté par l'explication de suppression de médias.
 
+En cas d'homonymes, la réponse propose des choix liés au membre, au salon, à la portée publique/privée et à l'intention initiale pendant dix minutes. « Celui de 2021 » suffit ensuite, sans répéter « préviens-moi ». Un retrait sans numéro propose aussi les suivis à retirer ; « retire le premier » ne devient pas une suppression de média. Le choix est consommé une seule fois et l'identité/autorisation reste revalidée avant écriture.
+
 ## Préférences
 
 Les réglages sont consultés et modifiés avec `/eris message:…` en privé. Un échange public renvoie vers ce parcours avant de lire les réglages du compte. Une demande de simple consultation ne peut pas autoriser une écriture proposée par le modèle.

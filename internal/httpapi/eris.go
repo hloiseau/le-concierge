@@ -30,6 +30,7 @@ type erisPending struct {
 	Seasons                                   []int
 	Private                                   bool
 	Expires                                   time.Time
+	PersonalPlan                              *eris.Plan
 }
 
 func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +63,7 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	}
 	write := func(reply eris.ToolReply) { jsonOut(w, 200, reply) }
 	message := func(text string) { write(eris.ToolReply{Content: text}) }
-	if component == "" && eris.IsMediaRemoval(caller.Question) {
+	if component == "" && eris.IsMediaRemoval(caller.Question) && !s.erisUnfollowChoice(caller, input.Choice) {
 		message(eris.RemovalExplanation)
 		return
 	}
@@ -140,7 +141,7 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(b.ID, ":")
 		if len(parts) == 3 {
 			if p, ok := s.erisPending[parts[2]]; ok {
-				p.ChannelID, p.Choices = caller.ChannelID, append([]eris.Button(nil), reply.Buttons...)
+				p.ChannelID, p.Private, p.Choices = caller.ChannelID, private, append([]eris.Button(nil), reply.Buttons...)
 				p.ChoicePrompt = eris.NaturalChoices(reply).Content
 				s.erisPending[parts[2]] = p
 			}
@@ -148,6 +149,21 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 	write(reply)
+}
+
+func (s *Server) erisUnfollowChoice(caller erisCallerContext, choice string) bool {
+	parts := strings.Split(choice, ":")
+	if len(parts) != 3 || parts[0] != "eris" {
+		return false
+	}
+	s.mu.Lock()
+	pending, exists := s.erisPending[parts[2]]
+	s.mu.Unlock()
+	if !exists || pending.PersonalPlan == nil || pending.PersonalPlan.Action != "unfollow" || pending.DiscordID != caller.UserID || pending.ChannelID != caller.ChannelID || pending.Private != caller.Private || time.Now().After(pending.Expires) {
+		return false
+	}
+	id, matched := eris.MatchChoice(caller.Question, pending.Choices)
+	return matched && id == choice
 }
 
 type erisCallerContext struct {
@@ -520,7 +536,37 @@ func (s *Server) resolveErisChoice(ctx context.Context, u store.User, discordID,
 	}
 	s.mu.Unlock()
 	if parts[1] == "cancel" {
+		if p.PersonalPlan != nil {
+			return eris.ToolReply{Content: "Choix abandonné. Aucun suivi modifié."}
+		}
 		return eris.ToolReply{Content: "Demande annulée. Rien n’a été envoyé."}
+	}
+	if p.PersonalPlan != nil {
+		current, err := s.Store.UserByDiscord(ctx, discordID)
+		if err != nil || current.ID != u.ID || current.PlexID != u.PlexID {
+			return invalid
+		}
+		g, err := s.grant(ctx, current)
+		if err != nil {
+			return invalid
+		}
+		if p.PersonalPlan.Action == "unfollow" {
+			return s.erisFollows(ctx, current, g, *p.PersonalPlan)
+		}
+		if p.PersonalPlan.Action != "follow" {
+			return invalid
+		}
+		member, err := s.resolveSeerr(ctx, current)
+		if err != nil || member != p.SeerrID {
+			return invalid
+		}
+		select {
+		case s.reminderGate <- struct{}{}:
+			defer func() { <-s.reminderGate }()
+		case <-ctx.Done():
+			return invalid
+		}
+		return s.erisFollowCandidate(ctx, current, *p.PersonalPlan, p.Candidate)
 	}
 	if parts[1] == "choose" && !submit {
 		p.Stage = "confirm"

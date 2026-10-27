@@ -137,7 +137,7 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 		return failure
 	}
 	for _, button := range result.Buttons {
-		if !ValidErisButton(button.ID) || button.Label == "" || utf8.RuneCountInString(button.Label) > 80 {
+		if !ValidErisButton(button.ID) || button.Label == "" || utf8.RuneCountInString(button.Label) > 80 || (button.Operation != "" && button.Operation != "follow" && button.Operation != "unfollow") {
 			return failure
 		}
 	}

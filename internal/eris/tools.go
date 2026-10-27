@@ -226,11 +226,12 @@ type ToolRequest struct {
 }
 
 type Button struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Title  string `json:"title,omitempty"`
-	Year   string `json:"year,omitempty"`
-	Number int    `json:"number,omitempty"`
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Title     string `json:"title,omitempty"`
+	Year      string `json:"year,omitempty"`
+	Number    int    `json:"number,omitempty"`
+	Operation string `json:"operation,omitempty"`
 }
 type ToolReply struct {
 	Content string            `json:"content"`

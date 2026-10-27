@@ -161,7 +161,12 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		return "", ErrBusy
 	}
 	var direct *Plan
-	if run != nil && IsMediaRemoval(question) {
+	unfollowChoice := false
+	if s != nil && len(s.choices) > 0 && s.choices[0].Operation == "unfollow" && now.Before(s.choiceUntil) {
+		id, matched := MatchChoice(question, s.choices)
+		unfollowChoice = matched && id != ""
+	}
+	if run != nil && IsMediaRemoval(question) && !unfollowChoice {
 		direct = &Plan{Action: "chat", Text: RemovalExplanation}
 	}
 	if direct == nil && c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
@@ -420,7 +425,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		if plan.Action == "follow" && !requestTitleMentioned(plan.Query, grounding) {
 			plan = Plan{Action: "chat", Text: "Quel contenu souhaites-tu suivre ? Précise son titre et la saison si nécessaire."}
 		}
-		if plan.Action == "unfollow" && !subscriptionMentioned(plan.SubscriptionID, grounding) {
+		if plan.Action == "unfollow" && plan.SubscriptionID > 0 && !subscriptionMentioned(plan.SubscriptionID, grounding) {
 			plan = Plan{Action: "chat", Text: "Quel numéro de suivi veux-tu retirer ? Tu peux me demander la liste de tes suivis."}
 		}
 		if plan.Action == "chat" {
