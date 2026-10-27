@@ -89,6 +89,8 @@ L'évolution utilise le chemin `ERIS_MEMORY_PATH` et le volume SQLite existants.
 
 Les tests locaux couvrent réouverture de la base, persistance au-delà de trente jours, accents/préfixes/synonymes, attribution et rejeu, correction et livraison tardive, isolation, suppression transitive et FTS, métadonnées invalides, rappel en deux passes sans action média, silence, contexte ambiant et export. Discord, le CDN et le fournisseur sont simulés dans ces tests.
 
-Le test de voix sur le modèle réel a été bloqué par le contrôle automatique d'approbation : il considérait le prompt dérivé du dépôt privé comme un transfert externe non autorisé. Il n'a pas été contourné. Les fixtures `eris01-review.json` sont une recette préparée, pas un résultat de modèle. Il faut donc encore valider sur l'installation réelle la voix, la latence, l'extraction fidèle des notes et les rappels reformulés, puis mesurer les régressions sur les demandes média.
+Après le refus initial du contrôle automatique de transfert, Hugo a explicitement autorisé les essais sur Sol 6.1. Les deux lots de voix passent leurs contrôles mécaniques (10 et 6 tours), et la boucle réelle Go Chat/SQLite réussit la mémorisation, le rappel après redémarrage, la correction, l'attribution, l'isolation privée et l'effacement, avec neuf messages humains et dix appels au modèle. [Résultats et lecture éditoriale](../evals/eris/eris01-review.md). Les données sont synthétiques ; les outils, Discord et les livraisons sont simulés.
+
+La voix conserve quelques formules génériques et répétitions d'images. La latence inclut le lancement du CLI et ne vaut pas une mesure du NAS. Il faut encore valider le transport Responses et le comportement sur l'installation réelle, puis mesurer le rappel sémantique et les régressions sur les demandes média. La recette n'effectue aucun déploiement.
 
 Référence technique : [SQLite FTS5, BM25 et tokenizer Unicode](https://www.sqlite.org/fts5.html).

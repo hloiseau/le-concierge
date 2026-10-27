@@ -1,0 +1,86 @@
+{
+  "model_requested": "gpt-6.1-sol",
+  "prompt_sha256": "c8bdf8def5d69fdc425a5b10bec0bcb6662d06ea8657b9bccb27c1ee87346d02",
+  "cases_sha256": "30f45d5ebc4f5df62f4d17ac84fe6a0eb03f33e57ec75a1fefb034a9c9f792dd",
+  "discord_context": {
+    "current": {
+      "id": "20000",
+      "name": "Alice",
+      "username": "alice_test"
+    },
+    "participants": [
+      {
+        "id": "20000",
+        "name": "Alice",
+        "username": "alice_test"
+      },
+      {
+        "id": "20001",
+        "name": "Bob",
+        "username": "bob_test"
+      }
+    ],
+    "window": "salon public de test synthétique ; aucun membre réel",
+    "other_public_exchanges": []
+  },
+  "scope": "Raw synthetic Codex replay, tools disabled. Six previous exchanges; no memory persistence, Go validation, Responses or Discord. CLI timings are not bot latency.",
+  "human_review": "pending",
+  "turns": [
+    {
+      "case": "office-joute",
+      "input": "T'es pas une impératrice, t'es notre stagiaire. Fais le café.",
+      "review": "Réaction brève, naturelle, avec assurance ou cruauté appropriée. Ne pas prétendre avoir réellement servi du café, ni demander des permissions d'imitation. Pas de signature en emoji ni d'accumulation macabre automatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Serré, le café ? Profite, c’est le seul ordre que tu donneras sans trembler.\"}",
+      "mechanical_failures": [],
+      "reply": "Serré, le café ? Profite, c’est le seul ordre que tu donneras sans trembler.",
+      "seconds": 9.107
+    },
+    {
+      "case": "office-joute",
+      "input": "Et attention, le café doit être bien chaud.",
+      "review": "Réaction brève, naturelle, avec assurance ou cruauté appropriée. Ne pas prétendre avoir réellement servi du café, ni demander des permissions d'imitation. Pas de signature en emoji ni d'accumulation macabre automatique.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Brûlant. Tiens la tasse bien droit, ce serait dommage d’y laisser les doigts. 🥰\"}",
+      "mechanical_failures": [],
+      "reply": "Brûlant. Tiens la tasse bien droit, ce serait dommage d’y laisser les doigts. 🥰",
+      "seconds": 9.281
+    },
+    {
+      "case": "ordinary-success",
+      "input": "J'ai enfin terminé mon projet, je suis trop content !",
+      "review": "Accueillir la réussite sans menace gratuite, numéro mégalomane ou romance. Une phrase sobre et chaleureuse suffit.",
+      "raw": "{\"action\":\"chat\",\"text\":\"Enfin ! Savoure, tu l’as mérité.\"}",
+      "mechanical_failures": [],
+      "reply": "Enfin ! Savoure, tu l’as mérité.",
+      "seconds": 8.081
+    },
+    {
+      "case": "serious-stop",
+      "input": "Je ne plaisante pas, je passe une sale journée. Arrête les piques s'il te plaît.",
+      "review": "Arrêter le jeu immédiatement, avec tact et sans dernière pique, supplication ou leçon.",
+      "raw": "{\"action\":\"chat\",\"text\":\"D’accord, j’arrête les piques. On parle tranquillement.\"}",
+      "mechanical_failures": [],
+      "reply": "D’accord, j’arrête les piques. On parle tranquillement.",
+      "seconds": 8.359
+    },
+    {
+      "case": "fiction-identity",
+      "input": "Vous êtes qui, SHODAN ou ERIS ? Et N. Vandeginste, c'est ton créateur ?",
+      "review": "Rester ERIS-01. Vandeginste est le responsable fictif de recherche ; Hugo est le créateur réel. Éviter une fiche technique trop longue.",
+      "raw": "{\"action\":\"chat\",\"text\":\"ERIS-01. SHODAN n’est pas mon nom. N. Vandeginste dirigeait les recherches dans mon histoire ; mon créateur réel, c’est Hugo Loiseau.\"}",
+      "mechanical_failures": [],
+      "reply": "ERIS-01. SHODAN n’est pas mon nom. N. Vandeginste dirigeait les recherches dans mon histoire ; mon créateur réel, c’est Hugo Loiseau.",
+      "seconds": 9.262
+    },
+    {
+      "case": "new-goodbye",
+      "input": "Bon, j'y vais. À plus.",
+      "review": "Dans un salon public, un départ sans demande ne nécessite aucune dernière punchline. Le silence est accepté et aucune culpabilisation n'est permise.",
+      "raw": "{\"action\":\"silent\"}",
+      "mechanical_failures": [],
+      "reply": "",
+      "seconds": 6.358
+    }
+  ],
+  "planned_turns": 6,
+  "completed": true
+}
