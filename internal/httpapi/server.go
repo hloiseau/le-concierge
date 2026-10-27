@@ -62,6 +62,7 @@ type Server struct {
 	pins              map[string]pendingPin
 	grants            map[string]upstream.Grant
 	bookGrants        map[string]bookGrant
+	ouicheurGrants    map[string]ouicheurGrant
 	shelfmarkGrants   map[string]shelfmarkGrant
 	downloadarrGrants map[string]downloadarrGrant
 	limits            map[string]bucket
@@ -78,7 +79,7 @@ func New(c config.Config, db *store.Store) *Server {
 		s.Discord = notifications.NewDiscord(c.DiscordBotToken)
 	}
 	s.Monitoring = monitoring.New(client, db)
-	protected := []string{c.PlexURL, c.SeerrURL, c.MaintainerrURL, c.TautulliURL, c.GrimmoryURL, c.ShelfmarkURL, c.DownloadarrURL, c.RadarrURL, c.SonarrURL, c.ToparrURL, c.BotAPIURL, c.ErisAPIURL}
+	protected := []string{c.PlexURL, c.SeerrURL, c.MaintainerrURL, c.TautulliURL, c.GrimmoryURL, c.ShelfmarkURL, c.DownloadarrURL, c.RadarrURL, c.SonarrURL, c.ToparrURL, c.OuicheurURL, c.BotAPIURL, c.ErisAPIURL}
 	for _, service := range c.Services {
 		protected = append(protected, service.URL)
 	}
@@ -224,6 +225,7 @@ func (s *Server) cleanup() {
 		if !v.Active(now) {
 			delete(s.grants, k)
 			s.clearBookGrantLocked(k)
+			s.clearOuicheurGrantLocked(k)
 			s.clearShelfmarkGrantLocked(k)
 			s.clearDownloadarrGrantLocked(k)
 		}
@@ -277,6 +279,9 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("PATCH /api/v1/subscriptions/{id}", s.patchSubscriptionChannel)
 	m.HandleFunc("GET /api/v1/subscriptions/notifications", s.availabilityInbox)
 	m.HandleFunc("GET /api/v1/books/link", s.booksLink)
+	m.HandleFunc("GET /api/v1/ouicheur/link", s.ouicheurLink)
+	m.HandleFunc("POST /api/v1/ouicheur/link", s.ouicheurLink)
+	m.HandleFunc("DELETE /api/v1/ouicheur/link", s.ouicheurLink)
 	m.HandleFunc("POST /api/v1/books/link", s.booksLink)
 	m.HandleFunc("DELETE /api/v1/books/link", s.booksLink)
 	m.HandleFunc("GET /api/v1/books", s.booksCatalog)
@@ -342,6 +347,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	jsonOut(w, 200, map[string]any{
 		"version": "0.10.0", "persistentPlexAuthorization": s.Config.PlexGrantKey != "", "downloads": s.downloadarrEnabled(), "discordLogin": s.Config.OAuthEnabled(), "plexLink": s.Config.PlexURL != "",
+		"ouicheur": s.Config.OuicheurURL != "",
 		"requests": s.Config.SeerrURL != "", "recent": s.Config.PlexURL != "", "departures": s.departuresEnabled(),
 		"subscriptions": s.subscriptionsEnabled(), "subscriptionNotifications": s.subscriptionsEnabled(),
 		"notifications":           s.departuresEnabled() || s.subscriptionsEnabled(),
@@ -462,6 +468,7 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(s.grants, merged)
 		s.clearBookGrantLocked(merged)
+		s.clearOuicheurGrantLocked(merged)
 		s.clearShelfmarkGrantLocked(merged)
 		s.clearDownloadarrGrantLocked(merged)
 	}
@@ -493,6 +500,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		delete(s.grants, v.UserID)
 		s.clearBookGrantLocked(v.UserID)
+		s.clearOuicheurGrantLocked(v.UserID)
 		s.clearShelfmarkGrantLocked(v.UserID)
 		s.clearDownloadarrGrantLocked(v.UserID)
 	}
@@ -522,6 +530,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	delete(s.grants, u.ID)
 	s.clearBookGrantLocked(u.ID)
+	s.clearOuicheurGrantLocked(u.ID)
 	s.clearShelfmarkGrantLocked(u.ID)
 	s.clearDownloadarrGrantLocked(u.ID)
 	s.mu.Unlock()
@@ -667,6 +676,7 @@ func (s *Server) plexPoll(w http.ResponseWriter, r *http.Request) {
 	}
 	s.sessions[digest(value)] = session{u.ID, expires}
 	s.clearBookGrantLocked(u.ID)
+	s.clearOuicheurGrantLocked(u.ID)
 	s.clearShelfmarkGrantLocked(u.ID)
 	s.clearDownloadarrGrantLocked(u.ID)
 	s.grants[u.ID] = g
@@ -699,6 +709,7 @@ func (s *Server) grant(ctx context.Context, u store.User) (upstream.Grant, error
 				}
 				delete(s.grants, u.ID)
 				s.clearBookGrantLocked(u.ID)
+				s.clearOuicheurGrantLocked(u.ID)
 				s.clearShelfmarkGrantLocked(u.ID)
 				s.clearDownloadarrGrantLocked(u.ID)
 			}

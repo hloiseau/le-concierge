@@ -58,6 +58,8 @@ services:
       # Downloadarr : HTTPS + revision Git complete de l'image compatible installee.
       DOWNLOADARR_URL: ''
       DOWNLOADARR_REVISION: ''
+      OUICHEUR_URL: ''
+      OUICHEUR_REVISION: ''
       # Mesures optionnelles ; fichiers sur un volume distinct monte en lecture seule.
       MONITORING_ENABLED: '' # Auto avec Tautulli, Toparr ou METRICS_FILE ; false pour desactiver.
       METRICS_FILE: ''
