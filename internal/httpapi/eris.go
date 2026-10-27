@@ -66,9 +66,9 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		message(eris.RemovalExplanation)
 		return
 	}
-	// No private requests or watch filters are read for public replies.
-	if !private && (input.Plan.Action == "status" || input.Plan.Unwatched) {
-		message("Pour tes demandes ou tes contenus non vus, parle-moi en privé avec /eris message:… ; ces informations restent personnelles.")
+	// Watch history is private; request titles and statuses can be shared in-channel.
+	if !private && input.Plan.Unwatched {
+		message("Pour filtrer selon ce que tu as vu ou non, utilise /eris message:… en privé : ton historique de visionnage reste personnel.")
 		return
 	}
 	u, err := s.Store.UserByDiscord(ctx, userID)
@@ -137,7 +137,7 @@ type erisCallerContext struct {
 
 func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCallerContext, error) {
 	if len(in.Interaction) > 0 {
-		if in.ChannelID != "" || in.MessageID != "" {
+		if in.ChannelID != "" || in.MessageID != "" || in.ContextMessageID != "" {
 			return erisCallerContext{}, upstream.ErrDenied
 		}
 		i, err := discord.Verify(s.Config.DiscordPublicKey, in.Timestamp, in.Signature, in.Interaction, time.Now())
@@ -161,7 +161,7 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 		options, _ := discord.CommandOptions(i)
 		return erisCallerContext{UserID: i.Member.User.ID, ChannelID: i.ChannelID, Private: i.Type != 3 || i.Message.Flags&64 != 0, Component: component, Question: options.ChatMessage}, nil
 	}
-	if in.Timestamp != "" || in.Signature != "" || !config.Snowflake(in.ChannelID) || !config.Snowflake(in.MessageID) || s.Config.DiscordBotToken == "" {
+	if in.Timestamp != "" || in.Signature != "" || !config.Snowflake(in.ChannelID) || !config.Snowflake(in.MessageID) || (in.ContextMessageID != "" && !config.Snowflake(in.ContextMessageID)) || s.Config.DiscordBotToken == "" {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
 	// Gateway events have no signature: re-read the message and channel from Discord.
@@ -180,11 +180,26 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 	}
 	m.GuildID = channel.GuildID
 	question, addressed := discord.ErisQuestion(&m, s.Config.DiscordClientID)
+	reference := ""
+	if in.ContextMessageID != "" {
+		if addressed {
+			return erisCallerContext{}, upstream.ErrDenied
+		}
+		var previous []*discordgo.Message
+		if err := s.Upstream.JSON(ctx, "GET", fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages?before=%s&limit=%d", in.ChannelID, in.MessageID, discord.ErisContextLimit), headers, "", &previous); err != nil {
+			return erisCallerContext{}, upstream.ErrDenied
+		}
+		anchor, _ := discord.ErisContext(&m, previous, s.Config.DiscordClientID, in.ContextMessageID, time.Now())
+		if anchor == nil {
+			return erisCallerContext{}, upstream.ErrDenied
+		}
+		question, addressed = discord.ImplicitErisQuestion(&m, anchor, s.Config.DiscordClientID, time.Now())
+		reference = anchor.Content
+	}
 	if !addressed || strings.TrimSpace(question) == "" || !s.erisEvent("eris:mention:"+m.ID) {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
-	reference := ""
-	if m.ReferencedMessage != nil {
+	if in.ContextMessageID == "" && m.ReferencedMessage != nil {
 		reference = m.ReferencedMessage.Content
 	}
 	return erisCallerContext{UserID: m.Author.ID, ChannelID: channel.ID, Question: question, Reference: reference}, nil

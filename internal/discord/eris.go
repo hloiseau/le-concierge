@@ -48,6 +48,9 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 			}
 			b.Eris.RememberRequest(owner, result)
 		} else {
+			if options.Forget {
+				b.clearPublicErisTurns(i.Member.User.ID)
+			}
 			result = b.erisDiscordReply(ctx, owner, options.ChatMessage, options.Forget, proof, "", eris.DiscordInput{MessageID: i.ID, Speaker: discordSpeaker(i.Member.User.ID, i.Member.Nick, i.Member.User.GlobalName, i.Member.User.Username)})
 		}
 		reply := Message(result.Content)
@@ -79,6 +82,9 @@ func (b *Bot) erisContextReply(ctx context.Context, owner, message string, forge
 func (b *Bot) erisDiscordReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string, incoming eris.DiscordInput) eris.ToolReply {
 	var result eris.ToolReply
 	text, err := b.Eris.ReplyWithDiscordContext(ctx, owner, message, forget, reference, incoming, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
+		if proof.ContextMessageID != "" && !b.currentErisTurn(proof.ChannelID, proof.MessageID) {
+			return eris.ToolReply{}, eris.ErrUnavailable
+		}
 		proof.Plan = plan
 		if plan.Action == "continue" {
 			proof.Plan, proof.Choice = eris.Plan{}, plan.Query

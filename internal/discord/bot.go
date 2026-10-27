@@ -25,6 +25,8 @@ type Bot struct {
 	seen            map[string]time.Time
 	interestBusy    map[string]bool
 	erisWorkers     int
+	erisPublic      map[string]*erisPublicTurn
+	erisAmbient     map[string]*erisAmbientTurn
 	interestRetryAt time.Time
 	slots           chan struct{}
 	workers         sync.WaitGroup
@@ -74,6 +76,10 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 	}
 	if command == "salons" {
 		b.handleInterests(w, i)
+		return
+	}
+	if command == "eris-salon" {
+		b.handleErisChannel(w, i)
 		return
 	}
 	if command == "eris" {
@@ -270,6 +276,9 @@ func (b *Bot) Register(ctx context.Context) error {
 		return errors.New("DISCORD_BOT_TOKEN is required to register commands")
 	}
 	commands := []map[string]any{
+		{"name": "eris-salon", "description": "Régler la participation spontanée d'Eris dans ce salon", "type": 1, "default_member_permissions": "8", "options": []map[string]any{
+			{"name": "participation", "description": "Activer, désactiver ou consulter le réglage", "type": 3, "choices": []map[string]any{{"name": "Activer", "value": "activer"}, {"name": "Désactiver", "value": "desactiver"}, {"name": "État", "value": "etat"}}},
+		}},
 		{"name": "eris", "description": "Discuter en privé avec Eris", "type": 1, "options": []map[string]any{
 			{"name": "message", "description": "Votre message pour Eris", "type": 3, "min_length": 1, "max_length": 500},
 			{"name": "oublier", "description": "Effacer votre conversation avant de reprendre", "type": 5},

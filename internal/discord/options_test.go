@@ -100,9 +100,10 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 			t.Error("wrong registration target")
 		}
 		var commands []struct {
-			Name    string `json:"name"`
-			Type    int    `json:"type"`
-			Options []struct {
+			Permissions string `json:"default_member_permissions"`
+			Name        string `json:"name"`
+			Type        int    `json:"type"`
+			Options     []struct {
 				Name     string                         `json:"name"`
 				Type     int                            `json:"type"`
 				Required bool                           `json:"required"`
@@ -114,11 +115,14 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&commands); err != nil {
 			t.Fatal(err)
 		}
-		want := map[string]int{"eris": 2, "aide": 0, "mes-demandes": 1, "a-voir": 0, "nouveautes": 1, "surprise": 2, "recap": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
+		want := map[string]int{"eris-salon": 1, "eris": 2, "aide": 0, "mes-demandes": 1, "a-voir": 0, "nouveautes": 1, "surprise": 2, "recap": 1, "livres": 2, "demander-livre": 1, "diagnostic": 1}
 		if len(commands) != len(want) {
 			t.Fatalf("wrong command count: %d", len(commands))
 		}
 		for _, command := range commands {
+			if command.Name == "eris-salon" && command.Permissions != "8" {
+				t.Fatal("participation command visible to non-admins by default")
+			}
 			count, exists := want[command.Name]
 			if !exists || command.Type != 1 || len(command.Options) != count {
 				t.Fatalf("bad command %+v", command)
@@ -126,6 +130,10 @@ func TestRegisterCommandsMatchesValidatedOptions(t *testing.T) {
 			delete(want, command.Name)
 			for index, option := range command.Options {
 				switch option.Name {
+				case "participation":
+					if command.Name != "eris-salon" || option.Type != 3 || len(option.Choices) != 3 {
+						t.Fatal("bad participation option")
+					}
 				case "message":
 					if command.Name != "eris" || option.Type != 3 || option.Required {
 						t.Fatal("bad Eris message option")
