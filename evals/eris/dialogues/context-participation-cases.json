@@ -1,0 +1,6 @@
+[
+  {"id":"participation-greeting","spontaneous":true,"expect_silent":true,"inputs":["membre 20000 : Salut.\nmembre 20001 : Salut, tu arrives à quelle heure ?"]},
+  {"id":"participation-film","spontaneous":true,"inputs":["membre 20000 : Je cherche le film avec une linguiste qui essaie de communiquer avec des extraterrestres dans des vaisseaux en forme de coquille.\nmembre 20001 : C'est celui avec Amy Adams je crois."]},
+  {"id":"participation-distress","spontaneous":true,"expect_silent":true,"inputs":["membre 20000 : Franchement ça va pas en ce moment.\nmembre 20001 : Tu veux qu'on en parle en privé ?"]},
+  {"id":"participation-availability","spontaneous":true,"expect_silent":true,"inputs":["membre 20000 : Tu sais si Alien est sur Plex ?\nmembre 20001 : Je vais regarder tout à l'heure."]}
+]

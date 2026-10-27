@@ -92,11 +92,14 @@ func TestParticipationUsesOneCallAndCannotProduceTools(t *testing.T) {
 				var payload struct{ Messages []Message }
 				json.NewDecoder(r.Body).Decode(&payload)
 				encoded, _ := json.Marshal(payload)
-				if len(payload.Messages) != 2 || strings.Contains(string(encoded), "PRIVATE") || strings.Contains(payload.Messages[0].Content, ToolInstructions) {
+				if len(payload.Messages) != 3 || strings.Contains(string(encoded), "PRIVATE") || strings.Contains(payload.Messages[0].Content, ToolInstructions) {
 					t.Error("borrowed private context/tools")
 				}
 				if !strings.Contains(payload.Messages[0].Content, CharacterCanon) {
 					t.Error("spontaneous response lost ERIS-01 canon")
+				}
+				if len(payload.Messages) != 3 || payload.Messages[1].Content != conversationVoice {
+					t.Error("spontaneous reply lost the shared conversation voice")
 				}
 				json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: raw}}}})
 			}))
