@@ -25,6 +25,7 @@ type Service struct {
 type Config struct {
 	ErisProfile, ErisProtocol, ErisMemoryPath, ErisKeyFile                                  string
 	DiscordBotName, ErisAPIURL, ErisAPIKey, ErisModel                                       string
+	ErisWebURL                                                                              string
 	PlexGrantKey                                                                            string
 	DownloadarrURL, DownloadarrRevision                                                     string
 	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
@@ -95,6 +96,10 @@ func Load() (Config, error) {
 		c.DiscordBotName = ""
 	}
 	c.ErisAPIURL = strings.TrimRight(os.Getenv("ERIS_API_URL"), "/")
+	c.ErisWebURL = strings.TrimRight(os.Getenv("ERIS_WEB_URL"), "/")
+	if c.ErisWebURL != "" && !ValidURL(c.ErisWebURL, false) {
+		return c, errors.New("ERIS_WEB_URL requires a trusted SearXNG URL without credentials, query or fragment")
+	}
 	c.ErisProfile = fallback("ERIS_PROFILE", "legacy")
 	c.ErisProtocol = fallback("ERIS_PROTOCOL", "chat-completions")
 	c.ErisMemoryPath = os.Getenv("ERIS_MEMORY_PATH")

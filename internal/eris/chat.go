@@ -222,7 +222,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	if run != nil {
 		persona += ToolInstructions
 		if c.V2 {
-			persona += TurnTakingInstructions
+			persona += TurnTakingInstructions + WebToolInstructions
 		}
 		if c.V2 && c.Memory != nil {
 			persona += MemoryInstructions + DurableMemoryInstructions
@@ -389,6 +389,15 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			return "Je n’ai pas retrouvé de souvenir assez précis pour te répondre.", nil
 		}
 		plan = plan.WithQuestionConstraints(question)
+		if plan.Action == "web" && plan.URL != "" {
+			grounded := false
+			for _, message := range grounding {
+				grounded = grounded || strings.Contains(message.Content, plan.URL)
+			}
+			if !grounded {
+				plan = Plan{Action: "chat", Text: "Quel lien public veux-tu que je lise ?"}
+			}
+		}
 		if incoming.MediaOnly && plan.Action != "chat" {
 			plan = Plan{Action: "chat", Text: "Tu m’as envoyé un média. Précise ce que tu veux que j’en fasse."}
 			change = nil
@@ -418,6 +427,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			choices = append([]Button(nil), result.Buttons...)
 			if err != nil {
 				return "", ErrUnavailable
+			}
+			if plan.Action == "web" && result.Web != nil {
+				reply = c.webAnswer(ctx, question, *result.Web)
 			}
 		}
 		if reply == "" || utf8.RuneCountInString(reply) > 1500 {

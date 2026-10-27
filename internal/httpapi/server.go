@@ -16,6 +16,7 @@ import (
 	"github.com/hloiseau/le-concierge/internal/notifications"
 	"github.com/hloiseau/le-concierge/internal/store"
 	"github.com/hloiseau/le-concierge/internal/upstream"
+	"github.com/hloiseau/le-concierge/internal/websearch"
 	"io"
 	"log/slog"
 	"net"
@@ -54,6 +55,7 @@ type Server struct {
 	Departures        *departures.Service
 	Discord           *notifications.Discord
 	Monitoring        *monitoring.Service
+	Web               *websearch.Client
 	mu                sync.Mutex
 	sessions          map[string]session
 	oauth             map[string]oauthAttempt
@@ -75,6 +77,11 @@ func New(c config.Config, db *store.Store) *Server {
 		s.Discord = notifications.NewDiscord(c.DiscordBotToken)
 	}
 	s.Monitoring = monitoring.New(client, db)
+	protected := []string{c.PlexURL, c.SeerrURL, c.MaintainerrURL, c.TautulliURL, c.GrimmoryURL, c.ShelfmarkURL, c.DownloadarrURL, c.RadarrURL, c.SonarrURL, c.ToparrURL, c.BotAPIURL, c.ErisAPIURL}
+	for _, service := range c.Services {
+		protected = append(protected, service.URL)
+	}
+	s.Web = websearch.New(c.ErisWebURL, c.PublicOrigin, protected...)
 	return s
 }
 func token() string {

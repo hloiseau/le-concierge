@@ -1,0 +1,28 @@
+# Add to the base Compose file; no host port or public reverse proxy.
+services:
+  api:
+    environment:
+      ERIS_WEB_URL: http://searxng:8080
+  searxng:
+    image: docker.io/searxng/searxng@sha256:0f48ffe2152f388f5eaede27f96b610449cebfc890d0ad457304475a54ad7b6e
+    user: '977:977'
+    cpus: 0.5
+    mem_limit: 384m
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?set a private random SearXNG secret}
+      FORCE_OWNERSHIP: 'false'
+      GRANIAN_WORKERS: '1'
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    tmpfs:
+      - /tmp:mode=1777,size=32m
+      - /var/cache/searxng:uid=977,gid=977,mode=0700,size=32m
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, /usr/local/searxng/.venv/bin/python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
