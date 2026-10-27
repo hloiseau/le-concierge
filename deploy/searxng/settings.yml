@@ -1,0 +1,17 @@
+use_default_settings:
+  engines:
+    keep_only: [brave, duckduckgo, youtube]
+search:
+  formats: [json]
+  safe_search: 1
+server:
+  # Set a private random value through SEARXNG_SECRET in the deployment.
+  secret_key: replace-through-SEARXNG_SECRET
+  limiter: false
+  image_proxy: false
+outgoing:
+  request_timeout: 3.0
+  max_request_timeout: 5.0
+engines:
+  - name: youtube
+    disabled: false

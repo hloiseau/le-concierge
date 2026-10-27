@@ -130,7 +130,10 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 	}
 	defer resp.Body.Close()
 	var result eris.ToolReply
-	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 16*1024)).Decode(&result) != nil || result.Content == "" || !utf8.ValidString(result.Content) || utf8.RuneCountInString(result.Content) > 1500 || len(result.Buttons) > 3 {
+	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 32*1024)).Decode(&result) != nil || result.Content == "" || !utf8.ValidString(result.Content) || utf8.RuneCountInString(result.Content) > 1500 || len(result.Buttons) > 3 {
+		return failure
+	}
+	if result.Web != nil && (input.Plan.Action != "web" || len(result.Buttons) != 0 || !result.Web.Validate()) {
 		return failure
 	}
 	for _, button := range result.Buttons {

@@ -32,6 +32,7 @@ jobs:
         run: |
           docker compose -f deploy/truenas.yaml config --quiet
           docker compose -f deploy/truenas-discord.yaml config --quiet
+          SEARXNG_SECRET=ci-only docker compose -f deploy/truenas-discord.yaml -f deploy/eris-web.override.yaml config --quiet
           bash -n deploy/truenas-admin.sh
   image:
     needs: test

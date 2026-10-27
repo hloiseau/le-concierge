@@ -60,3 +60,20 @@ func TestErisV2RequiresResponsesAndKeepsActivationExplicit(t *testing.T) {
 		t.Fatal("cloud token allowed over clear HTTP")
 	}
 }
+
+func TestErisWebEndpointIsExplicitOperatorConfiguration(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	for _, raw := range []string{"", "http://searxng:8080", "https://search.example/private"} {
+		t.Setenv("ERIS_WEB_URL", raw)
+		if c, err := Load(); err != nil || c.ErisWebURL != raw {
+			t.Fatal("valid optional web configuration rejected", err)
+		}
+	}
+	for _, raw := range []string{"https://user:secret@search.example", "https://search.example?token=secret", "file:///private", "https://search.example/#fragment"} {
+		t.Setenv("ERIS_WEB_URL", raw)
+		if _, err := Load(); err == nil || strings.Contains(err.Error(), "secret@") {
+			t.Fatal("invalid web configuration accepted or credential disclosed")
+		}
+	}
+}
