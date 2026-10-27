@@ -142,6 +142,10 @@ func (c *Client) seerrMember(ctx context.Context, base, key string, user int64) 
 
 // SearchRequestCandidates returns public catalogue fields only, never mediaInfo.requests.
 func (c *Client) SearchRequestCandidates(ctx context.Context, base, key string, user int64, query, kind string) ([]RequestCandidate, error) {
+	return c.searchRequestCandidates(ctx, base, key, user, query, kind, 3)
+}
+
+func (c *Client) searchRequestCandidates(ctx context.Context, base, key string, user int64, query, kind string, limit int) ([]RequestCandidate, error) {
 	if len([]rune(query)) < 2 || len([]rune(query)) > 200 || strings.ContainsFunc(query, unicode.IsControl) || (kind != "" && kind != "movie" && kind != "show") {
 		return nil, ErrDenied
 	}
@@ -186,7 +190,7 @@ func (c *Client) SearchRequestCandidates(ctx context.Context, base, key string, 
 			}
 		}
 		result = append(result, RequestCandidate{ID: m.ID, Kind: m.Type, Title: title, Year: year})
-		if len(result) == 3 {
+		if len(result) == limit {
 			break
 		}
 	}
