@@ -234,6 +234,8 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 	switch p.Action {
 	case "cinema":
 		return s.erisCinema(ctx, u, p)
+	case "diagnostic":
+		return s.erisDiagnostic(ctx, u, g, p)
 	case "monitoring":
 		if !s.Config.MonitoringEnabled || s.Monitoring == nil {
 			return eris.ToolReply{Content: "Mes capteurs ne sont pas branchés : les mesures du NAS ne sont pas activées 👀"}

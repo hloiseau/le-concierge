@@ -21,6 +21,7 @@ type diagnosticFixture struct {
 	wrongServer              bool
 	status                   int
 	reads                    int
+	health                   []map[string]any
 }
 
 func newDiagnosticFixture(t *testing.T, kind string) (*Client, DiagnosticSources, *diagnosticFixture) {
@@ -60,6 +61,8 @@ func newDiagnosticFixture(t *testing.T, kind string) (*Client, DiagnosticSources
 				source = "Sonarr"
 			}
 			data = map[string]any{"appName": source, "version": "4.0.20.3014", "startupPath": "/private/nas", "instanceName": "private-host"}
+		case "/arr/api/v3/health":
+			data = f.health
 		case "/arr/api/v3/movie":
 			if r.URL.Query().Get("tmdbId") != "12" {
 				t.Fatal("not correlated by TMDB")
@@ -104,6 +107,88 @@ func newDiagnosticFixture(t *testing.T, kind string) (*Client, DiagnosticSources
 	}))
 	t.Cleanup(server.Close)
 	return New(), DiagnosticSources{SeerrURL: server.URL + "/seerr", SeerrKey: "seerr-secret", RadarrURL: server.URL + "/arr", RadarrKey: "arr-secret", SonarrURL: server.URL + "/arr", SonarrKey: "arr-secret", PlexURL: server.URL + "/plex", PlexServerID: "server-a"}, f
+}
+
+func TestPersonalDiagnosticRejectsAnotherOwnerBeforeAdminReads(t *testing.T) {
+	for _, owner := range []int64{0, 2, 3} {
+		c, sources, f := newDiagnosticFixture(t, "movie")
+		f.request["requestedBy"] = map[string]any{"id": owner}
+		f.queue = []map[string]any{{"movieId": 9, "status": "downloading", "size": 1000, "sizeleft": 250, "downloadId": "private-hash", "indexer": "private-indexer", "outputPath": "/private/path"}}
+		result, err := c.DiagnosePersonalRequest(context.Background(), sources, Grant{}, 7, 2)
+		if owner != 2 {
+			if err != ErrDenied || f.reads != 1 {
+				t.Fatal("foreign owner reached administrator sources", owner, f.reads, err)
+			}
+			continue
+		}
+		if err != nil || result.Stage != "downloading" || result.ProgressPercent == nil || *result.ProgressPercent != 75 {
+			t.Fatal(result, err)
+		}
+		raw, _ := json.Marshal(result)
+		if strings.Contains(string(raw), "private-") || strings.Contains(string(raw), "/private/") {
+			t.Fatal("private download data escaped", string(raw))
+		}
+	}
+}
+
+func TestPersonalDiagnosticMissingEpisodesAndIndexerCaveat(t *testing.T) {
+	c, sources, f := newDiagnosticFixture(t, "tv")
+	f.request["requestedBy"] = map[string]any{"id": 2}
+	f.items[0]["seasons"] = []any{map[string]any{"seasonNumber": 2, "statistics": map[string]any{"episodeCount": 8, "episodeFileCount": 0}}}
+	f.health = []map[string]any{{"source": "IndexerStatusCheck", "type": "error", "message": "private indexer secret token path"}}
+	result, err := c.DiagnosePersonalRequest(context.Background(), sources, Grant{}, 7, 2)
+	if err != nil || result.Stage != "indexers" || result.MissingEpisodes == nil || *result.MissingEpisodes != 8 {
+		t.Fatal(result, err)
+	}
+	raw, _ := json.Marshal(result)
+	if strings.Contains(string(raw), "secret") {
+		t.Fatal("free health text retained")
+	}
+}
+
+func TestDiagnosticProgressUnknownWhenIncompleteOrMalformed(t *testing.T) {
+	for _, state := range []string{"missing", "invalid", "truncated", "paused", "sources"} {
+		c, sources, f := newDiagnosticFixture(t, "movie")
+		record := map[string]any{"movieId": 9, "status": "downloading", "size": 1000, "sizeleft": 250}
+		f.queue = []map[string]any{record}
+		switch state {
+		case "missing":
+			delete(record, "sizeleft")
+		case "invalid":
+			record["sizeleft"] = -1
+		case "truncated":
+			f.queueTotal = 10
+		case "paused":
+			record["status"] = "paused"
+		case "sources":
+			record["errorMessage"] = "no seeders for private-release on tracker secret"
+		}
+		r, err := c.DiagnoseRequest(context.Background(), sources, Grant{}, 7)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (state == "missing" || state == "invalid" || state == "truncated") && r.ProgressPercent != nil {
+			t.Fatal("invented complete progress", state, r)
+		}
+		if (state == "paused" || state == "sources") && r.Stage != state {
+			t.Fatal(state, r)
+		}
+	}
+}
+
+func TestPersonalSonarrV5QueueUsesOnlyRequestedSeasonsAndUniqueDownloads(t *testing.T) {
+	c, sources, f := newDiagnosticFixture(t, "tv")
+	f.request["requestedBy"] = map[string]any{"id": 2}
+	f.queue = []map[string]any{
+		{"seriesId": 9, "seasonNumbers": []int{2}, "status": "downloading", "size": 1000, "sizeleft": 250, "downloadId": "same-file"},
+		{"seriesId": 9, "seasonNumbers": []int{2}, "status": "downloading", "size": 1000, "sizeleft": 250, "downloadId": "same-file"},
+		{"seriesId": 9, "seasonNumbers": []int{2}, "status": "downloading", "size": 1000, "sizeleft": 750, "downloadId": "other-file"},
+		{"seriesId": 9, "seasonNumbers": []int{1}, "status": "paused", "errorMessage": "Not enough free space"},
+	}
+	r, err := c.DiagnosePersonalRequest(context.Background(), sources, Grant{}, 7, 2)
+	if err != nil || r.Stage != "downloading" || r.ProgressPercent == nil || *r.ProgressPercent != 50 {
+		t.Fatal(r, err)
+	}
 }
 func TestDiagnosticManualImportIsReadOnlyCorrelatedAndRedacted(t *testing.T) {
 	c, sources, f := newDiagnosticFixture(t, "movie")

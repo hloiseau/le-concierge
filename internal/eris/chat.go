@@ -222,7 +222,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	if run != nil {
 		persona += ToolInstructions
 		if c.V2 {
-			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions
+			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions
 		}
 		if c.V2 && c.Memory != nil {
 			persona += MemoryInstructions + DurableMemoryInstructions
