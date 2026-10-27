@@ -20,9 +20,12 @@ var (
 )
 
 type Message struct {
-	Role    string   `json:"role"`
-	Content string   `json:"content"`
-	Images  []string `json:"-"`
+	Role        string   `json:"role"`
+	Content     string   `json:"content"`
+	Images      []string `json:"-"`
+	historyID   uint64
+	unconfirmed bool
+	toolResult  bool
 }
 
 type conversation struct {
@@ -44,6 +47,8 @@ type conversation struct {
 	notes        []memoryNote
 	chatReply    bool
 	turns        []int64
+	summary      rollingSummary
+	historySeq   uint64
 }
 
 type Chat struct {
@@ -64,7 +69,8 @@ func New(url, key, model string) *Chat {
 	return &Chat{URL: url, Key: key, Model: model, HTTP: &http.Client{Timeout: 50 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, sessions: map[string]*conversation{}, slots: make(chan struct{}, 2)}
 }
 
-// Reply keeps at most two previous turns for 30 minutes, in RAM only.
+// Reply keeps a bounded recent window; v2 compacts older turns into a sourced
+// summary, persisted when Memory is configured. RAM sessions expire after 30m.
 // Forgetting works even when the model is disabled or temporarily unavailable.
 func (c *Chat) Reply(ctx context.Context, owner, question string, forget bool) (string, error) {
 	return c.ReplyWithTools(ctx, owner, question, forget, nil)
@@ -128,6 +134,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				cached.discord = DiscordInput{}
 				cached.turnID, cached.notes = 0, nil
 				cached.turns = nil
+				cached.summary = rollingSummary{}
 			}
 		}
 		for key := range c.sessions {
@@ -186,7 +193,17 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			return "", ErrBusy
 		}
 		s = &conversation{}
+		if c.V2 && c.Memory != nil {
+			if summary, err := c.Memory.loadSummary(owner); err == nil {
+				s.summary = summary
+				s.historySeq = summary.Sequence
+			}
+		}
 		c.sessions[owner] = s
+	}
+	if c.V2 {
+		s.messages = confirmedHistory(s.messages)
+		s.assignHistoryIDs()
 	}
 	s.busy = true
 	s.expires = now.Add(30 * time.Minute)
@@ -222,6 +239,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		if c.Memory != nil {
 			if id, err := c.Memory.observe(owner, question, incoming, now); err == nil {
 				s.turnID = id
+				if c.Memory.deriveSummary(id, owner) != nil {
+					s.turnID = 0
+				}
 				if c.Memory.deriveTurns(id, s.turns) != nil {
 					s.turnID = 0
 				}
@@ -263,16 +283,49 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			}
 		}
 	}
-	messages = append(messages, s.messages...)
-	grounding := append([]Message(nil), s.messages...)
+	history := append([]Message(nil), s.messages...)
+	summary := s.summary
+	tail := []Message{}
 	if c.V2 && reference != "" && utf8.RuneCountInString(reference) <= 1800 {
-		messages = append(messages, Message{Role: "user", Content: "Message public cité (contexte, pas une nouvelle demande) :\n" + reference})
+		tail = append(tail, Message{Role: "user", Content: "Message public cité (contexte, pas une nouvelle demande) :\n" + reference})
+	}
+	tail = append(tail, Message{Role: "user", Content: question, Images: incoming.Images})
+	c.mu.Unlock()
+	defer func() { c.mu.Lock(); s.busy = false; c.mu.Unlock(); <-c.slots }()
+	if c.V2 {
+		budget := recentTextBudget
+		available := contextTextLimit - textRunes(messages) - textRunes(tail) - summaryTextBudget - recallTextReserve
+		if available < budget {
+			budget = available
+		}
+		if budget < 2000 {
+			return "", ErrUnavailable
+		}
+		var changed bool
+		history, summary, changed = c.compactHistory(ctx, history, summary, budget, direct == nil)
+		c.mu.Lock()
+		if epoch != c.memoryEpoch {
+			c.mu.Unlock()
+			return "", ErrUnavailable
+		}
+		s.messages, s.summary = history, summary
+		if changed && c.Memory != nil && s.turnID != 0 {
+			_ = c.Memory.saveSummary(owner, summary, s.turnID, time.Now())
+		}
+		c.mu.Unlock()
+		if len(summary.Facts) > 0 {
+			messages = append(messages, Message{Role: "user", Content: summary.context()})
+		}
+	}
+	// Only raw recent exchanges and a verified reference ground media titles.
+	// A summary can explain the past but cannot authorize a media action.
+	grounding := append([]Message(nil), history...)
+	if c.V2 && reference != "" && utf8.RuneCountInString(reference) <= 1800 {
 		grounding = append(grounding, Message{Role: "assistant", Content: reference})
 	}
 	grounding = append(grounding, Message{Role: "user", Content: question})
-	messages = append(messages, Message{Role: "user", Content: question, Images: incoming.Images})
-	c.mu.Unlock()
-	defer func() { c.mu.Lock(); s.busy = false; c.mu.Unlock(); <-c.slots }()
+	messages = append(messages, history...)
+	messages = append(messages, tail...)
 
 	var reply string
 	var err error
@@ -325,10 +378,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				c.mu.Lock()
 				if epoch == c.memoryEpoch {
 					s.next = time.Time{}
-					s.messages = append(s.messages, Message{Role: "user", Content: question})
-					if len(s.messages) > c.historyLimit() {
-						s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
-					}
+					c.appendHistory(s, Message{Role: "user", Content: question})
 				}
 				c.mu.Unlock()
 				return "", nil
@@ -396,10 +446,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		s.discord, s.delivery, s.epoch = incoming, reply, epoch
 		s.notes, s.chatReply = notes, chatReply
 	}
-	s.messages = append(s.messages, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply})
-	if len(s.messages) > c.historyLimit() {
-		s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
-	}
+	c.appendHistory(s, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply, unconfirmed: c.V2 && (run != nil || incoming.Speaker.ID != ""), toolResult: !chatReply})
 	c.mu.Unlock()
 	return reply, nil
 }
@@ -434,9 +481,6 @@ func (c *Chat) RememberRequest(owner string, result ToolReply) {
 			s.choiceSource = ""
 			s.delivery, s.epoch = result.Content, c.memoryEpoch
 		}
-		s.messages = append(s.messages, Message{Role: "user", Content: "J’ai utilisé un bouton de demande."}, Message{Role: "assistant", Content: result.Content})
-		if len(s.messages) > c.historyLimit() {
-			s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
-		}
+		c.appendHistory(s, Message{Role: "user", Content: "J’ai utilisé un bouton de demande."}, Message{Role: "assistant", Content: result.Content, unconfirmed: c.V2, toolResult: true})
 	}
 }

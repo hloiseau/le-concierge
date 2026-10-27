@@ -91,7 +91,7 @@ def main():
         "prompt_sha256": hashlib.sha256(system.encode()).hexdigest(),
         "cases_sha256": hashlib.sha256(args.cases.read_bytes()).hexdigest(),
         "discord_context": context,
-        "scope": "Raw synthetic Codex replay, tools disabled. Six previous exchanges; no memory persistence, Go validation, Responses or Discord. CLI timings are not bot latency.",
+        "scope": "Raw synthetic Codex replay, tools disabled. Up to forty previous exchanges and 32000 history characters; no rolling summary, memory persistence, Go validation, Responses or Discord. Use the Go history lab for compaction. CLI timings are not bot latency.",
         "human_review": "pending", "turns": [],
         "planned_turns": sum(len(scenario["inputs"]) for scenario in scenarios),
         "completed": False,
@@ -104,7 +104,12 @@ def main():
             row = {"case": scenario["id"], "input": question, "review": scenario["review"]}
             start = time.monotonic()
             try:
-                messages = [{"role": "system", "content": system}] + prefix + history[-12:] + [{"role": "user", "content": question}]
+                recent = history[-80:]
+                while recent and sum(len(message["content"]) for message in recent) > 32000:
+                    recent = recent[1:]
+                while recent and recent[0]["role"] == "assistant":
+                    recent = recent[1:]
+                messages = [{"role": "system", "content": system}] + prefix + recent + [{"role": "user", "content": question}]
                 row["raw"] = codex_reply(messages, args.model, args.timeout)
                 reply, row["mechanical_failures"] = check_reply(row["raw"], scenario)
                 if reply is not None:

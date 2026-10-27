@@ -176,7 +176,7 @@ func TestDiscordContextRejectsImpersonationAndBoundsItsWindow(t *testing.T) {
 		c.observePublic("12345:"+id+":33333", "message", DiscordInput{MessageID: fmt.Sprintf("%05d", 50000+i), Speaker: Speaker{ID: id, Name: "Member"}}, now)
 	}
 	room := c.publicRooms["12345:33333"]
-	if len(room.members) > 32 || len(room.exchanges) > 12 {
+	if len(room.members) > 32 || len(room.exchanges) > publicExchangeLimit {
 		t.Fatal("unbounded public window")
 	}
 }

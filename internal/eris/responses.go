@@ -24,7 +24,7 @@ type responseOutput struct {
 
 // Responses is text-only: no shell, hosted tools or model-controlled callbacks.
 // OAuth provisioning/refresh belongs to the application credential provider.
-func (c *Chat) responses(ctx context.Context, messages []Message) (string, error) {
+func (c *Chat) responses(ctx context.Context, messages []Message, limits ...int) (string, error) {
 	key := c.Key
 	if c.KeyFile != "" {
 		raw, err := os.ReadFile(c.KeyFile)
@@ -159,6 +159,9 @@ func (c *Chat) responses(ctx context.Context, messages []Message) (string, error
 	rawLimit := 2500
 	if c.V2 && c.Memory != nil {
 		rawLimit = 6000
+	}
+	if len(limits) > 0 && limits[0] > rawLimit {
+		rawLimit = limits[0]
 	}
 	if text == "" || !utf8.ValidString(text) || utf8.RuneCountInString(text) > rawLimit {
 		return "", ErrUnavailable

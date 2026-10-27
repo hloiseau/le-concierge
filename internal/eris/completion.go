@@ -10,9 +10,22 @@ import (
 	"unicode/utf8"
 )
 
-func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool) (string, error) {
+type completionBudget struct{ Tokens, Runes int }
+
+func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool, budgets ...completionBudget) (string, error) {
+	if c.V2 && textRunes(messages) > contextTextLimit {
+		return "", ErrUnavailable
+	}
+	rawLimit := 1500
+	tokens := 160
+	if c.V2 && c.Memory != nil && withTools {
+		tokens, rawLimit = 800, 6000
+	}
+	if len(budgets) > 0 {
+		tokens, rawLimit = budgets[0].Tokens, budgets[0].Runes
+	}
 	if c.Protocol == "responses" {
-		return c.responses(ctx, messages)
+		return c.responses(ctx, messages, rawLimit)
 	}
 	for _, message := range messages {
 		if len(message.Images) > 0 {
@@ -23,10 +36,7 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool)
 	if withTools {
 		temperature = 0.45
 	}
-	payload := map[string]any{"model": c.Model, "messages": messages, "max_tokens": 160, "temperature": temperature, "stream": false}
-	if c.V2 && c.Memory != nil && withTools {
-		payload["max_tokens"] = 800 // Includes bounded, grounded memory metadata.
-	}
+	payload := map[string]any{"model": c.Model, "messages": messages, "max_tokens": tokens, "temperature": temperature, "stream": false}
 	if withTools {
 		payload["response_format"] = map[string]string{"type": "json_object"}
 	}
@@ -63,10 +73,6 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool)
 		return "", ErrUnavailable
 	}
 	reply := strings.TrimSpace(completion.Choices[0].Message.Content)
-	rawLimit := 1500
-	if c.V2 && c.Memory != nil && withTools {
-		rawLimit = 6000
-	}
 	if reply == "" || !utf8.ValidString(reply) || utf8.RuneCountInString(reply) > rawLimit {
 		return "", ErrUnavailable
 	}

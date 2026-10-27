@@ -23,7 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--model', default='gpt-6-luna')
-    parser.add_argument('--suite', choices=('legacy', 'durable'), default='legacy')
+    parser.add_argument('--suite', choices=('legacy', 'durable', 'history'), default='legacy')
     args = parser.parse_args()
     report = {'model': args.model, 'suite': args.suite, 'scope': 'Synthetic sequential dialogue through Go Chat and SQLite over Chat Completions; simulated delivery/tools, no Discord/media calls or NAS Responses transport. CLI timings include startup.',
               'character_source_sha256': hashlib.sha256((ROOT / 'internal/eris/character.go').read_bytes()).hexdigest(),
@@ -41,7 +41,7 @@ def main():
                 return
             start = time.monotonic()
             size = int(self.headers.get('Content-Length', '0'))
-            if self.path != '/chat/completions' or not 0 < size < 100_000:
+            if self.path != '/chat/completions' or not 0 < size < 512_000:
                 self.send_error(400)
                 return
             messages = json.loads(self.rfile.read(size))['messages']
@@ -70,7 +70,7 @@ def main():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     env = dict(os.environ, ERIS_DIALOGUE_TEST_URL=f'http://127.0.0.1:{server.server_port}', ERIS_DIALOGUE_MODEL=args.model)
-    test_name = '^TestERIS01DurableDialogue$' if args.suite == 'durable' else '^TestLunaDialogue$'
+    test_name = {'legacy': '^TestLunaDialogue$', 'durable': '^TestERIS01DurableDialogue$', 'history': '^TestERIS01ExtendedHistory$'}[args.suite]
     try:
         result = subprocess.run(['go', 'test', './internal/eris', '-run', test_name, '-count=1', '-v'], cwd=ROOT, env=env,
                                 encoding='utf-8', errors='replace', capture_output=True, timeout=480)

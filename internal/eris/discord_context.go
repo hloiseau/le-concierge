@@ -173,8 +173,8 @@ func (c *Chat) observePublic(owner, question string, in DiscordInput, now time.T
 		text += "\nMédia : " + in.VisualNote
 	}
 	room.exchanges = append(room.exchanges, publicExchange{ID: in.MessageID, Author: in.Speaker, Text: shortContext(text, 850), Mentions: in.Mentions, Ambient: in.Ambient, at: now})
-	if len(room.exchanges) > 12 {
-		room.exchanges = append([]publicExchange(nil), room.exchanges[len(room.exchanges)-12:]...)
+	if len(room.exchanges) > publicExchangeLimit {
+		room.exchanges = append([]publicExchange(nil), room.exchanges[len(room.exchanges)-publicExchangeLimit:]...)
 	}
 }
 
@@ -212,8 +212,8 @@ func (c *Chat) discordContext(owner string, in DiscordInput, now time.Time) stri
 			}
 		}
 		sort.Slice(data.Participants, func(i, j int) bool { return data.Participants[i].ID < data.Participants[j].ID })
-		budget := 6000
-		for i := len(room.exchanges) - 1; i >= 0 && len(data.Exchanges) < 6; i-- {
+		budget := publicTextBudget
+		for i := len(room.exchanges) - 1; i >= 0 && len(data.Exchanges) < publicPromptLimit; i-- {
 			e := room.exchanges[i]
 			if (e.Author.ID == in.Speaker.ID && !e.Ambient) || now.Sub(e.at) > 30*time.Minute {
 				continue

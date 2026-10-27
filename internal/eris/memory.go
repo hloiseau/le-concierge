@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS eris_whim_members(scope TEXT NOT NULL, topic TEXT NOT
 	if err == nil {
 		_, err = db.Exec(durableSchema)
 	}
+	if err == nil {
+		_, err = db.Exec(summarySchema)
+	}
 	if err != nil {
 		db.Close()
 		return nil, err
@@ -119,6 +122,12 @@ func (m *Memory) forget(owner string) error {
 		return err
 	}
 	defer tx.Rollback()
+	if _, err = tx.Exec(`DELETE FROM eris_summaries WHERE owner IN(SELECT owner FROM eris_summary_members WHERE member=?)`, member); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM eris_summary_members WHERE owner NOT IN(SELECT owner FROM eris_summaries)`); err != nil {
+		return err
+	}
 	// Remove all recorded derivatives, including another member's later reply.
 	if _, err = tx.Exec(`DELETE FROM eris_notes WHERE member=? OR turn_id IN(SELECT turn_id FROM eris_turn_members WHERE member=?)`, member, member); err != nil {
 		return err

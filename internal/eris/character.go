@@ -48,7 +48,7 @@ func memoryContext(w *rememberedWhim) string {
 }
 func (c *Chat) historyLimit() int {
 	if c.V2 {
-		return 12
+		return recentMessageLimit
 	}
 	return 4
 }
@@ -61,6 +61,12 @@ func (c *Chat) Delivered(owner, source, text string) {
 	s := c.sessions[owner]
 	if s == nil || s.delivery != text || s.epoch != c.memoryEpoch {
 		return
+	}
+	for i := len(s.messages) - 1; i >= 0; i-- {
+		if s.messages[i].Role == "assistant" && s.messages[i].Content == text && s.messages[i].unconfirmed {
+			s.messages[i].unconfirmed = false
+			break
+		}
 	}
 	if c.V2 {
 		c.publicReply(owner, s.discord, text)
