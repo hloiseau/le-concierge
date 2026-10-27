@@ -1,6 +1,6 @@
 # Eris v2 : personnalité, contexte et lubies
 
-Évolution du 27 octobre : [canon ERIS-01, mémoire durable des membres, journal d'épisodes, silence et contexte ambiant](eris-01-memory.md). Les limites de trente jours décrites ci-dessous concernent uniquement l'ancien carnet de lubies, pas le nouveau journal. Cette évolution n'est pas encore déployée par cette PR.
+Candidate du 27 octobre : [participation retrouvée et mémoire durable réconciliées](eris-recovery-79.md). Le [canon ERIS-01, la mémoire durable, le silence et le contexte ambiant](eris-01-memory.md) de main sont conservés. Les limites de trente jours décrites ci-dessous concernent uniquement l'ancien carnet de lubies, pas le nouveau journal. La candidate n'est pas déployée ; la production utilise le main `1894fae`.
 
 Déployé sur le NAS le 22 octobre 2026 à la demande de Hugo, depuis la branche de travail. Le bot actif utilise le profil v2 et Responses avec `gpt-6-luna`, via la connexion ChatGPT propre à Eris. Le profil historique reste le défaut dans le code. Voir le [relevé de déploiement](eris-v2-nas.md).
 
@@ -24,7 +24,7 @@ Une réponse Discord apporte désormais le texte du message d'Eris cité, unique
 
 ## Suivre une réponse sans mention — travail local du 26 octobre
 
-Après un message public effectivement envoyé par Eris, un message humain du salon peut poursuivre l'échange pendant deux minutes, même avec jusqu'à cinq messages intercalés. Exemple : Eris demande « Et toi, ça va ? », un autre membre intervient, puis le premier écrit « nickel » sans mention ni bouton Répondre. Un autre membre peut aussi répondre à une question ouverte au groupe. « Eris, tu connais ce film ? » permet de l'appeler par son nom, sans notification Discord.
+Après un message public effectivement envoyé par Eris, un message humain du salon peut poursuivre l'échange pendant deux minutes, même avec jusqu'à cinq messages intercalés. Exemple : Eris demande « Et toi, ça va ? », un autre membre intervient, puis le premier écrit « Je vais bien, et toi ? » sans mention ni bouton Répondre. Un autre membre peut aussi répondre à une question ouverte au groupe. « Eris, tu connais ce film ? » permet de l'appeler par son nom, sans notification Discord. Un simple « nickel » conserve le silence introduit dans main ; un choix média en attente reste traitable.
 
 Le bot doit avoir `ERIS_PROFILE=v2` et `DISCORD_MESSAGE_CONTENT=true`, avec Message Content Intent autorisé dans Discord. Ces paramètres restent propres au bot ; l'API n'a pas besoin d'un profil d'inférence. Le bot relit au maximum six messages précédents pour retrouver sa réponse. Un classement séparé, sans personnalité ni mémoire privée, reçoit aussi les messages intercalés avec leurs auteurs et décide si la relance lui est clairement destinée. Il est limité à huit secondes et partage la capacité d'inférence existante. Les essais des autres membres sont espacés de dix secondes ; l'interlocuteur en cours reste prioritaire. En cas de doute ou d'erreur, Eris reste silencieuse.
 

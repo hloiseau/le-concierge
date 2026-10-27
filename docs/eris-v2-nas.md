@@ -1,4 +1,4 @@
-État courant : [déploiement de la participation en salon du 26 octobre](eris-participation-deployment.md). Le relevé ci-dessous décrit la version précédente.
+État vérifié le 27 octobre : API et bot exécutent `1894fae72274981516692a0b746d97e80fa350f2` ; voir le [bilan de récupération](eris-recovery-79.md). Le [déploiement participation du 26 octobre](eris-participation-deployment.md) et le relevé ci-dessous sont historiques. La candidate de réconciliation n'est pas déployée.
 
 # Eris v2 sur le NAS — 23 octobre 2026
 

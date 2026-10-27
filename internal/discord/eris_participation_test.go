@@ -59,11 +59,21 @@ func TestErisChannelCommandRequiresSignedAdministratorAndPersists(t *testing.T) 
 }
 
 func TestSpontaneousParticipationBudgetSilenceAndNoTools(t *testing.T) {
-	for _, mode := range []string{"reply", "silence", "error", "disabled", "intent disabled", "ordinary", "banter", "mention elsewhere", "private", "bot", "stale", "disabled during call", "new message during call"} {
+	for _, mode := range []string{"reply", "silence", "error", "quiet", "disabled", "intent disabled", "ordinary", "banter", "mention elsewhere", "private", "bot", "stale", "disabled during call", "new message during call"} {
 		t.Run(mode, func(t *testing.T) {
 			b, _ := signedCommand(t, "eris")
 			participationMemory(t, b)
 			b.Eris.URL = "http://model.test"
+			if mode == "quiet" {
+				b.Eris.HTTP.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
+					return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Bonjour.\"}"}}]}`), nil
+				})
+				owner := "23456:11111:33333"
+				_, err := b.Eris.ReplyWithDiscordContext(context.Background(), owner, "Bonjour", false, "", eris.DiscordInput{MessageID: "99990", Speaker: eris.Speaker{ID: "11111"}}, nil)
+				if err != nil || !b.Eris.SkipPublicFollowup(owner, "tu peux te taire", false) {
+					t.Fatal("could not enter quiet state", err)
+				}
+			}
 			if mode != "disabled" {
 				if err := b.Eris.Memory.SetParticipation("23456", "33333", true); err != nil {
 					t.Fatal(err)

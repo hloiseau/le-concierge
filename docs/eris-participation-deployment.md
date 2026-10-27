@@ -1,5 +1,10 @@
 # Eris : participation en salon — 26 octobre 2026
 
+Relevé historique. Le 27 octobre, cette image est conservée sur le NAS, tandis
+que l'API et le bot exécutent `1894fae72274981516692a0b746d97e80fa350f2`.
+La [récupération et la candidate de réconciliation](eris-recovery-79.md) sont distinctes
+de ce déploiement passé ; cette note n'autorise pas à restaurer une ancienne base.
+
 Déploiement autorisé par Hugo sur `media-hub`, vérifié le 26 octobre 2026. Les corrections sont intégrées à la version réellement active `89a54e0`, afin de conserver la personnalité, les auteurs Discord, les images et le suivi des livres ajoutés depuis l'autre PC.
 
 - Code : `28f46de166fe4266a90e8ef24c43b24ca542752a`, branche `fix/eris-participation`.
