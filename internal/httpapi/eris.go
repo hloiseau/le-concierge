@@ -66,6 +66,14 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		message(eris.RemovalExplanation)
 		return
 	}
+	if component == "" && !eris.PersonalWriteRequested(caller.Question, input.Plan) {
+		message("Précise le suivi ou le réglage que tu veux modifier. Je n’ai rien changé.")
+		return
+	}
+	if !private && input.Plan.Action == "preferences" {
+		message("Pour tes réglages personnels, utilise /eris message:… en privé.")
+		return
+	}
 	// Watch history is private; request titles and statuses can be shared in-channel.
 	if !private && input.Plan.Unwatched {
 		message("Pour filtrer selon ce que tu as vu ou non, utilise /eris message:… en privé : ton historique de visionnage reste personnel.")
@@ -236,6 +244,10 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 		return s.erisCinema(ctx, u, p)
 	case "diagnostic":
 		return s.erisDiagnostic(ctx, u, g, p)
+	case "follow", "follows", "unfollow":
+		return s.erisFollows(ctx, u, g, p)
+	case "preferences":
+		return s.erisPreferences(ctx, u, g, p)
 	case "monitoring":
 		if !s.Config.MonitoringEnabled || s.Monitoring == nil {
 			return eris.ToolReply{Content: "Mes capteurs ne sont pas branchés : les mesures du NAS ne sont pas activées 👀"}

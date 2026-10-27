@@ -26,19 +26,23 @@ Demandes du membre, état/liste, même en public : {"action":"status"}, query si
 query=titre seul. Résous les pronoms avec la conversation. Omet les filtres non demandés. Titre/saison manquant : chat. L'application seule confirme/envoie les demandes. N'invente aucun résultat.`
 
 type Plan struct {
-	Action     string `json:"action"`
-	Query      string `json:"query,omitempty"`
-	Relation   string `json:"relation,omitempty"`
-	Source     string `json:"source,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	Genre      string `json:"genre,omitempty"`
-	MaxMinutes int    `json:"maxMinutes,omitempty"`
-	Unwatched  bool   `json:"unwatched,omitempty"`
-	Seasons    []int  `json:"seasons,omitempty"`
-	Text       string `json:"text,omitempty"`
-	URL        string `json:"url,omitempty"`
-	Year       int    `json:"year,omitempty"`
-	RequestID  int64  `json:"requestId,omitempty"`
+	Action         string `json:"action"`
+	Query          string `json:"query,omitempty"`
+	Relation       string `json:"relation,omitempty"`
+	Source         string `json:"source,omitempty"`
+	Kind           string `json:"kind,omitempty"`
+	Genre          string `json:"genre,omitempty"`
+	MaxMinutes     int    `json:"maxMinutes,omitempty"`
+	Unwatched      bool   `json:"unwatched,omitempty"`
+	Seasons        []int  `json:"seasons,omitempty"`
+	Text           string `json:"text,omitempty"`
+	URL            string `json:"url,omitempty"`
+	Year           int    `json:"year,omitempty"`
+	RequestID      int64  `json:"requestId,omitempty"`
+	SubscriptionID int64  `json:"subscriptionId,omitempty"`
+	Channel        string `json:"channel,omitempty"`
+	Setting        string `json:"setting,omitempty"`
+	Value          string `json:"value,omitempty"`
 }
 
 var unseenWords = regexp.MustCompile(`(?i)(?:^|[^\p{L}])(non[- ]vus?|pas(?: encore| déjà)? (?:regard[ée]s?|vus?)|jamais (?:regard[ée]s?|vus?)|unwatched|unseen|haven.t (?:watched|seen))(?:$|[^\p{L}])`)
@@ -103,6 +107,12 @@ func ParsePlan(raw string) (Plan, error) {
 
 func (p Plan) Validate() error {
 	invalid := errors.New("invalid media plan")
+	if (p.SubscriptionID != 0 && p.Action != "unfollow") || (p.Channel != "" && p.Action != "follow") || ((p.Setting != "" || p.Value != "") && p.Action != "preferences") || (p.RequestID != 0 && p.Action != "diagnostic") || (p.Year != 0 && p.Action != "cinema" && p.Action != "follow") {
+		return invalid
+	}
+	if p.Action == "follow" || p.Action == "follows" || p.Action == "unfollow" || p.Action == "preferences" {
+		return p.validatePersonalTool()
+	}
 	if p.Action == "diagnostic" {
 		if p.Text != "" || p.Kind != "" || p.Relation != "" || p.Source != "" || p.URL != "" || p.Year != 0 || p.Genre != "" || p.MaxMinutes != 0 || p.Unwatched || len(p.Seasons) > 0 || p.RequestID < 0 || p.RequestID > 2147483647 || (p.RequestID != 0 && p.Query != "") || (p.RequestID == 0 && (strings.TrimSpace(p.Query) != p.Query || strings.ContainsFunc(p.Query, unicode.IsControl) || utf8.RuneCountInString(p.Query) < 2 || utf8.RuneCountInString(p.Query) > 200)) {
 			return invalid

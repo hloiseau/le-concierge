@@ -29,14 +29,23 @@ var trailerKey = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 
 // Cinema retains catalogue metadata only. No requests, viewers or watch providers.
 func (c *Client) Cinema(ctx context.Context, base, key string, user int64, query, kind string, year int) (CinemaDetails, error) {
-	if year != 0 && (year < 1801 || year > 2999) {
-		return CinemaDetails{}, ErrDenied
-	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	m, choices, err := c.ResolveMediaReference(ctx, base, key, user, query, kind, year)
+	if err != nil {
+		return CinemaDetails{Choices: choices}, err
+	}
+	return c.cinemaDetails(ctx, base, key, user, m)
+}
+
+// ResolveMediaReference is shared by read-only cards and explicit follow requests.
+func (c *Client) ResolveMediaReference(ctx context.Context, base, key string, user int64, query, kind string, year int) (RequestCandidate, []RequestCandidate, error) {
+	if year != 0 && (year < 1801 || year > 2999) {
+		return RequestCandidate{}, nil, ErrDenied
+	}
 	matches, err := c.searchRequestCandidates(ctx, base, key, user, query, kind, 20)
 	if err != nil {
-		return CinemaDetails{}, err
+		return RequestCandidate{}, nil, err
 	}
 	var eligible, exact []RequestCandidate
 	for _, m := range matches {
@@ -52,10 +61,14 @@ func (c *Client) Cinema(ctx context.Context, base, key string, user int64, query
 		eligible = exact
 	}
 	if len(eligible) != 1 {
-		return CinemaDetails{Choices: eligible}, ErrMediaReference
+		return RequestCandidate{}, eligible, ErrMediaReference
 	}
 	m := eligible[0]
 	m.Title = cleanActivity(m.Title, 140)
+	return m, nil, nil
+}
+
+func (c *Client) cinemaDetails(ctx context.Context, base, key string, user int64, m RequestCandidate) (CinemaDetails, error) {
 	headers, err := c.seerrMember(ctx, base, key, user)
 	if err != nil {
 		return CinemaDetails{}, err
