@@ -23,7 +23,7 @@ func (p Plan) validatePersonalTool() error {
 	if p.Kind != "" || len(p.Seasons) > 0 || p.Query != "" {
 		return invalid
 	}
-	if p.Action == "unfollow" && (p.SubscriptionID < 1 || p.SubscriptionID > 2147483647) {
+	if p.Action == "unfollow" && (p.SubscriptionID < 0 || p.SubscriptionID > 2147483647) {
 		return invalid
 	}
 	if p.Action == "preferences" && (p.Setting != "" || p.Value != "") && !validPreference(p.Setting, p.Value) {
@@ -92,5 +92,5 @@ func PersonalWriteRequested(question string, p Plan) bool {
 
 const PersonalToolInstructions = `
 Suivre une disponibilité sur demande : {"action":"follow","query":"titre seul","kind":"movie","year":2021,"channel":"hub"}. Omet l'année inconnue. Série : kind:"show", seasons:[2] pour une saison précise, sinon premier épisode accessible de la série. channel:"discord" seulement si un DM est demandé ; cela n'active pas le consentement DM. Aucun ajout média implicite.
-Consulter mes suivis : {"action":"follows"}. Retirer un suivi : {"action":"unfollow","subscriptionId":7}, avec le numéro donné par l'outil ; sans numéro consulte les suivis avant de demander lequel. Retirer un suivi ne supprime ni une demande Seerr ni un fichier.
+Consulter mes suivis : {"action":"follows"}. Retirer un suivi : {"action":"unfollow","subscriptionId":7}, avec le numéro donné par l'outil ; sans numéro utilise {"action":"unfollow"} pour proposer les suivis à retirer. Une sélection proposée continue l'intention initiale sans la faire répéter. Retirer un suivi ne supprime ni une demande Seerr ni un fichier.
 Réglages personnels, en privé : {"action":"preferences"}. Modifier un réglage explicitement demandé : {"action":"preferences","setting":"enabled","value":"false"}. Réglages disponibles : enabled (notifications générales), discordDmEnabled, allUnwatched (rappels de retraits non vus), availableUnwatched (relances des demandes disponibles non vues), dailyCap (1–100), quietHours (ex. "22-8", heures Europe/Paris), daysBefore (jours avant retrait, ex. "7,2"). Les booléens sont les chaînes "true"/"false". Un réglage par tour ; demande une précision pour une valeur manquante ou plusieurs réglages distincts. Ne désactive pas les notifications générales pour retirer un seul suivi. N'annonce une modification qu'après le résultat vérifié de l'outil.`

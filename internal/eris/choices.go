@@ -47,7 +47,14 @@ func MatchChoice(text string, choices []Button) (string, bool) {
 		}
 		return "", true
 	}
-	for _, prefix := range []string{"je veux ", "je prends ", "prends ", "demande ", "ajoute ", "choisis ", "choisir "} {
+	prefixes := []string{"je veux ", "je prends ", "prends ", "demande ", "ajoute ", "choisis ", "choisir "}
+	if choices[0].Operation == "unfollow" {
+		prefixes = append(prefixes, "retire ", "supprime ", "arrête ", "arrete ")
+	}
+	if choices[0].Operation == "follow" {
+		prefixes = append(prefixes, "suis ", "suivre ")
+	}
+	for _, prefix := range prefixes {
 		if strings.HasPrefix(q, prefix) {
 			q = strings.TrimPrefix(q, prefix)
 			break
@@ -63,7 +70,7 @@ func MatchChoice(text string, choices []Button) (string, bool) {
 		}
 		selected := b.Title != "" && q == choiceText(b.Title)
 		if b.Year != "" && b.Title != "" {
-			selected = selected || q == choiceText(b.Title+" ("+b.Year+")") || q == choiceText(b.Title+" "+b.Year) || q == "celui de "+b.Year
+			selected = selected || q == choiceText(b.Title+" ("+b.Year+")") || q == choiceText(b.Title+" "+b.Year) || q == "celui de "+b.Year || q == b.Year || q == "le "+b.Year
 		}
 		number := strconv.Itoa(b.Number)
 		for _, word := range append([]string{number, "le " + number, "numéro " + number, "le numéro " + number}, ordinals[b.Number]...) {
@@ -84,7 +91,7 @@ func NaturalChoices(reply ToolReply) ToolReply {
 	if len(reply.Buttons) == 0 {
 		return reply
 	}
-	hint := "\nPour le demander, donne-moi son titre ou son numéro 🍿"
+	hint := "\nPour choisir, donne-moi le titre ou le numéro de la proposition."
 	if strings.HasPrefix(reply.Buttons[0].ID, "eris:confirm:") {
 		hint = "\nUn « oui, vas-y » pour confirmer, ou « annule »."
 	}

@@ -23,6 +23,34 @@ func (s *Server) erisFollows(ctx context.Context, u store.User, g upstream.Grant
 	if !s.subscriptionsEnabled() {
 		return eris.ToolReply{Content: "Les suivis ne sont pas encore configurés."}
 	}
+	if p.Action == "unfollow" && p.SubscriptionID == 0 {
+		items, _, err := s.listFollows(ctx, u, 0)
+		if err != nil {
+			return failure(err)
+		}
+		reply := eris.ToolReply{Content: "Quel suivi veux-tu retirer ?"}
+		if len(items) == 0 {
+			reply.Content = "Tu n’as aucun suivi à retirer."
+		}
+		for i, item := range items {
+			if i == 3 {
+				break
+			}
+			plan := eris.Plan{Action: "unfollow", SubscriptionID: item.ID}
+			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: u.DiscordID, GuildID: s.Config.DiscordGuildID, Stage: "choose", PersonalPlan: &plan, Expires: time.Now().Add(10 * time.Minute)}
+			key := s.saveErisPending(pending)
+			if key == "" {
+				return failure(upstream.ErrUnavailable)
+			}
+			title := safeText(item.Title)
+			if item.Season != nil {
+				title += fmt.Sprintf(" · saison %d", *item.Season)
+			}
+			reply.Content += fmt.Sprintf("\n%d. %s", i+1, title)
+			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Retirer %d", i+1), Title: title, Number: i + 1, Operation: "unfollow"})
+		}
+		return reply
+	}
 	if p.Action == "follows" {
 		items, total, err := s.listFollows(ctx, u, 0)
 		if err != nil {
@@ -68,18 +96,33 @@ func (s *Server) erisFollows(ctx context.Context, u store.User, g upstream.Grant
 	}
 	m, choices, err := s.Upstream.ResolveMediaReference(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, member, p.Query, p.Kind, p.Year)
 	if errors.Is(err, upstream.ErrMediaReference) {
-		text := "Précise le titre, l’année et le type du contenu à suivre :"
+		reply := eris.ToolReply{Content: "Quel contenu veux-tu suivre ?"}
+		if len(choices) == 0 {
+			reply.Content = "Précise le titre, l’année et le type du contenu à suivre."
+		}
 		for i, c := range choices {
 			if i == 3 {
 				break
 			}
-			text += "\n• " + safeText(c.Title) + " (" + c.Year + ") · " + c.Kind
+			plan := p
+			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: u.DiscordID, GuildID: s.Config.DiscordGuildID, SeerrID: member, Candidate: c, Stage: "choose", PersonalPlan: &plan, Expires: time.Now().Add(10 * time.Minute)}
+			key := s.saveErisPending(pending)
+			if key == "" {
+				return failure(upstream.ErrUnavailable)
+			}
+			reply.Content += fmt.Sprintf("\n%d. %s (%s) · %s", i+1, safeText(c.Title), c.Year, c.Kind)
+			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Suivre %d", i+1), Title: c.Title, Year: c.Year, Number: i + 1, Operation: "follow"})
 		}
-		return eris.ToolReply{Content: text}
+		return reply
 	}
 	if err != nil {
 		return failure(err)
 	}
+	return s.erisFollowCandidate(ctx, u, p, m)
+}
+
+func (s *Server) erisFollowCandidate(ctx context.Context, u store.User, p eris.Plan, m upstream.RequestCandidate) eris.ToolReply {
+	failure := func(err error) eris.ToolReply { return eris.ToolReply{Content: followErrorMessage(err)} }
 	target := store.SubscriptionTarget{Type: m.Kind, TMDBID: m.ID}
 	if len(p.Seasons) == 1 {
 		target.Season = &p.Seasons[0]
