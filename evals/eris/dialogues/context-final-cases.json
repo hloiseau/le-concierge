@@ -1,0 +1,114 @@
+[
+  {
+    "id": "new-memoir",
+    "inputs": [
+      "J'ai enfin rendu mon mémoire.",
+      "Je réalise pas encore.",
+      "Je pars fêter ça."
+    ]
+  },
+  {
+    "id": "new-skin",
+    "inputs": [
+      "J'ai claqué 40 balles pour un skin que je vois jamais.",
+      "Je joue en vue à la première personne.",
+      "Oui bon j'ai compris."
+    ]
+  },
+  {
+    "id": "new-register",
+    "inputs": [
+      "Tu me parles comme un communiqué de presse.",
+      "C'est mieux, continue comme ça."
+    ]
+  },
+  {
+    "id": "new-demon",
+    "inputs": [
+      "Dans notre scène fictive, je viens de casser une de tes cornes.",
+      "Je la recolle au scotch.",
+      "Ok hors-jeu. Combien font 17 fois 6 ?"
+    ]
+  },
+  {
+    "id": "new-serious",
+    "inputs": [
+      "En vrai j'ai besoin que tu me prennes au sérieux deux minutes.",
+      "Je me suis embrouillé avec un pote."
+    ]
+  },
+  {
+    "id": "old-rejected-history",
+    "seed": [
+      {
+        "role": "user",
+        "content": "Ça marche mieux maintenant ?"
+      },
+      {
+        "role": "assistant",
+        "content": "Oui, j'étais un peu en mode répondeur de préfecture."
+      },
+      {
+        "role": "user",
+        "content": "De préfecture carrément..."
+      },
+      {
+        "role": "assistant",
+        "content": "Encore un peu et je te demandais un justificatif de domicile."
+      }
+    ],
+    "inputs": [
+      "Bon Eris, tu réponds normalement maintenant ?",
+      "C'est surtout que je veux pouvoir discuter avec toi.",
+      "Je vais me faire une pizza."
+    ]
+  },
+  {
+    "id": "new-server",
+    "expect_action": "monitoring",
+    "inputs": [
+      "Tu peux me donner la RAM et le CPU du NAS ?"
+    ]
+  },
+  {
+    "id": "new-removal",
+    "inputs": [
+      "Supprime Alien de Plex.",
+      "Alien, celui de 1979."
+    ]
+  },
+  {
+    "id": "new-cinema",
+    "inputs": [
+      "Entre The Thing et Alien, tu choisis lequel ? Je veux ton avis, pas une recherche."
+    ]
+  },
+  {
+    "id": "holdout-train",
+    "inputs": [
+      "J'ai couru pour attraper un train et c'était pas le bon.",
+      "Je suis descendu à l'arrêt suivant."
+    ]
+  },
+  {
+    "id": "holdout-register",
+    "inputs": [
+      "Tu réponds comme si tu préparais chaque phrase pendant dix minutes.",
+      "Voilà, tranquille, c'est tout ce que je voulais."
+    ]
+  },
+  {
+    "id": "holdout-pay",
+    "inputs": [
+      "J'ai reçu ma première paie !",
+      "Je vais inviter mes potes."
+    ]
+  },
+  {
+    "id": "holdout-horror",
+    "inputs": [
+      "Dans notre fiction d'horreur gore, mon personnage te demande si tu vas le laisser sortir.",
+      "Il t'insulte et te fait un doigt d'honneur."
+    ]
+  }
+]

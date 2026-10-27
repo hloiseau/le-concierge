@@ -1,5 +1,7 @@
 # Terrain de test Eris — issue #62
 
+La [refonte du contexte et de la voix](context-refactor.md), sur `fix/eris-voice-context`, audite le prompt réellement envoyé, corrige la répétition des épisodes récents et partage une voix proche de la demande actuelle. Les recherches, comparaisons et conversations complètes sont conservées ; la production n'est pas modifiée par cette recette.
+
 But : comparer la personnalité actuellement en production et une candidate plus spontanée, absurde et mordante, sans perdre le classement Plex/Seerr. Voir le [corpus sourcé](references.md).
 
 `persona.txt` est une candidate expérimentale ; elle ne remplace pas `internal/eris/chat.go`. `cases.json` contient 12 scénarios de développement et 12 de réserve. Aucun message réel, identifiant de membre, jeton ou accès au catalogue n'est nécessaire. Les précédents échanges sont des fixtures synthétiques, pas des conversations générées en chaîne.

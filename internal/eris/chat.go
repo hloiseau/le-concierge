@@ -217,25 +217,13 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	s.turnID, s.notes, s.chatReply = 0, nil, false
 	s.choices, s.choiceSource = nil, ""
 	epoch := c.memoryEpoch
-	persona := Persona
-	if c.V2 {
-		persona = CharacterPersona + CharacterCanon
-		if incoming.Speaker.ID != "" {
-			persona += discordContextInstructions
-		}
-	}
-	if run != nil {
-		persona += ToolInstructions
-		if c.V2 {
-			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions + DiscordToolInstructions + GiftToolInstructions
-			persona += "\nHorloge de planification UTC : " + now.UTC().Format(time.RFC3339) + ". Heures locales par défaut : Europe/Paris."
-		}
-		if c.V2 && c.Memory != nil {
-			persona += MemoryInstructions + DurableMemoryInstructions
-		}
+	persona := c.instructions(incoming.Speaker.ID != "", run != nil)
+	if c.V2 && run != nil {
+		persona += "\nHorloge de planification UTC : " + now.UTC().Format(time.RFC3339) + ". Heures locales par défaut : Europe/Paris."
 	}
 	messages := []Message{{Role: "system", Content: persona}}
 	var recalled *rememberedWhim
+	var durable memoryBundle
 	if c.V2 {
 		messages = append(messages, Message{Role: "system", Content: "Auteur actuel (identité technique, ne pas réciter) : " + owner})
 		c.observePublic(owner, question, incoming, now)
@@ -275,7 +263,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			}
 			bundle, err := c.Memory.recallDurable(owner, question, incoming, s.turnID)
 			if err == nil && c.Memory.derive(s.turnID, owner, bundle) == nil {
-				messages = append(messages, Message{Role: "user", Content: bundle.context()})
+				durable = bundle
 			}
 			recalled, _ = c.Memory.recall(owner, question, now)
 			if recalled == nil && stopWhim(question) && s.lastTopic != "" {
@@ -300,7 +288,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	defer func() { c.mu.Lock(); s.busy = false; c.mu.Unlock(); <-c.slots }()
 	if c.V2 {
 		budget := recentTextBudget
-		available := contextTextLimit - textRunes(messages) - textRunes(tail) - summaryTextBudget - recallTextReserve
+		available := contextTextLimit - textRunes(messages) - textRunes(tail) - durable.promptBudget() - utf8.RuneCountInString(conversationVoice) - summaryTextBudget - recallTextReserve
 		if available < budget {
 			budget = available
 		}
@@ -330,6 +318,13 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		grounding = append(grounding, Message{Role: "assistant", Content: reference})
 	}
 	grounding = append(grounding, Message{Role: "user", Content: question})
+	if c.V2 {
+		// Compact first: an evicted exchange may still need its durable citation.
+		durable = durable.withoutRecent(incoming.Speaker.ID, history)
+		if len(durable.Notes) != 0 || len(durable.Episodes) != 0 {
+			messages = append(messages, Message{Role: "user", Content: durable.context()})
+		}
+	}
 	messages = append(messages, history...)
 	messages = append(messages, tail...)
 
@@ -337,7 +332,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	var err error
 	recallOnly := false
 	if direct == nil {
-		reply, err = c.complete(ctx, messages, run != nil)
+		reply, err = c.complete(ctx, c.dialoguePrompt(messages), run != nil)
 		if err != nil {
 			return "", err
 		}
@@ -357,7 +352,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				return "Je ne peux pas consulter mes souvenirs pour le moment.", nil
 			}
 			messages = append(messages, Message{Role: "assistant", Content: reply}, Message{Role: "user", Content: bundle.context()}, Message{Role: "system", Content: "Recherche mémoire terminée. Réponds à la question actuelle avec action chat uniquement. Aucun autre outil, aucune nouvelle recherche. N'invente pas un souvenir absent."})
-			reply, err = c.complete(ctx, messages, true)
+			reply, err = c.complete(ctx, c.dialoguePrompt(messages), true)
 			if err != nil {
 				return "", err
 			}
@@ -440,7 +435,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			if err != nil {
 				return "", ErrUnavailable
 			}
-			if (plan.Action == "web" || plan.Action == "anime") && result.Web != nil {
+			if (plan.Action == "web" || plan.Action == "anime" || plan.Action == "gifts") && result.Web != nil {
 				reply = c.webAnswer(ctx, question, *result.Web)
 			}
 		}

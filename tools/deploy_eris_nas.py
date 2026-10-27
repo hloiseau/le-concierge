@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import sqlite3
 import subprocess
 import time
@@ -20,13 +21,40 @@ REPOSITORY = 'ghcr.io/hloiseau/le-concierge'
 CONTAINERS = ['le-concierge-api', 'le-concierge-bot', 'le-hub', 'eris-runtime', 'eris-auth']
 
 
-def prepare(config, image):
+def prepare(config, image, hub_image=None, web=None, ouicheur_origin=None):
     if not re.fullmatch(re.escape(REPOSITORY) + r'@sha256:[a-f0-9]{64}', image):
         raise ValueError('expected an immutable published image')
     updated = copy.deepcopy(config)
     for name in ('api', 'bot'):
         updated['services'][name]['image'] = image
+    if hub_image:
+        if not re.fullmatch(r'ghcr.io/hloiseau/le-hub@sha256:[a-f0-9]{64}', hub_image):
+            raise ValueError('expected immutable Hub image')
+        updated['services']['hub']['image'] = hub_image
+    if web:
+        if 'searxng' in updated['services'] or config['services']['api'].get('networks'):
+            raise ValueError('web activation requires an unconfigured service on the default app network')
+        updated['services']['searxng'] = copy.deepcopy(web)
+        updated['services']['api'].setdefault('environment', {})['ERIS_WEB_URL'] = 'http://searxng:8080'
+    if ouicheur_origin:
+        from urllib.parse import urlsplit
+        origin = urlsplit(ouicheur_origin)
+        if origin.scheme != 'https' or not origin.hostname or origin.username or origin.password or origin.path or origin.query or origin.fragment:
+            raise ValueError('expected HTTPS Ouicheur origin')
+        updated['services']['api'].setdefault('environment', {}).update({
+            'OUICHEUR_URL': ouicheur_origin,
+            'OUICHEUR_REVISION': 'bbd143bc03201205a35b0a1009bf8476e110f16a',
+        })
     return updated
+
+
+def web_service(root, secret):
+    template = Path(__file__).resolve().parent.parent / 'deploy/eris-web.override.yaml'
+    service = json.loads(template.read_text())['services']['searxng']
+    service['container_name'] = 'eris-web'
+    service['environment']['SEARXNG_SECRET'] = secret
+    service['volumes'] = [str(root / 'eris-web/settings.yml') + ':/etc/searxng/settings.yml:ro']
+    return service
 
 
 def inspect(name):
@@ -49,11 +77,11 @@ def backup_database(source, destination):
             raise RuntimeError('invalid SQLite backup')
 
 
-def healthy():
+def healthy(extra=()):
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
         try:
-            items = [inspect(name) for name in CONTAINERS]
+            items = [inspect(name) for name in [*CONTAINERS, *extra]]
             if all(x['State']['Running'] and not x['State']['OOMKilled'] and x['State'].get('Health', {}).get('Status') == 'healthy' for x in items):
                 return
         except subprocess.SubprocessError:
@@ -114,13 +142,28 @@ def main():
     parser.add_argument('--revision', required=True)
     parser.add_argument('--previous-revision', required=True)
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--hub-revision')
+    parser.add_argument('--previous-hub-revision')
+    parser.add_argument('--enable-web', action='store_true')
+    parser.add_argument('--ouicheur-origin')
     args = parser.parse_args()
     assert all(re.fullmatch(r'[a-f0-9]{40}', value) for value in (args.revision, args.previous_revision))
+    assert bool(args.hub_revision) == bool(args.previous_hub_revision)
+    if args.hub_revision:
+        assert all(re.fullmatch(r'[a-f0-9]{40}', value) for value in (args.hub_revision, args.previous_hub_revision))
     root = args.root.resolve(strict=True)
     with Client() as client:
         current = client.call('app.config', 'media-hub')
         before = {name: inspect(name) for name in CONTAINERS}
         previous_model = env_model(before['le-concierge-bot'])
+        if args.hub_revision:
+            assert before['le-hub']['Config']['Labels']['org.opencontainers.image.revision'] == args.previous_hub_revision
+        if args.ouicheur_origin:
+            installed = inspect('ix-ouicheur-ouicheur-1')
+            assert installed['Config']['Labels']['org.opencontainers.image.revision'] == 'bbd143bc03201205a35b0a1009bf8476e110f16a'
+            assert dict(v.split('=', 1) for v in installed['Config']['Env']).get('APP_ORIGIN') == args.ouicheur_origin
+        web = web_service(root, secrets.token_hex(32)) if args.enable_web else None
+        prepare(current, REPOSITORY+'@sha256:'+'0'*64, web=web, ouicheur_origin=args.ouicheur_origin)
         for service, name in zip(('api', 'bot'), CONTAINERS[:2]):
             assert before[name]['Config']['Labels']['org.opencontainers.image.revision'] == args.previous_revision
             assert before[name]['Config']['Image'] == current['services'][service]['image']
@@ -134,7 +177,15 @@ def main():
         image = inspect(tag)
         assert image['Config']['Labels']['org.opencontainers.image.revision'] == args.revision
         pinned = next(value for value in image['RepoDigests'] if value.startswith(REPOSITORY + '@sha256:'))
-        updated = prepare(current, pinned)
+        hub_image = None
+        hub_pinned = None
+        if args.hub_revision:
+            tag = 'ghcr.io/hloiseau/le-hub:sha-' + args.hub_revision
+            subprocess.run(['docker', 'pull', tag], capture_output=True, check=True)
+            hub_image = inspect(tag)
+            assert hub_image['Config']['Labels']['org.opencontainers.image.revision'] == args.hub_revision
+            hub_pinned = next(value for value in hub_image['RepoDigests'] if value.startswith('ghcr.io/hloiseau/le-hub@sha256:'))
+        updated = prepare(current, pinned, hub_pinned, web, args.ouicheur_origin)
         subprocess.run(['docker', 'compose', '-f', '-', 'config', '--quiet'], input=json.dumps(updated), text=True, capture_output=True, check=True)
         backups = root / 'ops-backups'
         assert backups.stat().st_mode & 0o777 == 0o700
@@ -152,23 +203,42 @@ def main():
         backup_database(root / 'eris-character/character.db', bundle / 'character.db')
         for name in ('config-before.json', 'concierge.db', 'character.db'):
             permissions(bundle / name, '600')
+        if web:
+            directory = root / 'eris-web'
+            assert not directory.is_symlink()
+            if directory.exists():
+                assert {entry.name for entry in directory.iterdir()} <= {'settings.yml'}
+            directory.mkdir(mode=0o755, exist_ok=True)
+            settings = directory / 'settings.yml'
+            expected = (Path(__file__).resolve().parent.parent / 'deploy/searxng/settings.yml').read_text()
+            if settings.exists():
+                assert not settings.is_symlink() and settings.read_text() == expected
+            else:
+                with private_file(settings) as stream:
+                    stream.write(expected)
+            permissions(directory, '755')
+            permissions(settings, '644')
         assert client.call('app.config', 'media-hub') == current, 'configuration changed during preparation'
         print(json.dumps({'phase': 'backups_ready', 'private_backup_name': bundle.name, 'image': pinned, 'image_id': image['Id']}), flush=True)
         try:
             client.call('app.update', 'media-hub', {'custom_compose_config': updated}, job=True)
-            healthy()
+            healthy(['eris-web'] if web else [])
             for name in CONTAINERS[:2]:
                 actual = inspect(name)
                 assert actual['Image'] == image['Id']
                 assert actual['Config']['Labels']['org.opencontainers.image.revision'] == args.revision
             for name in CONTAINERS[2:]:
-                assert inspect(name)['Image'] == before[name]['Image']
+                expected_image = hub_image['Id'] if name == 'le-hub' and hub_image else before[name]['Image']
+                assert inspect(name)['Image'] == expected_image
             for name, binary in zip(CONTAINERS[:2], ('api', 'bot')):
                 subprocess.run(['docker', 'exec', name, '/app/' + binary, '--healthcheck'], capture_output=True, check=True)
             status = database_status(root)
             assert status['main_schema'] == previous_status['main_schema']
             assert env_model(inspect('le-concierge-bot')) == previous_model
             discord = discord_ready(inspect('le-concierge-bot'))
+            if web:
+                probe = "import json,urllib.request,urllib.parse;u='http://127.0.0.1:8080/search?'+urllib.parse.urlencode({'q':'Blender official website','format':'json'});d=json.load(urllib.request.urlopen(u,timeout=20));assert len(d.get('results',[]))>0"
+                subprocess.run(['docker', 'exec', 'eris-web', '/usr/local/searxng/.venv/bin/python', '-c', probe], capture_output=True, check=True)
         except Exception:
             client.call('app.update', 'media-hub', {'custom_compose_config': current}, job=True)
             healthy()
@@ -176,6 +246,13 @@ def main():
             print(json.dumps({'phase': 'rolled_back', 'databases_restored': False}), flush=True)
             raise
         receipt = {'phase': 'deployed', 'revision': args.revision, 'image': pinned, 'image_id': image['Id'], 'services': ['api', 'bot'], 'model': env_model(inspect('le-concierge-bot')), **status, **discord}
+        if hub_image:
+            receipt.update({'hub_revision': args.hub_revision, 'hub_image': hub_pinned})
+            receipt['services'].append('hub')
+        if web:
+            receipt['services'].append('searxng')
+            receipt['web_search_verified'] = True
+        receipt['ouicheur_enabled'] = bool(args.ouicheur_origin)
         with private_file(bundle / 'receipt.json') as stream:
             json.dump(receipt, stream, indent=2)
         permissions(bundle / 'receipt.json', '600')

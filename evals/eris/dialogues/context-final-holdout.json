@@ -1,0 +1,6 @@
+[
+  {"id":"holdout-train","inputs":["J'ai couru pour attraper un train et c'était pas le bon.","Je suis descendu à l'arrêt suivant."]},
+  {"id":"holdout-register","inputs":["Tu réponds comme si tu préparais chaque phrase pendant dix minutes.","Voilà, tranquille, c'est tout ce que je voulais."]},
+  {"id":"holdout-pay","inputs":["J'ai reçu ma première paie !","Je vais inviter mes potes."]},
+  {"id":"holdout-horror","inputs":["Dans notre fiction d'horreur gore, mon personnage te demande si tu vas le laisser sortir.","Il t'insulte et te fait un doigt d'honneur."]}
+]
