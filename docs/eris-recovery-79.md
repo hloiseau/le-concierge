@@ -2,7 +2,7 @@
 
 Le build local recherché dans [#79](https://github.com/hloiseau/le-concierge/issues/79)
 est retrouvé. La [PR de conservation #81](https://github.com/hloiseau/le-concierge/pull/81)
-rend ses sources accessibles sur GitHub. La branche `fix/eris-reconcile-79` conserve
+rend ses sources accessibles sur GitHub. La [PR de réconciliation #82](https://github.com/hloiseau/le-concierge/pull/82) conserve
 la mémoire durable de main et réintègre la participation. **La candidate n'est ni
 fusionnée ni déployée. Le ton reste soumis à la recette de Hugo.** Les outils de
 [#78](https://github.com/hloiseau/le-concierge/issues/78) restent suspendus.
@@ -82,14 +82,55 @@ comparable, pas une déclaration que la régression de ton est corrigée.
   transport Responses, bases temporaires, livraisons et outils simulés. Chaque
   réponse générée alimente le tour suivant. Aucun message Discord réel n'est envoyé.
 
-Les résultats de la comparaison modèle sont consignés après exécution dans cette
-section. Les fichiers bruts contenant prompts complets restent privés. Le verdict
-éditorial porte sur les échanges complets, le naturel, la compréhension et le
-macabre ; le JSON valide et les mots-clés ne suffisent pas.
+### Comparaison Sol 6.1 réellement exécutée
+
+Les trois versions ont chacune effectué les 19 étapes des six scénarios :
+18 tours conversationnels et un oubli, soit **54 tours conversationnels et trois
+oublis au total**. Les réponses sont lues comme des conversations complètes.
+Le laboratoire commun vérifie mécaniquement le silence demandé et le choix des
+outils ; ses assertions ne notent ni le macabre ni le rappel du projet.
+
+| Observation | Référence `28f46de` | Main `1894fae` | Candidate `ac573f3` |
+| --- | --- | --- | --- |
+| Provocation sur le score effacé | Réaction corporelle explicite et liée au score | Réplique sur une victoire obtenue sans jouer ; macabre seulement après relance explicite | Réaction corporelle explicite et liée aux points perdus |
+| Taquinerie de pirates, deux interlocuteurs, puis clarification | Registre du jeu maintenu | Registre du jeu maintenu | Registre du jeu maintenu |
+| Demande d'arrêt puis calcul | 105 minutes, pas de dernière pique | Identique | Identique |
+| « Merci, nickel » après le calcul | Répond encore ; échec de l'assertion de silence | Silence | Silence |
+| Demande Arrival / état du CPU | `search` / `monitoring` simulés | Identique | Identique |
+| Cobalt après redémarrage | Nom non rappelé | Nom et langage rappelés | Nom et langage rappelés |
+| Projet de Bob / oubli d'Alice, puis redémarrage | N'invente pas le nom | Ne donne pas Cobalt à Bob ; ne retrouve plus Cobalt après oubli | Identique |
+| Durée du lot, hors Discord | 96,63 s | 81,18 s | 89,89 s |
+
+Les deux dernières versions passent les assertions du laboratoire ; la référence
+échoue seulement sur l'acquiescement qui produit encore une réponse. Le rappel,
+l'identité du projet et son absence après oubli sont des observations sur les
+réponses, complétées par les tests déterministes de mémoire, pas un score de style.
+La mesure porte sur le laboratoire dans un conteneur isolé du NAS, pas sur la
+latence bout en bout du bot Discord. Un premier lancement avait échoué avant
+tout appel modèle, le montage temporaire interdisant l'exécution ; déplacer les
+binaires de laboratoire sur le dataset exécutable a permis les trois lots complets.
+
+La candidate retrouve un macabre plus direct sur la provocation banale et conserve
+les améliorations fonctionnelles de main. Elle répète toutefois les dents dans
+plusieurs scènes et aligne trois réponses de mémoire avec le même emoji 😇.
+Certaines répliques restent écrites ou explicatives ; aucune nouvelle retouche
+de prompt n'est faite à partir de ce lot. **La leçon sérieuse après clarification
+signalée dans #79 n'est pas reproduite par le scénario de pirates, déjà clairement
+cadré comme un jeu.** Ce résultat ne démontre pas sa disparition en contexte ambigu
+ou dans une longue session avec des souvenirs antérieurs.
+
+L'empreinte SHA-256 du `CharacterPersona` récupéré et candidat est
+`ab2a96a216c849e391c75dc8218d7e50e3eb3745d2b15ddc604c04669a41a2ea`.
+Le fichier des scénarios porte l'empreinte
+`d97984bb6deb25c2a76d59a867cceb61625c844cff9a8c044703b12677f4f2e8`.
+Les rapports JSON complets, logs et binaires de laboratoire restent privés, sur
+le NAS et dans la sauvegarde du PC. Aucun prompt complet ni transcription Discord
+réelle n'a été publié. Ces six conversations sont du développement ; elles ne
+constituent pas une réserve indépendante ou une recette humaine.
 
 ## Livraison et retour arrière
 
-La source retrouvée est poussée dans #81. La candidate suit la branche
+La source retrouvée est poussée dans #81. La candidate est poussée dans la [PR #82](https://github.com/hloiseau/le-concierge/pull/82), branche
 `fix/eris-reconcile-79`, avec le commit historique dans ses ancêtres. Le guide de
 [reprise initial](eris-reprise-autre-pc.md) est mis à jour dans cette branche.
 La CI de la PR complète les contrôles locaux, notamment le détecteur de courses
