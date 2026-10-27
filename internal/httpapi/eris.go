@@ -272,6 +272,8 @@ func (s *Server) erisEvent(id string) bool {
 func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant, discordID string, p eris.Plan, private bool) eris.ToolReply {
 	reply := eris.ToolReply{Content: "Je ne peux pas vérifier ces informations pour le moment. Réessaie plus tard."}
 	switch p.Action {
+	case "gifts":
+		return s.erisGifts(ctx, u, p, private)
 	case "cinema":
 		return s.erisCinema(ctx, u, p)
 	case "diagnostic":

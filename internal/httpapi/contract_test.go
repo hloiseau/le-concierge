@@ -298,6 +298,22 @@ func TestOpenAPIResponses(t *testing.T) {
 			check(t, tc.method, tc.path, call(s, tc.method, tc.path, cookie, s.Config.PublicOrigin, tc.body), 200)
 		}
 	})
+	t.Run("Ouicheur personal connection", func(t *testing.T) {
+		s := fixture(t)
+		cookie := seed(t, s, "11111", true)
+		s.Config.OuicheurURL = "https://gifts.test"
+		s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path == "/api/login" {
+				resp := response(200, `{"ok":true,"role":"member"}`)
+				resp.Header = http.Header{"Set-Cookie": {"wishlister_session=" + strings.Repeat("a", 64)}}
+				return resp, nil
+			}
+			return response(200, `[{"id":"`+strings.Repeat("b", 32)+`","current":true,"expires_at":"`+time.Now().Add(time.Hour).UTC().Format(time.RFC3339)+`"}]`), nil
+		})
+		for _, tc := range []struct{ method, body string }{{"GET", ""}, {"POST", `{"login":"alice","password":"personal-secret"}`}, {"GET", ""}, {"DELETE", ""}} {
+			check(t, tc.method, "/api/v1/ouicheur/link", call(s, tc.method, "/api/v1/ouicheur/link", cookie, s.Config.PublicOrigin, tc.body), 200)
+		}
+	})
 	t.Run("availability inbox and channel", func(t *testing.T) {
 		s, cookie, _, item, source := availabilityFixture(t)
 		source.available = true

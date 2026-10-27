@@ -227,7 +227,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	if run != nil {
 		persona += ToolInstructions
 		if c.V2 {
-			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions + DiscordToolInstructions
+			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions + DiscordToolInstructions + GiftToolInstructions
 			persona += "\nHorloge de planification UTC : " + now.UTC().Format(time.RFC3339) + ". Heures locales par défaut : Europe/Paris."
 		}
 		if c.V2 && c.Memory != nil {

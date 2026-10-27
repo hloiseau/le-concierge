@@ -121,6 +121,12 @@ func (p Plan) Validate() error {
 	if p.Action == "poll" || p.Action == "event" {
 		return p.validateDiscordCreation()
 	}
+	if p.Action == "gifts" {
+		if p.URL != "" || p.Kind != "" || p.Source != "" || p.Relation != "" || p.Genre != "" || p.MaxMinutes != 0 || p.Unwatched || len(p.Seasons) > 0 || p.Year != 0 || utf8.RuneCountInString(p.Query) > 100 || utf8.RuneCountInString(p.Text) > 200 || strings.TrimSpace(p.Query) != p.Query || strings.TrimSpace(p.Text) != p.Text || strings.ContainsFunc(p.Query+p.Text, unicode.IsControl) {
+			return invalid
+		}
+		return nil
+	}
 	if p.Action == "anime" {
 		if p.Year != 0 && p.Query == "" {
 			return invalid

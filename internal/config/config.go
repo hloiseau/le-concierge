@@ -28,6 +28,7 @@ type Config struct {
 	ErisWebURL                                                                              string
 	PlexGrantKey                                                                            string
 	DownloadarrURL, DownloadarrRevision                                                     string
+	OuicheurURL, OuicheurRevision                                                           string
 	RadarrURL, RadarrAPIKey, SonarrURL, SonarrAPIKey                                        string
 	CommunityFeedFile, CommunitySyncManifest                                                string
 	CommunityGitHubToken                                                                    string
@@ -86,6 +87,8 @@ func Load() (Config, error) {
 	c.ShelfmarkURL = strings.TrimRight(os.Getenv("SHELFMARK_URL"), "/")
 	c.DownloadarrURL = strings.TrimRight(os.Getenv("DOWNLOADARR_URL"), "/")
 	c.DownloadarrRevision = os.Getenv("DOWNLOADARR_REVISION")
+	c.OuicheurURL = strings.TrimRight(os.Getenv("OUICHEUR_URL"), "/")
+	c.OuicheurRevision = os.Getenv("OUICHEUR_REVISION")
 	c.MetricsFile = os.Getenv("METRICS_FILE")
 	c.ToparrURL = strings.TrimRight(os.Getenv("TOPARR_URL"), "/")
 	c.DiscordNotificationChannelID = os.Getenv("DISCORD_NOTIFICATION_CHANNEL_ID")
@@ -230,6 +233,9 @@ func Load() (Config, error) {
 	}
 	if (c.DownloadarrURL == "") != (c.DownloadarrRevision == "") || (c.DownloadarrRevision != "" && !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(c.DownloadarrRevision)) {
 		return c, errors.New("DOWNLOADARR_URL and DOWNLOADARR_REVISION require a paired URL and full Git revision")
+	}
+	if (c.OuicheurURL == "") != (c.OuicheurRevision == "") || (c.OuicheurRevision != "" && c.OuicheurRevision != "bbd143bc03201205a35b0a1009bf8476e110f16a") || (c.OuicheurURL != "" && (!ValidURL(c.OuicheurURL, true) || (c.Env != "development" && !strings.HasPrefix(c.OuicheurURL, "https://")))) {
+		return c, errors.New("Ouicheur requires an HTTPS origin and the audited OUICHEUR_REVISION")
 	}
 	if c.DownloadarrURL != "" && (c.PlexURL == "" || (c.Env != "development" && !strings.HasPrefix(c.DownloadarrURL, "https://"))) {
 		return c, errors.New("Downloadarr requires Plex and HTTPS outside local development")

@@ -2333,6 +2333,129 @@
           }
         }
       }
+    },
+    "/api/v1/ouicheur/link": {
+      "get": {
+        "operationId": "getOuicheurLink",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Association personnelle Ouicheur"
+      },
+      "post": {
+        "operationId": "linkOuicheurs",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "login": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "writeOnly": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin required.",
+        "summary": "Connexion personnelle Ouicheur"
+      },
+      "delete": {
+        "operationId": "unlinkOuicheurs",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookLinkStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error with stable code and French message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Owner only; matching Origin required.",
+        "summary": "Association personnelle Ouicheur"
+      }
     }
   },
   "components": {
@@ -2549,6 +2672,9 @@
           "persistentPlexAuthorization": {
             "type": "boolean",
             "description": "Plex authorization is encrypted at rest and survives browser expiry and API restart. Explicit logout, account deletion or Plex revocation stops it. Browser sessions still expire after 12 hours."
+          },
+          "ouicheur": {
+            "type": "boolean"
           }
         },
         "required": [
