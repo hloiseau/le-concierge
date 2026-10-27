@@ -8,7 +8,7 @@ import (
 const RemovalExplanation = "Je ne peux ni annuler une demande déjà envoyée dans Seerr, ni supprimer un film ou une série de Plex. Pour ça, passe par un admin du serveur ; une annulation dans Seerr ne retire pas le fichier de Plex."
 
 var removalCommand = regexp.MustCompile(`^(?:(?:donc|alors) )?(?:(?:est ce que )?(?:tu (?:peux|pourrais|sais)|(?:peux|pourrais|sais) tu) (?:me |nous |le |la |les |l')?|je (?:veux|voudrais|souhaite) |comment (?:je peux |on peut |faire pour )?)?(supprime[rz]?|supprimes|efface[rz]?|effaces|retire[rz]?|retires|enl[eè]ve[rz]?|enl[eè]ves|annule[rz]?|annules)(?: (.*))?$`)
-var nonMediaRemoval = regexp.MustCompile(`(?:^|[^\p{L}])(?:m[ée]moire|souvenirs?|messages?|historique|donn[ée]es|compte|lubies?)(?:$|[^\p{L}])`)
+var nonMediaRemoval = regexp.MustCompile(`(?:^|[^\p{L}])(?:m[ée]moire|souvenirs?|messages?|historique|donn[ée]es|compte|lubies?|suivis?|alertes?|notifications?|rappels?)(?:$|[^\p{L}])`)
 
 // A clear unsupported operation must never fall through to an add/status tool.
 // Bare "annule" still cancels a pending choice through MatchChoice.

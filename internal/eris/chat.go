@@ -222,7 +222,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	if run != nil {
 		persona += ToolInstructions
 		if c.V2 {
-			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions
+			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions
 		}
 		if c.V2 && c.Memory != nil {
 			persona += MemoryInstructions + DurableMemoryInstructions
@@ -416,6 +416,12 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		}
 		if plan.Action == "prepare" && !requestTitleMentioned(plan.Query, grounding) {
 			plan = Plan{Action: "chat", Text: "Quel titre veux-tu demander dans Seerr ? Donne-moi le nom du film ou de la série, et la saison si nécessaire."}
+		}
+		if plan.Action == "follow" && !requestTitleMentioned(plan.Query, grounding) {
+			plan = Plan{Action: "chat", Text: "Quel contenu souhaites-tu suivre ? Précise son titre et la saison si nécessaire."}
+		}
+		if plan.Action == "unfollow" && !subscriptionMentioned(plan.SubscriptionID, grounding) {
+			plan = Plan{Action: "chat", Text: "Quel numéro de suivi veux-tu retirer ? Tu peux me demander la liste de tes suivis."}
 		}
 		if plan.Action == "chat" {
 			reply = plan.Text
