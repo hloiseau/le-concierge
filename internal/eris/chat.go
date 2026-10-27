@@ -161,7 +161,12 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		return "", ErrBusy
 	}
 	var direct *Plan
-	if run != nil && IsMediaRemoval(question) {
+	unfollowChoice := false
+	if s != nil && len(s.choices) > 0 && s.choices[0].Operation == "unfollow" && now.Before(s.choiceUntil) {
+		id, matched := MatchChoice(question, s.choices)
+		unfollowChoice = matched && id != ""
+	}
+	if run != nil && IsMediaRemoval(question) && !unfollowChoice {
 		direct = &Plan{Action: "chat", Text: RemovalExplanation}
 	}
 	if direct == nil && c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
@@ -385,6 +390,15 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			return "Je n’ai pas retrouvé de souvenir assez précis pour te répondre.", nil
 		}
 		plan = plan.WithQuestionConstraints(question)
+		if plan.Action == "web" && plan.URL != "" {
+			grounded := false
+			for _, message := range grounding {
+				grounded = grounded || strings.Contains(message.Content, plan.URL)
+			}
+			if !grounded {
+				plan = Plan{Action: "chat", Text: "Quel lien public veux-tu que je lise ?"}
+			}
+		}
 		if incoming.MediaOnly && plan.Action != "chat" {
 			plan = Plan{Action: "chat", Text: "Tu m’as envoyé un média. Précise ce que tu veux que j’en fasse."}
 			change = nil
@@ -404,6 +418,12 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		if plan.Action == "prepare" && !requestTitleMentioned(plan.Query, grounding) {
 			plan = Plan{Action: "chat", Text: "Quel titre veux-tu demander dans Seerr ? Donne-moi le nom du film ou de la série, et la saison si nécessaire."}
 		}
+		if plan.Action == "follow" && !requestTitleMentioned(plan.Query, grounding) {
+			plan = Plan{Action: "chat", Text: "Quel contenu souhaites-tu suivre ? Précise son titre et la saison si nécessaire."}
+		}
+		if plan.Action == "unfollow" && plan.SubscriptionID > 0 && !subscriptionMentioned(plan.SubscriptionID, grounding) {
+			plan = Plan{Action: "chat", Text: "Quel numéro de suivi veux-tu retirer ? Tu peux me demander la liste de tes suivis."}
+		}
 		if plan.Action == "chat" {
 			reply = plan.Text
 			chatReply = true
@@ -414,6 +434,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			choices = append([]Button(nil), result.Buttons...)
 			if err != nil {
 				return "", ErrUnavailable
+			}
+			if (plan.Action == "web" || plan.Action == "anime" || plan.Action == "gifts") && result.Web != nil {
+				reply = c.webAnswer(ctx, question, *result.Web)
 			}
 		}
 		if reply == "" || utf8.RuneCountInString(reply) > 1500 {
