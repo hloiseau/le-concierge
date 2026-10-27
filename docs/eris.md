@@ -1,6 +1,6 @@
 # Eris sur Discord
 
-Le [profil v2 en préparation](eris-v2.md) ajoute la personnalité révisée, les références publiques, une mémoire durable des lubies et le transport Responses pour Luna. Il nécessite une activation explicite ; les informations de production ci-dessous décrivent le profil historique.
+Le [profil v2](eris-v2.md) ajoute la personnalité révisée, les références publiques et le transport Responses. Son évolution [ERIS-01](eris-01-memory.md) ajoute la mémoire durable des membres et épisodes, le silence et un contexte ambiant optionnel. Le profil v2 nécessite une activation explicite ; les informations ci-dessous décrivent le profil historique.
 
 Le bot conserve son compte, ses identifiants, ses commandes, les liaisons Plex/Discord et ses données. L’image applicative reste `ghcr.io/hloiseau/le-concierge` (version de production épinglée par SHA) et la base conserve son chemin actuel. Il n’y a pas de migration à effectuer.
 

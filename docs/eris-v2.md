@@ -1,10 +1,12 @@
 # Eris v2 : personnalité, contexte et lubies
 
+Évolution du 27 octobre : [canon ERIS-01, mémoire durable des membres, journal d'épisodes, silence et contexte ambiant](eris-01-memory.md). Les limites de trente jours décrites ci-dessous concernent uniquement l'ancien carnet de lubies, pas le nouveau journal. Cette évolution n'est pas encore déployée par cette PR.
+
 Déployé sur le NAS le 22 octobre 2026 à la demande de Hugo, depuis la branche de travail. Le bot actif utilise le profil v2 et Responses avec `gpt-6-luna`, via la connexion ChatGPT propre à Eris. Le profil historique reste le défaut dans le code. Voir le [relevé de déploiement](eris-v2-nas.md).
 
 ## Plan et état
 
-1. Contexte des réponses publiques : réalisé, référence unique vérifiée, auteur Eris et ID du message. Les fils complets et la lecture ambiante du salon ne sont pas ajoutés.
+1. Contexte des réponses publiques : référence unique vérifiée, auteur Eris et ID du message. La nouvelle version ajoute un contexte ambiant RAM dans les salons actifs si Message Content est activé ; les fils complets ne sont pas reconstruits.
 2. Mémoire de personnage durable : réalisée dans SQLite propre au bot, avec rappel sélectif, évolution, retrait, expiration et effacement.
 3. Personnalité et recette Luna : personnalité v2 intégrée, recette séquentielle de dix tours réussie ; voir les [résultats et limites éditoriales](../evals/eris/dialogues/README.md). Le ton reste à juger avec Hugo, notamment son intensité.
 4. Transport Responses : validé sur le compte réel depuis le NAS, avec une réponse de discussion et un plan d'outil synthétique. Le [service OAuth personnel](../tools/eris-auth/README.md) gère la connexion et le renouvellement avec le devkit officiel. Aucun transfert de session Codex ni basculement payant vers une clé API n'est effectué.
@@ -16,7 +18,7 @@ Après la [première correction de voix](../evals/eris/voice-review.md), le [ret
 
 Le [second retour du même jour](../evals/eris/graphic-review.md) constate que l'exubérance avait remplacé la cruauté par des farces inoffensives. La comédie horrifique redevient le registre principal : les petites provocations de la joute et les demandes de vengeance suscitent spontanément des conséquences corporelles macabres, sans attendre une demande explicite de démonstration. Les emojis accompagnent cette cruauté. Les questions utiles, les réussites, l'arrêt du jeu et les confidences gardent une réponse adaptée.
 
-Le profil v2 garde six échanges du membre en RAM pendant trente minutes (deux pour le profil historique). Le [contexte Discord](eris-discord-context.md) ajoute les noms vérifiés par le transport, une fenêtre bornée des échanges publics adressés à Eris et les images réellement accessibles. Les discussions privées et les autorisations d'action restent séparées par membre. Les images ne sont pas conservées dans l'historique. Les messages entrants restent limités à 500 caractères, avec au maximum un souvenir court et un message public cité de 1 500 caractères. Les résultats des outils restent rendus par le code ; aucune seconde génération ne réécrit les faits ou boutons.
+Le profil v2 garde six échanges du membre en RAM pendant trente minutes (deux pour le profil historique). Le [contexte Discord](eris-discord-context.md) ajoute les noms vérifiés par le transport, une fenêtre bornée des échanges publics et les images réellement accessibles. La [mémoire durable](eris-01-memory.md) apporte les notes et épisodes sourcés après redémarrage. Les discussions privées et les autorisations d'action restent séparées par membre. Les images ne sont pas conservées dans l'historique. Les messages entrants restent limités à 500 caractères. Les résultats des outils restent rendus par le code ; aucune seconde génération ne réécrit les faits ou boutons média. Une recherche locale de souvenirs peut employer une génération supplémentaire de discussion, sans outil média.
 
 Une réponse Discord apporte désormais le texte du message d'Eris cité, uniquement après validation de son auteur, de son ID, de son salon et de son caractère public. La demande et les droits appartiennent toujours au membre actuel. Ce texte peut fournir un titre à préparer, contrairement aux souvenirs de personnage. Une référence absente ou inaccessible ne fournit aucun faux contexte. Pas d'appel supplémentaire pour reconstituer une chaîne complète.
 
@@ -24,7 +26,7 @@ Une réponse Discord apporte désormais le texte du message d'Eris cité, unique
 
 Le modèle peut joindre une petite proposition `memory` à un plan de discussion. Le code la retire avant validation de l'action média. Le souvenir contient un sujet de 4 à 60 caractères et un extrait de 8 à 240 caractères dont les mots figurent dans la réponse (casse et ponctuation normalisées). Une proposition invalide est ignorée sans perdre la réponse. Seuls des goûts ou lubies fictifs d'Eris sont demandés au modèle ; l'analyse sémantique reste une limite à surveiller, ce validateur ne prouve pas à lui seul l'absence d'information personnelle.
 
-L'écriture arrive après acceptation de la réponse par Discord : un échec d'envoi ne crée pas de souvenir. La base conserve le sujet, l'extrait, la source, les dates de mise à jour/utilisation, l'expiration et les membres ayant contribué. Aucun historique brut ni jeton média n'y est écrit. Un nouvel avis sur le même sujet remplace l'ancien.
+L'écriture d'une lubie arrive après acceptation de la réponse par Discord : un échec d'envoi ne crée pas de souvenir de personnage. Ce carnet conserve le sujet, l'extrait, la source, les dates de mise à jour/utilisation, l'expiration et les membres ayant contribué. Aucun jeton média n'y est écrit. Le nouveau journal durable conserve séparément les messages humains adressés et les réponses de discussion livrées. Un nouvel avis sur le même sujet remplace l'ancienne lubie.
 
 Portées : une mémoire par salon public, partagée entre les participants de ce salon ; une mémoire privée séparée par membre et serveur. Au plus 32 sujets par portée, conservés trente jours ; les expirés ne sont plus rappelés et sont purgés lors d'une écriture. Les références croisées entre salons et privé/public ne sont pas autorisées.
 

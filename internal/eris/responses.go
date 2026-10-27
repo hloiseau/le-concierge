@@ -156,7 +156,11 @@ func (c *Chat) responses(ctx context.Context, messages []Message) (string, error
 		}
 	}
 	text = strings.TrimSpace(text)
-	if text == "" || !utf8.ValidString(text) || utf8.RuneCountInString(text) > 2500 {
+	rawLimit := 2500
+	if c.V2 && c.Memory != nil {
+		rawLimit = 6000
+	}
+	if text == "" || !utf8.ValidString(text) || utf8.RuneCountInString(text) > rawLimit {
 		return "", ErrUnavailable
 	}
 	return text, nil

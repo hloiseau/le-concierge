@@ -40,6 +40,10 @@ type conversation struct {
 	epoch        uint64
 	lastTopic    string
 	discord      DiscordInput
+	turnID       int64
+	notes        []memoryNote
+	chatReply    bool
+	turns        []int64
 }
 
 type Chat struct {
@@ -122,6 +126,8 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				cached.delivery = ""
 				cached.choices = nil
 				cached.discord = DiscordInput{}
+				cached.turnID, cached.notes = 0, nil
+				cached.turns = nil
 			}
 		}
 		for key := range c.sessions {
@@ -186,19 +192,23 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	s.expires = now.Add(30 * time.Minute)
 	s.next = now.Add(10 * time.Second)
 	s.whim, s.recalled, s.delivery = nil, nil, ""
+	s.turnID, s.notes, s.chatReply = 0, nil, false
 	s.choices, s.choiceSource = nil, ""
 	epoch := c.memoryEpoch
 	persona := Persona
 	if c.V2 {
-		persona = CharacterPersona
+		persona = CharacterPersona + CharacterCanon
 		if incoming.Speaker.ID != "" {
 			persona += discordContextInstructions
 		}
 	}
 	if run != nil {
 		persona += ToolInstructions
+		if c.V2 {
+			persona += TurnTakingInstructions
+		}
 		if c.V2 && c.Memory != nil {
-			persona += MemoryInstructions
+			persona += MemoryInstructions + DurableMemoryInstructions
 		}
 	}
 	messages := []Message{{Role: "system", Content: persona}}
@@ -210,11 +220,45 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			messages = append(messages, Message{Role: "user", Content: data})
 		}
 		if c.Memory != nil {
+			if id, err := c.Memory.observe(owner, question, incoming, now); err == nil {
+				s.turnID = id
+				if c.Memory.deriveTurns(id, s.turns) != nil {
+					s.turnID = 0
+				}
+				if s.turnID != 0 {
+					s.turns = append(s.turns, id)
+					if len(s.turns) > c.historyLimit()/2 {
+						s.turns = append([]int64(nil), s.turns[len(s.turns)-c.historyLimit()/2:]...)
+					}
+				}
+			}
+			// Public RAM context can also contribute to a later durable reply.
+			if room := c.publicRooms[publicScope(owner)]; room != nil {
+				var dependencies memoryBundle
+				var authors []Speaker
+				for _, entry := range room.exchanges {
+					dependencies.Episodes = append(dependencies.Episodes, memoryTurn{Source: entry.ID})
+					authors = append(authors, entry.Author)
+				}
+				if c.Memory.derive(s.turnID, owner, dependencies) != nil || c.Memory.deriveSpeakers(s.turnID, owner, authors) != nil {
+					s.turnID = 0
+				}
+			}
+			if c.Memory.deriveReference(s.turnID, owner, reference) != nil {
+				s.turnID = 0
+			}
+			bundle, err := c.Memory.recallDurable(owner, question, incoming, s.turnID)
+			if err == nil && c.Memory.derive(s.turnID, owner, bundle) == nil {
+				messages = append(messages, Message{Role: "user", Content: bundle.context()})
+			}
 			recalled, _ = c.Memory.recall(owner, question, now)
 			if recalled == nil && stopWhim(question) && s.lastTopic != "" {
 				recalled, _ = c.Memory.recall(owner, s.lastTopic, now)
 			}
 			if recalled != nil {
+				if c.Memory.deriveWhim(s.turnID, owner, recalled) != nil {
+					s.turnID = 0
+				}
 				messages = append(messages, Message{Role: "system", Content: memoryContext(recalled)})
 			}
 		}
@@ -232,13 +276,38 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 
 	var reply string
 	var err error
+	recallOnly := false
 	if direct == nil {
 		reply, err = c.complete(ctx, messages, run != nil)
 		if err != nil {
 			return "", err
 		}
+		// A memory lookup is local and read-only; never forward it to media tools.
+		if query := parseRecall(reply); c.V2 && c.Memory != nil && run != nil && query != "" {
+			c.mu.Lock()
+			if epoch != c.memoryEpoch {
+				c.mu.Unlock()
+				return "", ErrUnavailable
+			}
+			bundle, searchErr := c.Memory.recallDurable(owner, query, incoming, s.turnID)
+			if searchErr == nil {
+				searchErr = c.Memory.derive(s.turnID, owner, bundle)
+			}
+			c.mu.Unlock()
+			if searchErr != nil {
+				return "Je ne peux pas consulter mes souvenirs pour le moment.", nil
+			}
+			messages = append(messages, Message{Role: "assistant", Content: reply}, Message{Role: "user", Content: bundle.context()}, Message{Role: "system", Content: "Recherche mémoire terminée. Réponds à la question actuelle avec action chat uniquement. Aucun autre outil, aucune nouvelle recherche. N'invente pas un souvenir absent."})
+			reply, err = c.complete(ctx, messages, true)
+			if err != nil {
+				return "", err
+			}
+			recallOnly = true
+		}
 	}
 	var change *whim
+	var notes []memoryNote
+	chatReply := run == nil
 	pending := false
 	var choices []Button
 	if run != nil {
@@ -246,10 +315,28 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		if direct != nil {
 			plan, err = *direct, nil
 		} else if c.V2 {
-			plan, change, err = parseCharacterPlan(reply, recalled)
+			plan, change, notes, err = parseDurablePlan(reply, recalled, question)
 		}
 		if err != nil {
 			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
+		}
+		if plan.Action == "silent" {
+			if c.V2 && publicScope(owner) != "" && incoming.Speaker.ID != "" {
+				c.mu.Lock()
+				if epoch == c.memoryEpoch {
+					s.next = time.Time{}
+					s.messages = append(s.messages, Message{Role: "user", Content: question})
+					if len(s.messages) > c.historyLimit() {
+						s.messages = append([]Message(nil), s.messages[len(s.messages)-c.historyLimit():]...)
+					}
+				}
+				c.mu.Unlock()
+				return "", nil
+			}
+			plan = Plan{Action: "chat", Text: "D’accord."}
+		}
+		if recallOnly && plan.Action != "chat" {
+			return "Je n’ai pas retrouvé de souvenir assez précis pour te répondre.", nil
 		}
 		plan = plan.WithQuestionConstraints(question)
 		if incoming.MediaOnly && plan.Action != "chat" {
@@ -273,6 +360,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		}
 		if plan.Action == "chat" {
 			reply = plan.Text
+			chatReply = true
 		} else {
 			var result ToolReply
 			result, err = run(ctx, plan)
@@ -306,6 +394,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	if c.V2 && incoming.Speaker.ID != "" {
 		incoming.Images = nil
 		s.discord, s.delivery, s.epoch = incoming, reply, epoch
+		s.notes, s.chatReply = notes, chatReply
 	}
 	s.messages = append(s.messages, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply})
 	if len(s.messages) > c.historyLimit() {

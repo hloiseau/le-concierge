@@ -24,6 +24,9 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool)
 		temperature = 0.45
 	}
 	payload := map[string]any{"model": c.Model, "messages": messages, "max_tokens": 160, "temperature": temperature, "stream": false}
+	if c.V2 && c.Memory != nil && withTools {
+		payload["max_tokens"] = 800 // Includes bounded, grounded memory metadata.
+	}
 	if withTools {
 		payload["response_format"] = map[string]string{"type": "json_object"}
 	}
@@ -60,7 +63,11 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool)
 		return "", ErrUnavailable
 	}
 	reply := strings.TrimSpace(completion.Choices[0].Message.Content)
-	if reply == "" || !utf8.ValidString(reply) || utf8.RuneCountInString(reply) > 1500 {
+	rawLimit := 1500
+	if c.V2 && c.Memory != nil && withTools {
+		rawLimit = 6000
+	}
+	if reply == "" || !utf8.ValidString(reply) || utf8.RuneCountInString(reply) > rawLimit {
 		return "", ErrUnavailable
 	}
 	return reply, nil

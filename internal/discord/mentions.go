@@ -107,7 +107,19 @@ func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
 
 func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event *discordgo.MessageCreate) {
 	question, ok := b.mentionQuestion(event)
-	if !ok || !b.rememberEvent("mention:"+event.ID) || !b.reserveEris() {
+	if !ok {
+		// Same human/guild checks as mentionQuestion; ambient context stays in RAM.
+		if b.Config.DiscordMessageContent && event != nil && event.Message != nil && event.GuildID == b.Config.DiscordGuildID && event.Author != nil && !event.Author.Bot && event.WebhookID == "" && event.Author.ID != b.Config.DiscordClientID && (event.Type == discordgo.MessageTypeDefault || event.Type == discordgo.MessageTypeReply) {
+			nick := ""
+			if event.Member != nil {
+				nick = event.Member.Nick
+			}
+			b.Eris.ObserveAmbient(event.GuildID+":"+event.Author.ID+":"+event.ChannelID, event.Content, eris.DiscordInput{MessageID: event.ID, Speaker: discordSpeaker(event.Author.ID, nick, event.Author.GlobalName, event.Author.Username)})
+		}
+		return
+	}
+	explicit := strings.Contains(event.Content, "<@"+b.Config.DiscordClientID+">") || strings.Contains(event.Content, "<@!"+b.Config.DiscordClientID+">")
+	if b.Eris.SkipPublicFollowup(event.GuildID+":"+event.Author.ID+":"+event.ChannelID, question, explicit) || !b.rememberEvent("mention:"+event.ID) || !b.reserveEris() {
 		return
 	}
 	b.workers.Add(1)
@@ -129,6 +141,10 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 			for _, button := range result.Buttons {
 				components = append(components, discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Style: discordgo.SecondaryButton, Label: button.Label, CustomID: button.ID}}})
 			}
+		}
+		// Deliberate silence is a valid public turn.
+		if reply == "" {
+			return
 		}
 		sent, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
 			Content: reply, Reference: event.Reference(), Components: components,
