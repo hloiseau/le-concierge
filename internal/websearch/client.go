@@ -24,7 +24,7 @@ type Source struct {
 	Title       string `json:"title"`
 	URL         string `json:"url"`
 	Text        string `json:"text"`
-	Kind        string `json:"kind"` // snippet, page, or video (metadata only).
+	Kind        string `json:"kind"` // snippet, page, video, or catalogue metadata.
 	PublishedAt string `json:"publishedAt,omitempty"`
 	Author      string `json:"author,omitempty"`
 }
@@ -39,7 +39,7 @@ func (r Result) Validate() bool {
 		return false
 	}
 	for _, s := range r.Sources {
-		if !PublicURL(s.URL) || len(s.URL) > 300 || s.Title == "" || s.Text == "" || utf8.RuneCountInString(s.Title) > 160 || utf8.RuneCountInString(s.Text) > 1800 || len(s.PublishedAt) > 80 || utf8.RuneCountInString(s.Author) > 160 || (s.Kind != "snippet" && s.Kind != "page" && s.Kind != "video") {
+		if !PublicURL(s.URL) || len(s.URL) > 300 || s.Title == "" || s.Text == "" || utf8.RuneCountInString(s.Title) > 160 || utf8.RuneCountInString(s.Text) > 1800 || len(s.PublishedAt) > 80 || utf8.RuneCountInString(s.Author) > 160 || (s.Kind != "snippet" && s.Kind != "page" && s.Kind != "video" && s.Kind != "metadata") {
 			return false
 		}
 	}
@@ -131,10 +131,43 @@ func get(ctx context.Context, client *http.Client, target, accept string, limit 
 }
 
 func (c *Client) Search(ctx context.Context, query string, youtube bool) (Result, error) {
+	return c.searchPages(ctx, query, youtube, nil)
+}
+
+// Only complete pages from these operator-selected sources may support a date.
+func (c *Client) SearchPublishers(ctx context.Context, query string, domains []string) (Result, error) {
+	if len(domains) == 0 {
+		return Result{}, ErrDenied
+	}
+	return c.searchPages(ctx, query, false, domains)
+}
+
+func publisherURL(raw string, domains []string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, domain := range domains {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) searchPages(ctx context.Context, query string, youtube bool, publishers []string) (Result, error) {
 	if c.endpoint == "" || clip(query, 200) != query || utf8.RuneCountInString(query) < 2 {
 		return Result{}, ErrUnavailable
 	}
 	params := url.Values{"q": {query}, "format": {"json"}, "language": {"fr"}, "safesearch": {"1"}}
+	if len(publishers) > 0 {
+		filters := make([]string, 0, len(publishers))
+		for _, domain := range publishers {
+			filters = append(filters, "site:"+domain)
+		}
+		params.Set("q", query+" ("+strings.Join(filters, " OR ")+")")
+	}
 	if youtube {
 		params.Set("engines", "youtube")
 	}
@@ -158,7 +191,7 @@ func (c *Client) Search(ctx context.Context, query string, youtube bool) (Result
 		if len(r.Sources) == MaxSources {
 			break
 		}
-		if !c.allowed(item.URL) || seen[item.URL] {
+		if !c.allowed(item.URL) || seen[item.URL] || (len(publishers) > 0 && !publisherURL(item.URL, publishers)) {
 			continue
 		}
 		seen[item.URL] = true
@@ -176,7 +209,7 @@ func (c *Client) Search(ctx context.Context, query string, youtube bool) (Result
 				s = page
 			}
 		}
-		if s.Title != "" && s.Text != "" {
+		if s.Title != "" && s.Text != "" && (len(publishers) == 0 || (s.Kind == "page" && publisherURL(s.URL, publishers))) {
 			r.Sources = append(r.Sources, s)
 		}
 	}

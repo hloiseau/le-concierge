@@ -222,7 +222,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	if run != nil {
 		persona += ToolInstructions
 		if c.V2 {
-			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions
+			persona += TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions
 		}
 		if c.V2 && c.Memory != nil {
 			persona += MemoryInstructions + DurableMemoryInstructions
@@ -434,7 +434,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			if err != nil {
 				return "", ErrUnavailable
 			}
-			if plan.Action == "web" && result.Web != nil {
+			if (plan.Action == "web" || plan.Action == "anime") && result.Web != nil {
 				reply = c.webAnswer(ctx, question, *result.Web)
 			}
 		}
