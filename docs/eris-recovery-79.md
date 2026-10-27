@@ -49,6 +49,11 @@ Les récupérations, comparaisons et tests sont effectués dans d'autres worktre
 
 ## Comparaison et choix de réconciliation
 
+Le tableau et les mesures ci-dessous décrivent la première candidate, avant
+la séance interactive. La [retouche issue de la recette humaine](eris-human-review-79.md)
+modifie ensuite la voix, distingue nom et matricule, et assouplit le filtre sur
+une réplique courte ambiguë. La version historique reste préservée dans #81.
+
 | Sujet | Build `28f46de` | Main `1894fae` | Candidate |
 | --- | --- | --- | --- |
 | Voix | Prompt de joute horrifique expressive de #73 | Réécriture privilégiant davantage calme et brièveté, nouveaux exemples | `CharacterPersona` restauré exactement depuis `28f46de`, sans nouvelle retouche éditoriale |
