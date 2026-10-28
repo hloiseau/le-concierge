@@ -41,7 +41,7 @@ func (c *Chat) instructions(discord, tools bool) string {
 	return prompt
 }
 
-const conversationVoice = "Pour le texte conversationnel uniquement :\n" + CharacterPersona + "\nGarde la réaction directe, sans analogie humoristique ni objet ajouté pour fabriquer une chute. Le contrat JSON et les choix d'action restent prioritaires."
+const conversationVoice = "Le texte final de tes réponses, y compris après un outil, garde cette même voix :\n" + CharacterPersona + "\nGarde la réaction directe, sans analogie humoristique ni objet ajouté pour fabriquer une chute. Le contrat JSON et les choix d'action restent prioritaires."
 
 // Keep the current request last, with one voice instruction close to generation.
 // Classifiers and history summarizers use complete directly and never inherit it.

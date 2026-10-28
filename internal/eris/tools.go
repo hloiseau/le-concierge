@@ -251,9 +251,11 @@ type Button struct {
 	Operation string `json:"operation,omitempty"`
 }
 type ToolReply struct {
-	Content string            `json:"content"`
-	Buttons []Button          `json:"buttons,omitempty"`
-	Web     *websearch.Result `json:"web,omitempty"`
+	Content    string            `json:"content"`
+	Buttons    []Button          `json:"buttons,omitempty"`
+	Web        *websearch.Result `json:"web,omitempty"`
+	Narrate    bool              `json:"narrate,omitempty"`
+	Diagnostic *DiagnosticFacts  `json:"diagnostic,omitempty"`
 }
 
 const WebToolInstructions = `

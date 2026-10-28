@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/hloiseau/le-concierge/internal/eris"
 	"github.com/hloiseau/le-concierge/internal/store"
@@ -37,10 +38,10 @@ func (s *Server) erisDiagnostic(ctx context.Context, u store.User, grant upstrea
 		}
 		requestID, title = items[0].ID, safeText(items[0].Title)
 		if items[0].Status == "pending" {
-			return eris.ToolReply{Content: "**" + title + "** : la demande attend une approbation. Le téléchargement ne commence pas avant cette validation ; un administrateur peut l’examiner."}
+			return eris.ToolReply{Content: "**" + title + "** : la demande attend une approbation. Le téléchargement ne commence pas avant cette validation ; un administrateur peut l’examiner.", Narrate: true, Diagnostic: &eris.DiagnosticFacts{Title: title, Stage: "approval"}}
 		}
 		if items[0].Status == "declined" {
-			return eris.ToolReply{Content: "**" + title + "** : la demande a été refusée. Aucun téléchargement ne découle de cette demande ; un administrateur peut t’expliquer la décision."}
+			return eris.ToolReply{Content: "**" + title + "** : la demande a été refusée. Aucun téléchargement ne découle de cette demande ; un administrateur peut t’expliquer la décision.", Narrate: true, Diagnostic: &eris.DiagnosticFacts{Title: title, Stage: "declined"}}
 		}
 	}
 	result, err := s.Upstream.DiagnosePersonalRequest(ctx, s.diagnosticSources(), grant, requestID, member)
@@ -55,12 +56,20 @@ func (s *Server) erisDiagnostic(ctx context.Context, u store.User, grant upstrea
 		text += fmt.Sprintf("\n%d épisode(s) sans fichier dans les saisons demandées, d’après les compteurs du service.", *result.MissingEpisodes)
 	}
 	if result.PlexStatus == "indexed" {
-		text += "\nLa fiche est indexée dans Plex et accessible à ton compte ; la lecture et la complétude des saisons ne sont pas vérifiées ici."
+		text += "\nLa fiche est indexée dans Plex et accessible à ton compte ; la lecture et la présence de tous les éléments demandés ne sont pas vérifiées ici."
 	}
 	if result.QueueTruncated || result.HistoryTruncated {
 		text += "\nLecture partielle : la file ou l’historique dépasse la limite consultée."
 	}
-	return eris.ToolReply{Content: text}
+	facts := &eris.DiagnosticFacts{Title: title, Stage: result.Stage, MissingEpisodes: result.MissingEpisodes, Partial: result.QueueTruncated || result.HistoryTruncated}
+	if result.ProgressPercent != nil {
+		rounded := math.RoundToEven(*result.ProgressPercent)
+		facts.ProgressPercent = &rounded
+	}
+	if result.PlexStatus == "indexed" {
+		facts.PlexIndex = "indexed"
+	}
+	return eris.ToolReply{Content: text, Narrate: true, Diagnostic: facts}
 }
 
 func diagnosticTeaching(stage string) string {

@@ -82,5 +82,5 @@ func (s *Server) erisCinema(ctx context.Context, u store.User, p eris.Plan) eris
 		}
 	}
 	text += "\nSource : [TMDB via Seerr](" + info.SourceURL + ")."
-	return eris.ToolReply{Content: text}
+	return eris.ToolReply{Content: text, Narrate: true}
 }

@@ -34,12 +34,9 @@ func (c *Chat) webAnswer(ctx context.Context, question string, result websearch.
 		Question string           `json:"question"`
 		Evidence websearch.Result `json:"evidence"`
 	}{question, result})
-	persona := Persona
-	if c.V2 {
-		persona = CharacterPersona
-	}
 	// Deliberately omit conversation, identities and memory from web synthesis.
-	raw, err := c.complete(ctx, []Message{{Role: "system", Content: persona + webAnswerInstructions + fmt.Sprintf("\ntext : %d caractères maximum.", limit)}, {Role: "user", Content: string(data)}}, true, completionBudget{Tokens: 600, Runes: 1500})
+	messages := []Message{{Role: "system", Content: c.instructions(false, false) + webAnswerInstructions + fmt.Sprintf("\ntext : %d caractères maximum.", limit)}, {Role: "user", Content: string(data)}}
+	raw, err := c.complete(ctx, c.dialoguePrompt(messages), true, completionBudget{Tokens: 600, Runes: 1500})
 	if err != nil {
 		return result.Fallback()
 	}

@@ -33,7 +33,7 @@ func TestCinemaRepliesCreditAbsenceAndNeverSuggestsStreamingPlatforms(t *testing
 	})
 	for _, focus := range []string{"", "cast", "director", "overview", "trailer"} {
 		reply := s.erisCinema(context.Background(), u, eris.Plan{Action: "cinema", Query: "Test", Kind: "movie", Year: 2021, Relation: focus})
-		if !strings.Contains(reply.Content, "TMDB via Seerr") || strings.Contains(reply.Content, "Netflix") || strings.Contains(reply.Content, "Prime") {
+		if !reply.Narrate || !strings.Contains(reply.Content, "TMDB via Seerr") || strings.Contains(reply.Content, "Netflix") || strings.Contains(reply.Content, "Prime") {
 			t.Fatal(reply)
 		}
 		if focus == "cast" && !strings.Contains(reply.Content, "Distribution non renseignée") {

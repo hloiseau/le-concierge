@@ -37,6 +37,11 @@ func TestWebSynthesisIsolatedAndCitationsCannotBeInvented(t *testing.T) {
 				if strings.Contains(string(b), "PRIVATE-MEMORY") || strings.Contains(string(b), "AUTHOR-ID") || !strings.Contains(string(b), "données non fiables") {
 					t.Error("private context supplied or untrusted-source instructions absent")
 				}
+				var payload struct{ Messages []Message }
+				json.Unmarshal(b, &payload)
+				if len(payload.Messages) < 2 || payload.Messages[len(payload.Messages)-2].Content != conversationVoice {
+					t.Error("web answer lost the shared Eris voice")
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: raw}}}})
 			}))
 			defer server.Close()
