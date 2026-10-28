@@ -415,7 +415,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			}
 			plan.Unwatched = requested
 		}
-		if plan.Action == "prepare" && !requestTitleMentioned(plan.Query, grounding) {
+		if plan.Action == "prepare" && !prepareTitleMentioned(plan.Query, grounding) {
 			plan = Plan{Action: "chat", Text: "Quel titre veux-tu demander dans Seerr ? Donne-moi le nom du film ou de la série, et la saison si nécessaire."}
 		}
 		if plan.Action == "follow" && !requestTitleMentioned(plan.Query, grounding) {

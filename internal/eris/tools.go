@@ -80,18 +80,12 @@ func (p Plan) WithQuestionConstraints(question string) Plan {
 // A request title must come from this conversation, never a system-prompt example.
 func requestTitleMentioned(title string, messages []Message) bool {
 	normalize := func(s string) string {
-		return " " + strings.Join(strings.Fields(strings.Map(func(r rune) rune {
-			if unicode.IsLetter(r) || unicode.IsNumber(r) {
-				return unicode.ToLower(r)
-			}
-			return ' '
-		}, s)), " ") + " "
+		return " " + strings.Join(titleWords(s), " ") + " "
 	}
-	title = normalize(title)
-	switch strings.TrimSpace(title) {
-	case "", "film", "le film", "un film", "ce film", "série", "serie", "la série", "une série", "cette série", "la serie", "une serie", "cette serie", "the movie", "a movie", "that movie", "the show", "that show":
+	if !concreteRequestTitle(titleWords(title)) {
 		return false
 	}
+	title = normalize(title)
 	for _, m := range messages {
 		if m.Role != "system" && strings.Contains(normalize(m.Content), title) {
 			return true

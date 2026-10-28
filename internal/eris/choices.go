@@ -68,9 +68,9 @@ func MatchChoice(text string, choices []Button) (string, bool) {
 		if !strings.HasPrefix(b.ID, "eris:choose:") {
 			continue
 		}
-		selected := b.Title != "" && q == choiceText(b.Title)
+		selected := b.Title != "" && foldTitleAccents(q) == foldTitleAccents(choiceText(b.Title))
 		if b.Year != "" && b.Title != "" {
-			selected = selected || q == choiceText(b.Title+" ("+b.Year+")") || q == choiceText(b.Title+" "+b.Year) || q == "celui de "+b.Year || q == b.Year || q == "le "+b.Year
+			selected = selected || foldTitleAccents(q) == foldTitleAccents(choiceText(b.Title+" ("+b.Year+")")) || foldTitleAccents(q) == foldTitleAccents(choiceText(b.Title+" "+b.Year)) || q == "celui de "+b.Year || q == b.Year || q == "le "+b.Year
 		}
 		number := strconv.Itoa(b.Number)
 		for _, word := range append([]string{number, "le " + number, "numéro " + number, "le numéro " + number}, ordinals[b.Number]...) {
