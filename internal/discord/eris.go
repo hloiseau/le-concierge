@@ -136,6 +136,9 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 	if result.Web != nil && ((input.Plan.Action != "web" && input.Plan.Action != "anime" && input.Plan.Action != "gifts") || len(result.Buttons) != 0 || !result.Web.Validate()) {
 		return failure
 	}
+	if result.Diagnostic != nil && (input.Plan.Action != "diagnostic" || !result.Narrate || result.Web != nil || len(result.Buttons) > 0 || !result.Diagnostic.Valid()) {
+		return failure
+	}
 	for _, button := range result.Buttons {
 		if !ValidErisButton(button.ID) || button.Label == "" || utf8.RuneCountInString(button.Label) > 80 || (button.Operation != "" && button.Operation != "follow" && button.Operation != "unfollow") {
 			return failure

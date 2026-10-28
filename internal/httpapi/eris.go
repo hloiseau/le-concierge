@@ -291,6 +291,7 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 			return reply
 		}
 		reply.Content = erisMetrics(snapshot.Metrics)
+		reply.Narrate = true
 	case "search", "recommend":
 		if p.Action == "recommend" && p.Relation != "" {
 			return s.erisRelatedMovies(ctx, u, g, discordID, p, private)
@@ -301,6 +302,7 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 		}
 		if len(items) == 0 {
 			reply.Content = "Aucun titre lisible correspondant dans ton catalogue Plex. Tu peux préciser le titre ou élargir les critères."
+			reply.Narrate = true
 			return reply
 		}
 		reply.Content = "**Disponibles sur Plex**"
@@ -339,10 +341,12 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 				reply.Content += "\n[Ouvrir dans Plex](" + m.URL + ")"
 			}
 		}
+		reply.Narrate = true
 	case "recent":
 		page, err := s.Upstream.RecentPage(ctx, s.Config.PlexURL, s.Config.PlexServerID, g, 0, 3)
 		if err == nil {
 			reply.Content = recentMessage(page.Items, s.Config.PublicOrigin, private)
+			reply.Narrate = true
 		}
 	case "status":
 		id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
@@ -354,6 +358,7 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 			return reply
 		}
 		reply.Content = "**Tes demandes**"
+		reply.Narrate = true
 		if len(items) == 0 {
 			reply.Content = "Aucune demande correspondante sur ton compte."
 		}
@@ -458,7 +463,7 @@ func (s *Server) erisRelatedMovies(ctx context.Context, u store.User, g upstream
 		}
 		return eris.ToolReply{Content: "Je n’ai trouvé aucun film correspondant lisible dans ton Plex parmi ces recommandations. Je peux aussi chercher dans Seerr."}
 	}
-	reply := eris.ToolReply{Content: "Si tu veux prolonger **" + safeText(result.Reference.Title) + "** 🍿"}
+	reply := eris.ToolReply{Content: "Si tu veux prolonger **" + safeText(result.Reference.Title) + "** 🍿", Narrate: true}
 	if p.Relation == "director" {
 		reply.Content += " : voilà ce que **" + safeText(result.Director) + "** a aussi réalisé"
 	} else {

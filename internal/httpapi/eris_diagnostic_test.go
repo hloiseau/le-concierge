@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -51,14 +52,18 @@ func TestErisDiagnosticAllowsMemberAndStopsForeignRequestBeforeArr(t *testing.T)
 		})
 		reply := s.erisDiagnostic(context.Background(), u, s.grants[u.ID], eris.Plan{Action: "diagnostic", RequestID: 7})
 		if foreign {
-			if arrReads != 0 || !strings.Contains(reply.Content, "pas pu vérifier") {
+			if arrReads != 0 || !strings.Contains(reply.Content, "pas pu vérifier") || reply.Narrate || reply.Diagnostic != nil {
 				t.Fatal("foreign request disclosed", arrReads, reply)
 			}
-		} else if arrReads == 0 || !strings.Contains(reply.Content, "75 %") || !strings.Contains(reply.Content, "indexation") {
+		} else if arrReads == 0 || !strings.Contains(reply.Content, "75 %") || !strings.Contains(reply.Content, "indexation") || !reply.Narrate || reply.Diagnostic == nil || !reply.Diagnostic.Valid() || reply.Diagnostic.ProgressPercent == nil || *reply.Diagnostic.ProgressPercent != 75 {
 			t.Fatal("member diagnosis missing", reply)
 		}
 		if strings.Contains(reply.Content, "private") || strings.Contains(reply.Content, "secret") || strings.Contains(reply.Content, "6.4.4") || strings.Contains(reply.Content, "admin-secret") {
 			t.Fatal("technical private fields exposed", reply)
+		}
+		raw, _ := json.Marshal(reply.Diagnostic)
+		if strings.Contains(string(raw), "private") || strings.Contains(string(raw), "secret") || strings.Contains(string(raw), "outputPath") || strings.Contains(string(raw), "indexer") {
+			t.Fatal("private evidence reached narrator", string(raw))
 		}
 	}
 }

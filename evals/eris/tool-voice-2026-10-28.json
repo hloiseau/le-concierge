@@ -1,0 +1,119 @@
+{
+  "scope": "Synthetic tool facts only. No Discord publication or production media reads. Same configured model credentials; human assessment required for personality.",
+  "date": "2026-10-28",
+  "baseline": "a265d35c080d808f161eedc289374c3f31546d15",
+  "baseline_eris_go_sha256": "03fe0856fdb99d2d91269ae5c04704388397ae0fe8c66d84f1db9438cf51d0af",
+  "candidate_eris_go_sha256": "dfd5397d2f23dfb2a3aeab0388ccd08631f28d0a61533171371dbf955a5b2dd8",
+  "before": [
+    {
+      "action": "diagnostic",
+      "case": "toy-story",
+      "elapsed_ms": 3737,
+      "error": "",
+      "question": "Pourquoi toystorie 5 est bloqué ?",
+      "reply": "Toy Story 5\nLe fichier a été trouvé, mais l’application ne peut pas l’associer et l’importer automatiquement. Un administrateur doit vérifier le bon contenu avant un import manuel.\nProgression observée : 100 % des données des téléchargements consultés. Cela ne signifie pas encore disponible dans Plex.\nLa fiche est indexée dans Plex et accessible à ton compte ; la lecture et la complétude des saisons ne sont pas vérifiées ici.",
+      "tool_calls": 1
+    },
+    {
+      "action": "diagnostic",
+      "case": "progress",
+      "elapsed_ms": 2851,
+      "error": "",
+      "question": "Pourquoi ma demande de Dune n’est toujours pas disponible ?",
+      "reply": "Dune (2021) : téléchargement en cours, progression observée 37 % des données consultées. L’import et l’indexation dans Plex viennent après. Aucun délai confirmé.",
+      "tool_calls": 1
+    },
+    {
+      "action": "diagnostic",
+      "case": "partial",
+      "elapsed_ms": 3669,
+      "error": "",
+      "question": "Pourquoi ma demande de la saison 2 de Dark bloque ?",
+      "reply": "Dark, saison 2 : import manuel nécessaire. Un administrateur doit vérifier le fichier. Progression 100 % des téléchargements consultés. Lecture partielle : file tronquée. Deux épisodes sans fichier dans la saison demandée. Pas de lecture Plex confirmée.",
+      "tool_calls": 1
+    },
+    {
+      "action": "diagnostic",
+      "case": "unknown",
+      "elapsed_ms": 2828,
+      "error": "",
+      "question": "Pourquoi ma demande d’Arrival bloque ?",
+      "reply": "Arrival (2016) : aucune cause confirmée dans les éléments consultés. La recherche peut encore être en attente ; l’absence d’erreur ne prouve pas que tout fonctionne. Progression inconnue.",
+      "tool_calls": 1
+    },
+    {
+      "action": "cinema",
+      "case": "cinema",
+      "elapsed_ms": 3372,
+      "error": "",
+      "question": "Qui a réalisé Dune (2021) ?",
+      "reply": "**Dune** (2021)\nRéalisation : Denis Villeneuve\nSource : [TMDB via Seerr](https://www.themoviedb.org/movie/438631).",
+      "tool_calls": 1
+    },
+    {
+      "action": "chat",
+      "case": "hello",
+      "elapsed_ms": 3252,
+      "error": "",
+      "question": "Salut Eris, comment ça va ?",
+      "reply": "Salut ! Ça va bien, contente de te voir. Et toi, ça va ?",
+      "tool_calls": 0
+    }
+  ],
+  "after": [
+    {
+      "action": "diagnostic",
+      "case": "toy-story",
+      "elapsed_ms": 6479,
+      "error": "",
+      "question": "Pourquoi toystorie 5 est bloqué ?",
+      "reply": "Toy Story 5 est téléchargé à 100 %, mais il bloque à l’import manuel : un admin doit vérifier le contenu puis l’importer à la main. Une fiche est déjà accessible dans Plex, mais ça ne garantit pas que le film soit lisible.",
+      "tool_calls": 1
+    },
+    {
+      "action": "diagnostic",
+      "case": "progress",
+      "elapsed_ms": 6168,
+      "error": "",
+      "question": "Pourquoi ma demande de Dune n’est toujours pas disponible ?",
+      "reply": "Dune (2021) est encore en téléchargement, à 37 %. C’est pour ça que ta demande n’est pas encore disponible. J’ai pas de délai fiable à te donner.",
+      "tool_calls": 1
+    },
+    {
+      "action": "diagnostic",
+      "case": "partial",
+      "elapsed_ms": 6067,
+      "error": "",
+      "question": "Pourquoi ma demande de la saison 2 de Dark bloque ?",
+      "reply": "Pour Dark, saison 2, les téléchargements consultés sont à 100 %, mais ça bloque à l’import : un admin doit vérifier le contenu puis l’importer à la main. La vue est partielle et signale encore 2 épisodes manquants ; je ne peux donc pas te confirmer que toute la saison est prête.",
+      "tool_calls": 1
+    },
+    {
+      "action": "diagnostic",
+      "case": "unknown",
+      "elapsed_ms": 7121,
+      "error": "",
+      "question": "Pourquoi ma demande d’Arrival bloque ?",
+      "reply": "Je n’ai pas de cause confirmée pour le blocage de ta demande d’Arrival (2016). Je peux pas te dire pourquoi ça coince avec les infos disponibles.",
+      "tool_calls": 1
+    },
+    {
+      "action": "cinema",
+      "case": "cinema",
+      "elapsed_ms": 8856,
+      "error": "",
+      "question": "Qui a réalisé Dune (2021) ?",
+      "reply": "C’est Denis Villeneuve qui a réalisé **Dune** (2021).\n[TMDB via Seerr](https://www.themoviedb.org/movie/438631)",
+      "tool_calls": 1
+    },
+    {
+      "action": "chat",
+      "case": "hello",
+      "elapsed_ms": 3563,
+      "error": "",
+      "question": "Salut Eris, comment ça va ?",
+      "reply": "Salut ! Ça va bien, je suis de bonne humeur pour une fois. Et toi ?",
+      "tool_calls": 0
+    }
+  ]
+}

@@ -437,6 +437,8 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			}
 			if (plan.Action == "web" || plan.Action == "anime" || plan.Action == "gifts") && result.Web != nil {
 				reply = c.webAnswer(ctx, question, *result.Web)
+			} else if c.V2 && canNarrate(plan, result) {
+				reply = c.toolAnswer(ctx, question, result)
 			}
 		}
 		if reply == "" || utf8.RuneCountInString(reply) > 1500 {

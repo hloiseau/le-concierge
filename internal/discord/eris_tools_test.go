@@ -31,6 +31,32 @@ func TestErisToolAcceptsGiftEvidenceOnlyForAnEvidenceAction(t *testing.T) {
 	}
 }
 
+func TestErisV2DeliversNarratedDiagnosticFromVerifiedToolReply(t *testing.T) {
+	b, _ := signedCommand(t, "eris")
+	b.Eris.V2 = true
+	b.Eris.URL = "http://model.test"
+	b.Config.BotAPIURL = "http://api.test"
+	modelCalls, apiCalls := 0, 0
+	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host == "api.test" {
+			apiCalls++
+			return botResponse(200, `{"content":"Toy Story 5 : import manuel nécessaire. Un administrateur doit vérifier le fichier.","narrate":true,"diagnostic":{"title":"Toy Story 5","stage":"manual_import","partial":false}}`), nil
+		}
+		modelCalls++
+		raw := `{"action":"diagnostic","query":"Toy Story 5"}`
+		if modelCalls == 2 {
+			raw = `{"text":"Ça bloque à l’import. Faut qu’un admin vérifie le fichier."}`
+		}
+		body, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": eris.Message{Role: "assistant", Content: raw}}}})
+		return botResponse(200, string(body)), nil
+	})
+	b.Eris.HTTP.Transport = b.Client.Transport
+	got := b.erisMediaReply(context.Background(), "23456:11111:33333", "Pourquoi Toy Story 5 est bloqué ?", false, eris.ToolRequest{ChannelID: "33333", MessageID: "44444"})
+	if modelCalls != 2 || apiCalls != 1 || got.Content != "Ça bloque à l’import. Faut qu’un admin vérifie le fichier." {
+		t.Fatal(got, modelCalls, apiCalls)
+	}
+}
+
 func TestErisToolForwardsSignedProofAndDisplaysPrivateChoices(t *testing.T) {
 	body := `{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"token":"private-interaction-token","member":{"user":{"id":"11111"}},"data":{"name":"eris","options":[{"name":"message","type":3,"value":"Demande Arrival"}]}}`
 	b, r := signedInteraction(t, body)
