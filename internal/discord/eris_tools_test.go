@@ -10,7 +10,26 @@ import (
 	"testing"
 
 	"github.com/hloiseau/le-concierge/internal/eris"
+	"github.com/hloiseau/le-concierge/internal/websearch"
 )
+
+func TestErisToolAcceptsGiftEvidenceOnlyForAnEvidenceAction(t *testing.T) {
+	for _, action := range []string{"gifts", "status"} {
+		t.Run(action, func(t *testing.T) {
+			b, _ := signedCommand(t, "eris")
+			b.Config.BotAPIURL = "http://api.test"
+			evidence := websearch.Result{RetrievedAt: "2026-10-28T12:00:00Z", Sources: []websearch.Source{{Title: "Liste autorisée", URL: "https://gifts.example/lists/one", Text: "Un jeu coopératif.", Kind: "metadata"}}}
+			b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				raw, _ := json.Marshal(eris.ToolReply{Content: evidence.Fallback(), Web: &evidence})
+				return botResponse(200, string(raw)), nil
+			})
+			got := b.erisTool(context.Background(), eris.ToolRequest{Plan: eris.Plan{Action: action}})
+			if (got.Web != nil) != (action == "gifts") {
+				t.Fatal("gift evidence rejected or unexpected evidence accepted", got)
+			}
+		})
+	}
+}
 
 func TestErisToolForwardsSignedProofAndDisplaysPrivateChoices(t *testing.T) {
 	body := `{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"token":"private-interaction-token","member":{"user":{"id":"11111"}},"data":{"name":"eris","options":[{"name":"message","type":3,"value":"Demande Arrival"}]}}`
