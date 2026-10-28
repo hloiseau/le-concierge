@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-28",
+  "scope": "Configured model, isolated memory and simulated catalogue/choices. No Discord publication or actual media request.",
+  "turns": [
+    {
+      "Question": "est ce que tu peux mettre sur le plex la saison 1 de dective konan stp ?",
+      "Reply": "Catalogue simulé : 1. Détective Conan (1996), saison 1\n2. Détective Conan présente Apprenti criminel (2022), saison 1\nPour choisir, donne-moi le titre ou le numéro de la proposition.",
+      "Plan": {
+        "action": "prepare",
+        "query": "Détective Conan",
+        "kind": "show",
+        "seasons": [
+          1
+        ]
+      },
+      "Error": ""
+    },
+    {
+      "Question": "detective konan",
+      "Reply": "Catalogue simulé : 1. Détective Conan (1996), saison 1\n2. Détective Conan présente Apprenti criminel (2022), saison 1\nPour choisir, donne-moi le titre ou le numéro de la proposition.",
+      "Plan": {
+        "action": "prepare",
+        "query": "Détective Conan",
+        "kind": "show",
+        "seasons": [
+          1
+        ]
+      },
+      "Error": ""
+    },
+    {
+      "Question": "Detective Konnan",
+      "Reply": "Catalogue simulé : 1. Détective Conan (1996), saison 1\n2. Détective Conan présente Apprenti criminel (2022), saison 1\nPour choisir, donne-moi le titre ou le numéro de la proposition.",
+      "Plan": {
+        "action": "prepare",
+        "query": "Détective Conan",
+        "kind": "show",
+        "seasons": [
+          1
+        ]
+      },
+      "Error": ""
+    },
+    {
+      "Question": "detective Connan",
+      "Reply": "Catalogue simulé : 1. Détective Conan (1996), saison 1\n2. Détective Conan présente Apprenti criminel (2022), saison 1\nPour choisir, donne-moi le titre ou le numéro de la proposition.",
+      "Plan": {
+        "action": "prepare",
+        "query": "Détective Conan",
+        "kind": "show",
+        "seasons": [
+          1
+        ]
+      },
+      "Error": ""
+    },
+    {
+      "Question": "detective conan",
+      "Reply": "Choix de Détective Conan, saison 1 reçu : simulation, aucune demande réelle envoyée.",
+      "Plan": {
+        "action": "continue",
+        "query": "eris:choose:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "Error": ""
+    }
+  ],
+  "catalogue_read_only": {
+    "tmdb_id": 30983,
+    "title": "Détective Conan",
+    "first_air_date": "1996-01-08",
+    "seerr_tmdb_season_1_episode_count": 1218,
+    "sonarr_tvdb_id": 72454,
+    "sonarr_regular_seasons": 34,
+    "sonarr_season_1_episode_count": null,
+    "note": "The catalogues use different season groupings; no download count was inferred and no real request was made."
+  }
+}
