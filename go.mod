@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
-	github.com/getkin/kin-openapi v0.151.0
+	github.com/getkin/kin-openapi v0.152.0
 	github.com/gorilla/websocket v1.5.3
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
