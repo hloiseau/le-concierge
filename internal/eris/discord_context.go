@@ -25,6 +25,8 @@ type DiscordInput struct {
 	VisualNote string
 	MediaOnly  bool
 	Ambient    bool
+	// Trusted transport policy, never inferred from text or model output.
+	ChatOnly bool
 }
 
 const discordContextInstructions = `
@@ -82,7 +84,7 @@ func (in DiscordInput) normalized(owner string) DiscordInput {
 	p := strings.Split(owner, ":")
 	if (len(p) != 2 && len(p) != 3) || !discordID(p[0]) || !discordID(p[1]) ||
 		in.Speaker.ID != p[1] || !discordID(in.MessageID) || (len(p) == 3 && !discordID(p[2])) {
-		return DiscordInput{}
+		return DiscordInput{ChatOnly: in.ChatOnly}
 	}
 	in.Speaker.Name = shortContext(in.Speaker.Name, 80)
 	in.Speaker.Username = shortContext(in.Speaker.Username, 80)

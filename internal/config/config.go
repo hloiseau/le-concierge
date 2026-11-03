@@ -35,6 +35,7 @@ type Config struct {
 	CommunityForumIDs, RoadmapIssueIDs                                                      []string
 	Env, Listen, BotListen, PublicOrigin, DatabasePath                                      string
 	DiscordClientID, DiscordClientSecret, DiscordGuildID, DiscordPublicKey, DiscordBotToken string
+	DiscordChatGuildIDs                                                                     []string
 	BotAPIURL, BotAPISecret                                                                 string
 	PlexURL, PlexServerID, SeerrURL, SeerrAPIKey                                            string
 	MaintainerrURL, TautulliURL, TautulliAPIKey                                             string
@@ -81,6 +82,20 @@ func ValidURL(raw string, origin bool) bool {
 }
 func Load() (Config, error) {
 	c := Config{Env: fallback("APP_ENV", "production"), Listen: fallback("LISTEN_ADDR", ":8080"), BotListen: fallback("BOT_LISTEN_ADDR", ":8081"), PublicOrigin: strings.TrimRight(fallback("PUBLIC_ORIGIN", "http://localhost:3000"), "/"), DatabasePath: fallback("DATABASE_PATH", "data/concierge.db"), DiscordClientID: os.Getenv("DISCORD_CLIENT_ID"), DiscordGuildID: os.Getenv("DISCORD_GUILD_ID"), DiscordPublicKey: os.Getenv("DISCORD_PUBLIC_KEY"), BotAPIURL: strings.TrimRight(fallback("BOT_API_URL", "http://api:8080"), "/"), PlexURL: strings.TrimRight(os.Getenv("PLEX_URL"), "/"), PlexServerID: os.Getenv("PLEX_SERVER_ID"), SeerrURL: strings.TrimRight(os.Getenv("SEERR_URL"), "/")}
+	if raw := strings.TrimSpace(os.Getenv("DISCORD_CHAT_GUILD_IDS")); raw != "" {
+		if !Snowflake(c.DiscordGuildID) {
+			return c, errors.New("DISCORD_CHAT_GUILD_IDS requires the primary DISCORD_GUILD_ID")
+		}
+		seen := map[string]bool{c.DiscordGuildID: true}
+		for _, value := range strings.Split(raw, ",") {
+			id := strings.TrimSpace(value)
+			if !Snowflake(id) || seen[id] || len(c.DiscordChatGuildIDs) >= 10 {
+				return c, errors.New("DISCORD_CHAT_GUILD_IDS requires at most 10 distinct additional guild IDs")
+			}
+			seen[id] = true
+			c.DiscordChatGuildIDs = append(c.DiscordChatGuildIDs, id)
+		}
+	}
 	c.MaintainerrURL = strings.TrimRight(os.Getenv("MAINTAINERR_URL"), "/")
 	c.TautulliURL = strings.TrimRight(os.Getenv("TAUTULLI_URL"), "/")
 	c.GrimmoryURL = strings.TrimRight(os.Getenv("GRIMMORY_URL"), "/")
@@ -307,4 +322,20 @@ func (c Config) Admin(id string) bool {
 }
 func (c Config) OAuthEnabled() bool {
 	return c.DiscordClientID != "" && c.DiscordClientSecret != "" && c.DiscordGuildID != ""
+}
+
+// Additional guilds may converse with Eris, but never gain Hub access.
+func (c Config) DiscordChatAllowed(guild string) bool {
+	if !Snowflake(guild) {
+		return false
+	}
+	if guild == c.DiscordGuildID {
+		return true
+	}
+	for _, id := range c.DiscordChatGuildIDs {
+		if guild == id {
+			return true
+		}
+	}
+	return false
 }

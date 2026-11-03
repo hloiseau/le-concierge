@@ -12,6 +12,7 @@ import (
 
 type erisAmbientMessage struct{ Author, Text string }
 type erisAmbientTurn struct {
+	GuildID             string
 	Messages            []erisAmbientMessage
 	LastID              string
 	LastSeen, NextCheck time.Time
@@ -54,7 +55,7 @@ func (b *Bot) considerErisParticipation(parent context.Context, s *discordgo.Ses
 			b.mu.Unlock()
 			return
 		}
-		state = &erisAmbientTurn{}
+		state = &erisAmbientTurn{GuildID: m.GuildID}
 		b.erisAmbient[m.ChannelID] = state
 	}
 	if now.Sub(state.LastSeen) > erisFollowupWindow {
@@ -126,6 +127,6 @@ func (b *Bot) considerErisParticipation(parent context.Context, s *discordgo.Ses
 		if stamp.IsZero() {
 			stamp = time.Now()
 		}
-		b.erisPublic[m.ChannelID] = &erisPublicTurn{Message: &discordgo.Message{ID: sent.ID, ChannelID: m.ChannelID, GuildID: m.GuildID, Content: reply, Timestamp: stamp, Author: &discordgo.User{ID: b.Config.DiscordClientID, Bot: true}}, Question: string(text), AuthorID: m.Author.ID, LastEvent: sent.ID, Expires: stamp.Add(erisFollowupWindow)}
+		b.erisPublic[m.ChannelID] = &erisPublicTurn{GuildID: m.GuildID, Message: &discordgo.Message{ID: sent.ID, ChannelID: m.ChannelID, GuildID: m.GuildID, Content: reply, Timestamp: stamp, Author: &discordgo.User{ID: b.Config.DiscordClientID, Bot: true}}, Question: string(text), AuthorID: m.Author.ID, LastEvent: sent.ID, Expires: stamp.Add(erisFollowupWindow)}
 	}()
 }

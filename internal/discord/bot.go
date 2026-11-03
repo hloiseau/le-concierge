@@ -66,7 +66,7 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 		_, commandErr = b.interestAction(i)
 		command = "salons"
 	}
-	if commandErr != nil || i.GuildID != b.Config.DiscordGuildID || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) || len(i.Token) < 8 || len(i.Token) > 4096 {
+	if commandErr != nil || !b.allowedInteraction(i, command) || !config.Snowflake(i.Member.User.ID) || !config.Snowflake(i.ID) || len(i.Token) < 8 || len(i.Token) > 4096 {
 		http.Error(w, "unsupported interaction", 403)
 		return
 	}
@@ -89,7 +89,9 @@ func (b *Bot) interaction(w http.ResponseWriter, r *http.Request) {
 	// Static help must work even when the API is unavailable.
 	if command == "aide" {
 		help := Help(b.Config.PublicOrigin, b.Config.Services)
-		if len(b.Config.DiscordInterests) > 0 {
+		if i.GuildID != b.Config.DiscordGuildID {
+			help = erisChatHelp
+		} else if len(b.Config.DiscordInterests) > 0 {
 			help = "/salons — Choisir ou quitter vos salons thématiques, sans compte Plex.\n\n" + help
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message(help)})
@@ -323,8 +325,27 @@ func (b *Bot) Register(ctx context.Context) error {
 			command["options"] = append(options, map[string]any{"name": "public", "description": "Partager le résultat dans ce salon (privé par défaut)", "type": 5})
 		}
 	}
+	// Register each guild independently: an inaccessible extra guild must not
+	// prevent updates in the primary guild or other allowed guilds.
+	result := b.registerGuild(ctx, b.Config.DiscordGuildID, commands)
+	var chatCommands []map[string]any
+	for _, command := range commands {
+		if chatCommand(command["name"].(string)) {
+			if command["name"] == "aide" {
+				command = map[string]any{"name": "aide", "description": "Comment discuter avec Eris", "type": 1}
+			}
+			chatCommands = append(chatCommands, command)
+		}
+	}
+	for _, guild := range b.Config.DiscordChatGuildIDs {
+		result = errors.Join(result, b.registerGuild(ctx, guild, chatCommands))
+	}
+	return result
+}
+
+func (b *Bot) registerGuild(ctx context.Context, guild string, commands []map[string]any) error {
 	raw, _ := json.Marshal(commands)
-	req, e := http.NewRequestWithContext(ctx, "PUT", "https://discord.com/api/v10/applications/"+b.Config.DiscordClientID+"/guilds/"+b.Config.DiscordGuildID+"/commands", strings.NewReader(string(raw)))
+	req, e := http.NewRequestWithContext(ctx, "PUT", "https://discord.com/api/v10/applications/"+b.Config.DiscordClientID+"/guilds/"+guild+"/commands", strings.NewReader(string(raw)))
 	if e != nil {
 		return e
 	}

@@ -129,6 +129,8 @@ services:
     entrypoint: [/app/bot]
     environment:
       <<: *discord
+      # Serveurs supplementaires : discussion uniquement, IDs separes par des virgules.
+      DISCORD_CHAT_GUILD_IDS: ''
       BOT_API_URL: http://api:8080
       BOT_LISTEN_ADDR: ':8081'
       GOMEMLIMIT: 96MiB

@@ -78,7 +78,7 @@ func (b *Bot) mentionQuestion(event *discordgo.MessageCreate) (string, bool) {
 		return "", false
 	}
 	m := event.Message
-	if m.GuildID != b.Config.DiscordGuildID || m.Author == nil || m.Author.Bot || m.WebhookID != "" ||
+	if !b.Config.DiscordChatAllowed(m.GuildID) || m.Author == nil || m.Author.Bot || m.WebhookID != "" ||
 		m.Author.ID == b.Config.DiscordClientID || !config.Snowflake(m.Author.ID) || !config.Snowflake(m.ChannelID) || !config.Snowflake(m.ID) ||
 		(m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply) {
 		return "", false
@@ -117,7 +117,7 @@ func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
 }
 
 func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event *discordgo.MessageCreate) {
-	if event == nil || event.Message == nil || event.GuildID != b.Config.DiscordGuildID || !config.Snowflake(event.ChannelID) || !config.Snowflake(event.ID) {
+	if event == nil || event.Message == nil || !b.Config.DiscordChatAllowed(event.GuildID) || !config.Snowflake(event.ChannelID) || !config.Snowflake(event.ID) {
 		return
 	}
 	if event.Author != nil && event.Author.ID == b.Config.DiscordClientID {

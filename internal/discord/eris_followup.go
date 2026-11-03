@@ -18,6 +18,7 @@ var erisVocative = regexp.MustCompile(`(?i)^((?:(?:salut|bonjour|bonsoir|coucou|
 
 type erisPublicTurn struct {
 	Message            *discordgo.Message
+	GuildID            string
 	Question, AuthorID string
 	LastEvent          string
 	Expires            time.Time
@@ -62,7 +63,7 @@ func (b *Bot) beginErisTurn(m *discordgo.Message, direct bool) *erisPublicTurn {
 		if b.erisPublic == nil {
 			b.erisPublic = map[string]*erisPublicTurn{}
 		}
-		turn = &erisPublicTurn{Expires: now.Add(erisFollowupWindow)}
+		turn = &erisPublicTurn{GuildID: m.GuildID, Expires: now.Add(erisFollowupWindow)}
 		b.erisPublic[m.ChannelID] = turn
 	}
 	previous := *turn
@@ -149,14 +150,24 @@ func (b *Bot) rememberPublicErisReply(event, sent *discordgo.Message, question, 
 }
 
 func (b *Bot) clearPublicErisTurns(author string) {
+	b.clearPublicErisGuildTurns("", author)
+}
+
+func (b *Bot) clearPublicErisGuildTurns(guild, author string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for channel, turn := range b.erisPublic {
+		if guild != "" && turn.GuildID != guild {
+			continue
+		}
 		if author == "" || turn.AuthorID == author {
 			delete(b.erisPublic, channel)
 		}
 	}
 	for channel, turn := range b.erisAmbient {
+		if guild != "" && turn.GuildID != guild {
+			continue
+		}
 		if author == "" {
 			delete(b.erisAmbient, channel)
 			continue
