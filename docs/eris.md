@@ -20,13 +20,17 @@ Au 22 octobre 2026, le bot/API `20f96b6` et le runtime `5dd08ded` sont déployé
 
 ## Discuter avec Eris
 
+Pour l'ajouter sur un autre serveur uniquement pour discuter, voir le
+[guide multi-serveurs](eris-multiple-servers.md). Le serveur principal conserve
+les fonctions média ; les autres doivent être explicitement autorisés.
+
 - `@Eris Salut` : mentionner le compte Eris et recevoir une réponse dans le même salon ou fil. Le bouton **Répondre** de Discord permet ensuite de continuer sans réécrire la mention.
 - `/eris` : afficher comment lui parler.
 - `/eris message:Salut Eris` : démarrer ou poursuivre une conversation.
 - `/eris oublier:true` : effacer la conversation sans appeler le modèle.
 - `/eris message:On recommence oublier:true` : effacer puis envoyer un nouveau message.
 
-Les réponses à `/eris` sont éphémères, visibles uniquement par leur auteur. Les mentions et réponses à Eris sont publiques dans le salon concerné, sans notification de masse. Une réponse doit référencer un message d'Eris dans le même salon ; écrire son nom seul, mentionner un rôle ou répondre à quelqu'un d'autre ne déclenche pas le chat. Les messages des bots, webhooks, autres serveurs et messages privés sont ignorés. Il n’est pas nécessaire de lier Plex pour discuter.
+Les réponses à `/eris` sont éphémères, visibles uniquement par leur auteur. Les mentions et réponses à Eris sont publiques dans le salon concerné, sans notification de masse. Une réponse doit référencer un message d'Eris dans le même salon ; écrire son nom seul, mentionner un rôle ou répondre à quelqu'un d'autre ne déclenche pas le chat. Les messages des bots, webhooks, serveurs non autorisés et messages privés sont ignorés. Il n’est pas nécessaire de lier Plex pour discuter.
 
 Quand le moteur et le token Discord sont configurés, le bot ouvre une connexion Gateway avec `GUILD_MESSAGES`. Pour recevoir aussi le texte des réponses dont la notification est désactivée, activer **Message Content Intent** dans l'application Discord, puis `DISCORD_MESSAGE_CONTENT=true` dans le bot. Le réglage est désactivé par défaut ; sans lui, [Discord transmet seulement certains contenus, dont les mentions du bot](https://docs.discord.com/developers/events/gateway#message-content-intent). Même activé, les messages non adressés à Eris sont écartés avant tout appel au modèle ou à l'API média. Accorder **Voir le salon**, **Envoyer des messages**, **Lire l’historique des messages** et, pour les fils, **Envoyer des messages dans les fils**. La connexion se rétablit après une coupure ; un échec ne bloque pas les commandes HTTP.
 

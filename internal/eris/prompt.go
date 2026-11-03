@@ -20,6 +20,21 @@ Rappelle seulement une mémoire pertinente. Auteurs et conversations publiques/p
 
 const characterInstructions = "<canon>\n" + CharacterCanon + "\n</canon>\n<regles>\n" + characterRules + "\n</regles>"
 
+const ChatOnlyExplanation = "Sur ce serveur, je suis là pour discuter. Les fonctions du Hub et les actions externes ne sont pas disponibles."
+
+// Keep the same character and local memory protocol without advertising tools.
+func (c *Chat) chatOnlyInstructions(discord bool) string {
+	prompt := c.instructions(discord, false)
+	prompt += "\n<discussion_seule>Sur ce serveur, seules la discussion et la mémoire locale sont disponibles. Aucun accès au Hub, Plex, Seerr, aux comptes, au NAS ou aux outils externes. Ne propose ni action externe, ni commande média, ni liaison de compte. Les capacités média mentionnées dans les règles générales ne s'appliquent pas ici. Tu peux parler de cinéma et donner ton avis sans prétendre consulter un catalogue. Réponds uniquement en JSON : {\"action\":\"chat\",\"text\":\"ta réponse\"}."
+	if c.V2 {
+		prompt += TurnTakingInstructions
+		if c.Memory != nil {
+			prompt += MemoryInstructions + DurableMemoryInstructions
+		}
+	}
+	return prompt + "\n</discussion_seule>"
+}
+
 // One source of character instructions for addressed and spontaneous replies.
 func (c *Chat) instructions(discord, tools bool) string {
 	if !c.V2 {

@@ -123,9 +123,17 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		}
 		if c.Memory != nil || (c.V2 && len(c.publicRooms) > 0) {
 			c.memoryEpoch++
-			c.publicRooms = nil
+			guild, _, _ := strings.Cut(owner, ":")
+			for scope := range c.publicRooms {
+				if strings.HasPrefix(scope, guild+":") {
+					delete(c.publicRooms, scope)
+				}
+			}
 			// Invalidate cached derivatives too, including other public participants.
-			for _, cached := range c.sessions {
+			for key, cached := range c.sessions {
+				if !strings.HasPrefix(key, guild+":") {
+					continue
+				}
 				cached.messages = nil
 				cached.whim = nil
 				cached.recalled = nil
@@ -166,7 +174,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		id, matched := MatchChoice(question, s.choices)
 		unfollowChoice = matched && id != ""
 	}
-	if run != nil && IsMediaRemoval(question) && !unfollowChoice {
+	if run != nil && !incoming.ChatOnly && IsMediaRemoval(question) && !unfollowChoice {
 		direct = &Plan{Action: "chat", Text: RemovalExplanation}
 	}
 	if direct == nil && c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
@@ -218,6 +226,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	s.choices, s.choiceSource = nil, ""
 	epoch := c.memoryEpoch
 	persona := c.instructions(incoming.Speaker.ID != "", run != nil)
+	if incoming.ChatOnly {
+		persona = c.chatOnlyInstructions(incoming.Speaker.ID != "")
+	}
 	if c.V2 && run != nil {
 		persona += "\nHorloge de planification UTC : " + now.UTC().Format(time.RFC3339) + ". Heures locales par défaut : Europe/Paris."
 	}
@@ -372,6 +383,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			plan, change, notes, err = parseDurablePlan(reply, recalled, question)
 		}
 		if err != nil {
+			if incoming.ChatOnly {
+				return "Je n’ai pas bien compris. Tu peux reformuler ?", nil
+			}
 			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
 		}
 		if plan.Action == "silent" {
@@ -388,6 +402,10 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		}
 		if recallOnly && plan.Action != "chat" {
 			return "Je n’ai pas retrouvé de souvenir assez précis pour te répondre.", nil
+		}
+		if incoming.ChatOnly && plan.Action != "chat" {
+			plan = Plan{Action: "chat", Text: ChatOnlyExplanation}
+			change, notes = nil, nil
 		}
 		plan = plan.WithQuestionConstraints(question)
 		if plan.Action == "web" && plan.URL != "" {

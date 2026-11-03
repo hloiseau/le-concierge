@@ -154,14 +154,14 @@ func TestErisV2NaturalRequestsHideButtonsAndBypassModelForConsent(t *testing.T) 
 	})
 	b.Eris.HTTP.Transport = b.Client.Transport
 	for _, q := range []string{"demande Bronson", "prends le premier"} {
-		result := b.erisMediaReply(context.Background(), "guild:alice:33333", q, false, eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
+		result := b.erisMediaReply(context.Background(), "23456:11111:33333", q, false, eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
 		if len(result.Buttons) != 0 {
 			t.Fatal("v2 still displays buttons")
 		}
 		if apiCalls == 2 && result.Content != "Demande créée." {
 			t.Fatal("selection did not finish the request")
 		}
-		b.Eris.Delivered("guild:alice:33333", "88888", result.Content)
+		b.Eris.Delivered("23456:11111:33333", "88888", result.Content)
 	}
 	if modelCalls != 1 || apiCalls != 2 {
 		t.Fatal(modelCalls, apiCalls)
