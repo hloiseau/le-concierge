@@ -22,7 +22,7 @@ jobs:
       - run: go test -race -cover ./...
       - name: Test isolated metrics collector
         run: python3 -m unittest discover -s tools -p 'test_*.py'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - name: Test Eris credential rotation
