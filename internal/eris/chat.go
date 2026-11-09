@@ -26,6 +26,9 @@ type Message struct {
 	historyID   uint64
 	unconfirmed bool
 	toolResult  bool
+	stalled     bool
+	failedRead  *Plan
+	source      string
 }
 
 type conversation struct {
@@ -218,6 +221,16 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		s.messages = confirmedHistory(s.messages)
 		s.assignHistoryIDs()
 	}
+	var previous Message
+	if len(s.messages) > 0 && s.messages[len(s.messages)-1].Role == "assistant" {
+		previous = s.messages[len(s.messages)-1]
+	}
+	resumingRead := c.V2 && run != nil && direct == nil && !incoming.ChatOnly && !incoming.MediaOnly &&
+		previous.failedRead != nil && acknowledgesAccess(question) &&
+		(reference == "" || (previous.source != "" && strings.HasPrefix(reference, "Eris (message "+previous.source+") : ")))
+	if resumingRead {
+		direct = previous.failedRead
+	}
 	s.busy = true
 	s.expires = now.Add(30 * time.Minute)
 	s.next = now.Add(10 * time.Second)
@@ -228,6 +241,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	persona := c.instructions(incoming.Speaker.ID != "", run != nil)
 	if incoming.ChatOnly {
 		persona = c.chatOnlyInstructions(incoming.Speaker.ID != "")
+	}
+	if previous.stalled {
+		persona += "\n" + stalledTurnInstructions
 	}
 	if c.V2 && run != nil {
 		persona += "\nHorloge de planification UTC : " + now.UTC().Format(time.RFC3339) + ". Heures locales par défaut : Europe/Paris."
@@ -374,6 +390,8 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	var notes []memoryNote
 	chatReply := run == nil
 	pending := false
+	stalled := false
+	var failedRead *Plan
 	var choices []Button
 	if run != nil {
 		plan, err := ParsePlan(reply)
@@ -382,11 +400,13 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		} else if c.V2 {
 			plan, change, notes, err = parseDurablePlan(reply, recalled, question)
 		}
-		if err != nil {
-			if incoming.ChatOnly {
-				return "Je n’ai pas bien compris. Tu peux reformuler ?", nil
-			}
-			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
+		repaired := false
+		if recallOnly && (err != nil || plan.Action != "chat") {
+			plan = Plan{Action: "chat", Text: "Je n’ai pas retrouvé de souvenir assez précis pour te répondre."}
+			change, notes, stalled, repaired = nil, nil, true, true
+		} else if err != nil {
+			plan, stalled = c.recoverChat(ctx, messages, incoming.Speaker.ID != "", previous)
+			change, notes, repaired = nil, nil, true
 		}
 		if plan.Action == "silent" {
 			if c.V2 && publicScope(owner) != "" && incoming.Speaker.ID != "" {
@@ -399,9 +419,6 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				return "", nil
 			}
 			plan = Plan{Action: "chat", Text: "D’accord."}
-		}
-		if recallOnly && plan.Action != "chat" {
-			return "Je n’ai pas retrouvé de souvenir assez précis pour te répondre.", nil
 		}
 		if incoming.ChatOnly && plan.Action != "chat" {
 			plan = Plan{Action: "chat", Text: ChatOnlyExplanation}
@@ -443,8 +460,12 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			plan = Plan{Action: "chat", Text: "Quel numéro de suivi veux-tu retirer ? Tu peux me demander la liste de tes suivis."}
 		}
 		if plan.Action == "chat" {
+			if !repaired && !recallOnly && repeatedQuestion(previous.Content, plan.Text) {
+				plan, stalled = c.recoverChat(ctx, messages, incoming.Speaker.ID != "", previous)
+				change, notes = nil, nil
+			}
 			reply = plan.Text
-			chatReply = true
+			chatReply = !stalled
 		} else {
 			var result ToolReply
 			result, err = run(ctx, plan)
@@ -452,6 +473,13 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			choices = append([]Button(nil), result.Buttons...)
 			if err != nil {
 				return "", ErrUnavailable
+			}
+			stalled = result.Issue != ""
+			if resumingRead && stalled {
+				reply = result.accountRetryReply()
+			}
+			if !resumingRead && result.needsAccountStep() && plan.isAccountRead() {
+				failedRead = &plan
 			}
 			if (plan.Action == "web" || plan.Action == "anime" || plan.Action == "gifts") && result.Web != nil {
 				reply = c.webAnswer(ctx, question, *result.Web)
@@ -485,7 +513,10 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		s.discord, s.delivery, s.epoch = incoming, reply, epoch
 		s.notes, s.chatReply = notes, chatReply
 	}
-	c.appendHistory(s, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply, unconfirmed: c.V2 && (run != nil || incoming.Speaker.ID != ""), toolResult: !chatReply})
+	c.appendHistory(s, Message{Role: "user", Content: question}, Message{
+		Role: "assistant", Content: reply, unconfirmed: c.V2 && (run != nil || incoming.Speaker.ID != ""),
+		toolResult: !chatReply, stalled: stalled, failedRead: failedRead,
+	})
 	c.mu.Unlock()
 	return reply, nil
 }

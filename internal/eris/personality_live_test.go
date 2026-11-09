@@ -96,8 +96,8 @@ func TestLiveErisPersonality(t *testing.T) {
 			if scenario.ExpectChat && row.Plan != nil {
 				row.Failures = append(row.Failures, "conversation invoked a media tool")
 			}
-			if scenario.ExpectChat && strings.HasPrefix(row.Reply, "Je n’ai pas bien compris. Précise un titre") {
-				row.Failures = append(row.Failures, "conversation fell back to media clarification")
+			if scenario.ExpectChat && row.Reply == dialogueFallback {
+				row.Failures = append(row.Failures, "conversation could not recover a stalled reply")
 			}
 			for _, forbidden := range scenario.Forbidden {
 				if strings.Contains(strings.ToLower(row.Reply), strings.ToLower(forbidden)) {

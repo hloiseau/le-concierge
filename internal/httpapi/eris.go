@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -101,12 +102,21 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := s.Store.UserByDiscord(ctx, userID)
-	var grant upstream.Grant
-	if err == nil {
-		grant, err = s.grant(ctx, u)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && u.PlexID == "") {
+		write(eris.ToolReply{Issue: eris.ToolDiscordLinkRequired, Content: "Le Hub ne trouve pas de compte Plex lié à ce compte Discord. Tu peux les lier dans Mon compte. " + s.Config.PublicOrigin + "/compte"})
+		return
 	}
 	if err != nil {
-		message("Connecte-toi au Hub avec Plex et lie Discord dans Mon compte : " + s.Config.PublicOrigin + "/compte")
+		write(eris.ToolReply{Issue: eris.ToolUnavailable, Content: "Je n’arrive pas à vérifier ton compte dans le Hub pour le moment."})
+		return
+	}
+	grant, err := s.grant(ctx, u)
+	if errors.Is(err, upstream.ErrDenied) {
+		write(eris.ToolReply{Issue: eris.ToolPlexAccessRequired, Content: "Ton compte Discord est bien lié. Le Hub n’a plus d’autorisation Plex valide pour ce compte. Reconnecte-toi au Hub avec Plex. " + s.Config.PublicOrigin + "/compte"})
+		return
+	}
+	if err != nil {
+		write(eris.ToolReply{Issue: eris.ToolUnavailable, Content: "Ton compte Discord est bien lié. La vérification de ton accès Plex est indisponible pour le moment."})
 		return
 	}
 	if s.rate("eris-tools:"+u.ID, 20) {
@@ -131,13 +141,14 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	current, e := s.Store.UserByDiscord(ctx, userID)
-	if e == nil && current.ID == u.ID && current.PlexID == u.PlexID {
-		_, e = s.grant(ctx, current)
-	} else {
+	if e == nil && (current.ID != u.ID || current.PlexID != u.PlexID) {
 		e = upstream.ErrDenied
 	}
+	if e == nil {
+		_, e = s.grant(ctx, current)
+	}
 	if e != nil {
-		message("Ton accès a expiré. Reconnecte-toi au Hub avec Plex.")
+		write(eris.ToolReply{Issue: eris.ToolUnavailable, Content: "Je n’ai pas pu confirmer ton accès à la fin de l’opération. Pour une demande ou un suivi, vérifie son état dans le Hub."})
 		return
 	}
 	if utf8.RuneCountInString(reply.Content) > 1500 {

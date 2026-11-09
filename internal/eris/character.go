@@ -43,6 +43,7 @@ func (c *Chat) Delivered(owner, source, text string) {
 	for i := len(s.messages) - 1; i >= 0; i-- {
 		if s.messages[i].Role == "assistant" && s.messages[i].Content == text && s.messages[i].unconfirmed {
 			s.messages[i].unconfirmed = false
+			s.messages[i].source = source
 			break
 		}
 	}

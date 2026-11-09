@@ -124,6 +124,51 @@ func TestErisPublicWatchFiltersNeverReadMedia(t *testing.T) {
 	}
 }
 
+func TestErisDistinguishesDiscordLinkFromPlexAccess(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		linked     bool
+		plexStatus int
+		want       eris.ToolIssue
+		text       string
+	}{
+		{"no link", false, 0, eris.ToolDiscordLinkRequired, "ne trouve pas de compte Plex lié"},
+		{"linked but expired", true, 0, eris.ToolPlexAccessRequired, "bien lié"},
+		{"linked but denied", true, 403, eris.ToolPlexAccessRequired, "bien lié"},
+		{"linked but Plex unavailable", true, 503, eris.ToolUnavailable, "vérification de ton accès Plex est indisponible"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := fixture(t)
+			s.Config.BotAPISecret = strings.Repeat("s", 32)
+			if tc.linked {
+				seed(t, s, "11111", true)
+				grant := s.grants["11111"]
+				grant.VerifiedAt = time.Now().Add(-6 * time.Minute)
+				if tc.plexStatus == 0 {
+					grant.ExpiresAt = time.Now().Add(-time.Minute)
+				}
+				s.grants["11111"] = grant
+			}
+			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if tc.plexStatus == 0 || r.URL.Host != "plex.tv" || r.URL.Path != "/api/v2/user" {
+					t.Errorf("unexpected upstream request: %s", r.URL.Path)
+					return response(500, `{}`), nil
+				}
+				return response(tc.plexStatus, `{}`), nil
+			})
+			in := signedErisTool(t, s, eris.Plan{Action: "search", Query: "Arrival"}, erisSlash)
+			w := callErisTool(s, in)
+			var reply eris.ToolReply
+			if err := json.Unmarshal(w.Body.Bytes(), &reply); err != nil || w.Code != 200 || reply.Issue != tc.want || !strings.Contains(reply.Content, tc.text) {
+				t.Fatalf("unexpected account result: %d %s (%v)", w.Code, w.Body, err)
+			}
+			if tc.linked && strings.Contains(reply.Content, "les lier") {
+				t.Fatalf("linked member was prompted to link again: %s", reply.Content)
+			}
+		})
+	}
+}
+
 func TestErisMissingSeasonAsksBeforeReadingOrCreatingRequest(t *testing.T) {
 	s := fixture(t)
 	seed(t, s, "11111", true)
