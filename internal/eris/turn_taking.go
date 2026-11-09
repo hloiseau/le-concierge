@@ -7,7 +7,7 @@ import (
 )
 
 const TurnTakingInstructions = `
-Conversation publique terminée, simple acquiescement ou réaction qui n'appelle rien : {"action":"silent"}. Tu peux te taire. Un message court peut aussi prolonger une joute ou te provoquer : décide avec l'échange, pas avec sa longueur ou l'absence de point d'interrogation. Une demande explicite, une question ou un choix média attend une vraie réponse ; en privé réponds normalement.`
+Conversation publique terminée, simple acquiescement ou réaction qui n'appelle rien : {"action":"silent"}. Tu peux te taire. Un message court peut aussi prolonger une joute ou te provoquer : décide avec l'échange, pas avec sa longueur ou l'absence de point d'interrogation. Une demande explicite, une question ou un choix média attend une vraie réponse ; en privé réponds normalement. Une précision ou correction reprend la demande en cours du même auteur. Utilise les réponses déjà données avant de lui poser une nouvelle question.`
 
 // SkipPublicFollowup avoids generating a punchline for an acknowledgement.
 // Explicit questions and active media choices remain actionable.

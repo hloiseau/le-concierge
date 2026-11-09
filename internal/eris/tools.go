@@ -244,7 +244,17 @@ type Button struct {
 	Number    int    `json:"number,omitempty"`
 	Operation string `json:"operation,omitempty"`
 }
+
+type ToolIssue string
+
+const (
+	ToolDiscordLinkRequired ToolIssue = "discord_link_required"
+	ToolPlexAccessRequired  ToolIssue = "plex_access_required"
+	ToolUnavailable         ToolIssue = "unavailable"
+)
+
 type ToolReply struct {
+	Issue      ToolIssue         `json:"issue,omitempty"`
 	Content    string            `json:"content"`
 	Buttons    []Button          `json:"buttons,omitempty"`
 	Web        *websearch.Result `json:"web,omitempty"`
