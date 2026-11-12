@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 	modernc.org/sqlite v1.60.1
 )
 
