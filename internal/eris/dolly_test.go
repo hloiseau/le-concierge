@@ -24,10 +24,10 @@ func dollyCompletion(w http.ResponseWriter, model, finish, content string) {
 func TestDollyChatCompletion(t *testing.T) {
 	keyFile := filepath.Join(t.TempDir(), "key")
 	for _, test := range []struct{ model, finish, key, want string }{
-		{"dolly2-security", "stop", strings.Repeat("a", 32), "Ouais."},
-		{"dolly2-security", "length", strings.Repeat("b", 32), ""},
-		{"glm-5.3", "stop", strings.Repeat("c", 32), ""},
-		{"dolly2-security", "tool_calls", strings.Repeat("d", 32), ""},
+		{"dolly2-security", "stop", "sk-" + strings.Repeat("a", 22), "Ouais."},
+		{"dolly2-security", "length", "sk-" + strings.Repeat("b", 22), ""},
+		{"glm-5.3", "stop", "sk-" + strings.Repeat("c", 22), ""},
+		{"dolly2-security", "tool_calls", "sk-" + strings.Repeat("d", 22), ""},
 	} {
 		func() {
 			if err := os.WriteFile(keyFile, []byte(test.key+"\n"), 0600); err != nil {
@@ -86,7 +86,7 @@ func TestDollyRepairsMissedMemoryCorrectionOnDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer memory.Close()
-	chat := New(server.URL, strings.Repeat("z", 32), "dolly2-security")
+	chat := New(server.URL, "sk-"+strings.Repeat("z", 22), "dolly2-security")
 	chat.V2, chat.Memory = true, memory
 	run := func(_ context.Context, _ Plan) (ToolReply, error) {
 		t.Fatal("a memory reply ran a tool")
@@ -118,7 +118,7 @@ func TestDollyRepairsMissedMemoryCorrectionOnDelivery(t *testing.T) {
 	}
 	checkNote("jasmin")
 	// Drop the undelivered session, keeping only its durable state.
-	chat = New(server.URL, strings.Repeat("z", 32), "dolly2-security")
+	chat = New(server.URL, "sk-"+strings.Repeat("z", 22), "dolly2-security")
 	chat.V2, chat.Memory = true, memory
 	chat.Delivered(owner, "45701", call("45672", correction))
 	checkNote("bergamote")
@@ -146,7 +146,7 @@ func TestDollySeasonGroundingAndReceiptVoice(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	chat := New(server.URL, strings.Repeat("z", 32), "dolly2-security")
+	chat := New(server.URL, "sk-"+strings.Repeat("z", 22), "dolly2-security")
 	chat.V2 = true
 	const owner = "12345:23456:34567"
 	const facts = "Quelle saison veux-tu ?"

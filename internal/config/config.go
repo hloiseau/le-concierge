@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hloiseau/le-concierge/internal/community"
+	"github.com/hloiseau/le-concierge/internal/eris"
 	"log/slog"
 	"net/url"
 	"os"
@@ -179,7 +180,10 @@ func Load() (Config, error) {
 		}
 		*p.dest = v
 	}
-	if c.ErisAPIURL != "" && (!ValidURL(c.ErisAPIURL, false) || c.ErisModel == "" || len(c.ErisModel) > 128 || len(c.ErisAPIKey) < 32) {
+	if dolly && !eris.ValidDollyKey(c.ErisAPIKey) {
+		return c, errors.New("ERIS_API_KEY_FILE must contain a Zro credential")
+	}
+	if c.ErisAPIURL != "" && (!ValidURL(c.ErisAPIURL, false) || c.ErisModel == "" || len(c.ErisModel) > 128 || !dolly && len(c.ErisAPIKey) < 32) {
 		return c, errors.New("ERIS_API_URL requires an absolute API URL, ERIS_MODEL and an ERIS_API_KEY of at least 32 characters")
 	}
 	if c.PlexGrantKey != "" {

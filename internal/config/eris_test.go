@@ -91,13 +91,19 @@ func TestDollyConfigurationRequiresTokenFileAndPinnedEndpoint(t *testing.T) {
 		t.Fatal("Dolly accepted a credential from the environment")
 	}
 	file := filepath.Join(t.TempDir(), "eris.key")
-	if err := os.WriteFile(file, []byte(strings.Repeat("a", 32)), 0600); err != nil {
+	if err := os.WriteFile(file, []byte("sk-"+strings.Repeat("a", 22)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("ERIS_API_KEY", "")
 	t.Setenv("ERIS_API_KEY_FILE", file)
 	if _, err := Load(); err != nil {
 		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("sk-proj-"+strings.Repeat("b", 50)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(); err == nil {
+		t.Fatal("Dolly accepted an OpenAI project key")
 	}
 	t.Setenv("ERIS_API_URL", "https://other.example/v1")
 	if _, err := Load(); err == nil {

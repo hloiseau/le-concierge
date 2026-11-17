@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -14,6 +15,12 @@ import (
 type completionBudget struct{ Tokens, Runes int }
 
 func (c *Chat) dolly() bool { return c.Model == "dolly2-security" }
+
+var dollyKeyFormat = regexp.MustCompile(`^sk-[A-Za-z0-9_-]{20,197}$`)
+
+func ValidDollyKey(key string) bool {
+	return dollyKeyFormat.MatchString(key) && !strings.HasPrefix(key, "sk-proj-") && !strings.HasPrefix(key, "sk-svcacct-")
+}
 
 func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool, budgets ...completionBudget) (string, error) {
 	if c.V2 && textRunes(messages) > contextTextLimit {
@@ -60,7 +67,7 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 	}
 	req.Header.Set("Content-Type", "application/json")
 	key, err := c.apiKey()
-	if err != nil || c.dolly() && len(key) < 32 {
+	if err != nil || c.dolly() && !ValidDollyKey(key) {
 		return "", ErrUnavailable
 	}
 	if key != "" {
