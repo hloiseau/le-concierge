@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"unicode/utf8"
 )
@@ -25,15 +24,8 @@ type responseOutput struct {
 // Responses is text-only: no shell, hosted tools or model-controlled callbacks.
 // OAuth provisioning/refresh belongs to the application credential provider.
 func (c *Chat) responses(ctx context.Context, messages []Message, limits ...int) (string, error) {
-	key := c.Key
-	if c.KeyFile != "" {
-		raw, err := os.ReadFile(c.KeyFile)
-		if err != nil {
-			return "", ErrUnavailable
-		}
-		key = strings.TrimSpace(string(raw))
-	}
-	if key == "" {
+	key, err := c.apiKey()
+	if err != nil || key == "" {
 		return "", ErrUnavailable
 	}
 	input := make([]map[string]any, 0, len(messages))

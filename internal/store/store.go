@@ -123,6 +123,11 @@ INSERT INTO schema_migrations(version) VALUES(2);`); e != nil {
 			return fail(e)
 		}
 	}
+	// This table is additive so the previous API can still open the database.
+	if _, e = tx.Exec(seerrAttemptSchema); e != nil {
+		tx.Rollback()
+		return fail(e)
+	}
 	if e = tx.Commit(); e != nil {
 		return fail(e)
 	}

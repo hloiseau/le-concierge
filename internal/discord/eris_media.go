@@ -133,6 +133,9 @@ func (b *Bot) erisDiscordInput(ctx context.Context, session *discordgo.Session, 
 		return in
 	}
 	in.VisualNote = "Un média a été envoyé, mais aucune image n'est accessible. Son URL et ses métadonnées ne permettent pas d'en connaître le contenu."
+	if b.Config.ErisModel == "dolly2-security" {
+		in.VisualNote = "L'image n'est pas accessible à ton moteur textuel. Si le membre te demande d'y réagir, invite-le à te décrire ce qu'il veut te montrer."
+	}
 	if !b.Eris.V2 || b.Eris.Protocol != "responses" {
 		return in
 	}

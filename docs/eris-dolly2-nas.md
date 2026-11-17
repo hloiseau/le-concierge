@@ -1,0 +1,11 @@
+# Eris avec Dolly 2 sur TrueNAS
+
+Le bot utilise le profil `v2`, `chat-completions` et `dolly2-security` via `https://zro.moonmath.ai/v1`. Les appels utilisent l’effort `low`, 1 536 tokens de sortie et le JSON objet pour les plans. Le bot exige l’identifiant Dolly 2 et le motif de fin `stop`. L’identifiant vérifie la réponse du service. Le fournisseur ne fournit pas d’empreinte du checkpoint dans les réponses observées.
+
+Le fichier de clé se trouve dans le répertoire privé `/mnt/Main/tank/concierge-secrets/zro-eris`, monté dans le bot en lecture seule. Le répertoire appartient à `root:65532` avec le mode `0710`. Le fichier `api-key` appartient à `root:65532` avec le mode `0440`. La rotation remplace le fichier dans ce répertoire. Le bot le relit à chaque requête. Le plafond de la clé et le solde prépayé se gèrent dans le compte Zro. [Quotas Zro](https://zro.moonmath.ai/docs/key-controls)
+
+Le déploiement épingle l’API et le bot au même digest publié par la CI. Exécuter `tools/deploy_eris_dolly.py` sur le NAS avec les révisions présentes de l’API et du bot, et la nouvelle révision. La vérification par défaut valide les deux configurations Compose et l’intégrité des bases existantes. L’option `--apply` crée une sauvegarde privée avant d’enregistrer la configuration dans TrueNAS. Le script vérifie les images, le montage de la clé, le démarrage de Discord et l’état de `media-hub`.
+
+Le répertoire privé de sauvegarde contient `rollback.json`, qui reconstitue la configuration du bot au moment du déploiement, et les deux copies SQLite. Pour un retour manuel, lire le JSON sur le NAS et le transmettre à `app.update` dans `custom_compose_config`. Ne pas l’afficher ni l’exporter. La table des tentatives Seerr est additive. La base de production peut être conservée lors du retour. Restaurer une copie SQLite est une opération distincte qui ferait perdre les écritures plus récentes.
+
+Quand Seerr n’a pas confirmé une écriture, une nouvelle demande identique vérifie les demandes récentes du membre en lecture seule. Si cette recherche ne permet pas de conclure, le membre peut vérifier dans Seerr avant de décider de la suite. La confirmation et le choix de saison restent validés par Go. Dolly peut introduire le résultat avec une courte transition.

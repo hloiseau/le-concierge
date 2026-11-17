@@ -133,8 +133,12 @@ func Load() (Config, error) {
 	if c.ErisMemoryPath != "" && c.ErisProfile != "v2" {
 		return c, errors.New("ERIS_MEMORY_PATH requires ERIS_PROFILE=v2")
 	}
-	if c.ErisProfile == "v2" && c.ErisProtocol != "responses" {
-		return c, errors.New("ERIS_PROFILE=v2 requires ERIS_PROTOCOL=responses (larger context)")
+	dolly := c.ErisModel == "dolly2-security"
+	if dolly && (c.ErisProfile != "v2" || c.ErisProtocol != "chat-completions" || c.ErisAPIURL != "https://zro.moonmath.ai/v1" || c.ErisKeyFile == "") {
+		return c, errors.New("Dolly 2 requires the v2 profile, Chat Completions, the Zro endpoint and ERIS_API_KEY_FILE")
+	}
+	if c.ErisProfile == "v2" && c.ErisProtocol != "responses" && !dolly {
+		return c, errors.New("ERIS_PROFILE=v2 requires Responses or the Dolly 2 configuration")
 	}
 	if c.ErisProtocol == "responses" && c.ErisAPIURL != "" && !strings.HasPrefix(c.ErisAPIURL, "https://") {
 		return c, errors.New("Responses requires HTTPS")

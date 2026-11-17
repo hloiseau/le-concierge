@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"unicode/utf8"
 )
 
 type completionBudget struct{ Tokens, Runes int }
+
+func (c *Chat) dolly() bool { return c.Model == "dolly2-security" }
 
 func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool, budgets ...completionBudget) (string, error) {
 	if c.V2 && textRunes(messages) > contextTextLimit {
@@ -25,6 +28,9 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 		tokens, rawLimit = budgets[0].Tokens, budgets[0].Runes
 	}
 	if c.Protocol == "responses" {
+		if c.dolly() {
+			return "", ErrUnavailable
+		}
 		return c.responses(ctx, messages, rawLimit)
 	}
 	for _, message := range messages {
@@ -37,6 +43,13 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 		temperature = 0.45
 	}
 	payload := map[string]any{"model": c.Model, "messages": messages, "max_tokens": tokens, "temperature": temperature, "stream": false}
+	bodyLimit := int64(16 * 1024)
+	if c.dolly() {
+		// Zro counts hidden reasoning against the same completion budget.
+		payload["max_tokens"] = 1536
+		payload["reasoning_effort"] = "low"
+		bodyLimit = 128 * 1024
+	}
 	if withTools {
 		payload["response_format"] = map[string]string{"type": "json_object"}
 	}
@@ -46,10 +59,16 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 		return "", ErrUnavailable
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.Key != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Key)
+	key, err := c.apiKey()
+	if err != nil || c.dolly() && len(key) < 32 {
+		return "", ErrUnavailable
 	}
-	resp, err := c.HTTP.Do(req)
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	client := *c.HTTP
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", ErrUnavailable
 	}
@@ -60,16 +79,21 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", ErrUnavailable
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16*1024+1))
-	if err != nil || len(raw) > 16*1024 {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
+	if err != nil || int64(len(raw)) > bodyLimit {
 		return "", ErrUnavailable
 	}
 	var completion struct {
+		Model   string `json:"model"`
 		Choices []struct {
-			Message Message `json:"message"`
+			Message      Message `json:"message"`
+			FinishReason string  `json:"finish_reason"`
 		} `json:"choices"`
 	}
 	if json.Unmarshal(raw, &completion) != nil || len(completion.Choices) != 1 || completion.Choices[0].Message.Role != "assistant" {
+		return "", ErrUnavailable
+	}
+	if c.dolly() && (completion.Model != c.Model || completion.Choices[0].FinishReason != "stop") {
 		return "", ErrUnavailable
 	}
 	reply := strings.TrimSpace(completion.Choices[0].Message.Content)
@@ -77,4 +101,15 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 		return "", ErrUnavailable
 	}
 	return reply, nil
+}
+
+func (c *Chat) apiKey() (string, error) {
+	if c.KeyFile == "" {
+		return c.Key, nil
+	}
+	raw, err := os.ReadFile(c.KeyFile)
+	if err != nil {
+		return "", ErrUnavailable
+	}
+	return strings.TrimSpace(string(raw)), nil
 }
