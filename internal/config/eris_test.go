@@ -77,3 +77,41 @@ func TestErisWebEndpointIsExplicitOperatorConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestDollyConfigurationRequiresTokenFileAndPinnedEndpoint(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3000")
+	t.Setenv("ERIS_PROFILE", "v2")
+	t.Setenv("ERIS_PROTOCOL", "chat-completions")
+	t.Setenv("ERIS_MODEL", "dolly2-security")
+	t.Setenv("ERIS_API_URL", "https://zro.moonmath.ai/v1")
+	t.Setenv("ERIS_API_KEY", strings.Repeat("a", 32))
+	t.Setenv("ERIS_API_KEY_FILE", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("Dolly accepted a credential from the environment")
+	}
+	file := filepath.Join(t.TempDir(), "eris.key")
+	if err := os.WriteFile(file, []byte("sk-"+strings.Repeat("a", 22)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ERIS_API_KEY", "")
+	t.Setenv("ERIS_API_KEY_FILE", file)
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("sk-proj-"+strings.Repeat("b", 50)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(); err == nil {
+		t.Fatal("Dolly accepted an OpenAI project key")
+	}
+	t.Setenv("ERIS_API_URL", "https://other.example/v1")
+	if _, err := Load(); err == nil {
+		t.Fatal("Dolly accepted a different endpoint")
+	}
+	t.Setenv("ERIS_API_URL", "https://zro.moonmath.ai/v1")
+	t.Setenv("ERIS_PROTOCOL", "responses")
+	if _, err := Load(); err == nil {
+		t.Fatal("Dolly accepted Responses")
+	}
+}

@@ -1,10 +1,12 @@
 package eris
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -431,6 +433,53 @@ func parseDurablePlan(raw string, recalled *rememberedWhim, question string) (Pl
 		}
 	}
 	return p, whim, notes, nil
+}
+
+var explicitPreference = regexp.MustCompile(`(?:^|[.!?]\s+)(retiens|memorise|corrige|mets a jour) (?:bien )?(?:cette|ma|la) preference\b`)
+
+func preferenceCommand(question string) string {
+	match := explicitPreference.FindStringSubmatch(foldTitleAccents(choiceText(question)))
+	if len(match) == 0 {
+		return ""
+	}
+	return match[1]
+}
+
+func preferenceNote(notes []memoryNote, topics []string, correction bool) []memoryNote {
+	if len(notes) != 1 || notes[0].Kind != "preference" {
+		return nil
+	}
+	if correction {
+		for _, topic := range topics {
+			if canonicalTopic(notes[0].Topic) == topic {
+				return notes
+			}
+		}
+		return nil
+	}
+	return notes
+}
+
+func (c *Chat) extractPreference(ctx context.Context, question string, topics []string, correction bool) (string, []memoryNote) {
+	const failed = "Je prends le changement en compte ici. Je n’ai pas trouvé de préférence à enregistrer avec certitude."
+	if correction && len(topics) == 0 {
+		return failed, nil
+	}
+	data, _ := json.Marshal(struct {
+		Question   string   `json:"message"`
+		Topics     []string `json:"existing_topics"`
+		Correction bool     `json:"correction"`
+	}{question, topics, correction})
+	instructions := c.instructions(false, false) + `
+Extrais une seule préférence exprimée par l'auteur du message. Réponds avec {"action":"chat","text":"ta réponse","memories":[{"kind":"preference","topic":"sujet stable","quote":"assertion exacte du membre","summary":"résumé fidèle"}]}. Si correction vaut vrai, recopie le sujet correspondant de existing_topics. Si aucun ne correspond, omets memories. Sépare le sujet de la valeur : le sujet d'une préférence sur le thé ne change pas quand le parfum change. Copie la préférence mot pour mot dans quote, sans l'ordre de la retenir. Omet les secrets et les confidences sensibles. Formule text dans ta voix, en réagissant à la préférence, sans prétendre que l'enregistrement a réussi.`
+	raw, err := c.complete(ctx, c.dialoguePrompt([]Message{{Role: "system", Content: instructions}, {Role: "user", Content: string(data)}}), true)
+	if err == nil {
+		plan, _, notes, parseErr := parseDurablePlan(raw, nil, question)
+		if notes = preferenceNote(notes, topics, correction); parseErr == nil && len(notes) == 1 {
+			return plan.Text, notes
+		}
+	}
+	return failed, nil
 }
 
 func parseRecall(raw string) string {

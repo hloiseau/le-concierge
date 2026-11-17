@@ -603,17 +603,7 @@ func (s *Server) resolveErisChoice(ctx context.Context, u store.User, discordID,
 	if _, err = s.grant(ctx, current); err != nil {
 		return invalid
 	}
-	requestID, err := s.Upstream.CreateMediaRequest(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, id, p.Candidate, p.Seasons)
-	switch {
-	case err == nil:
-		return eris.ToolReply{Content: fmt.Sprintf("Demande #%d créée : %s. Tu peux suivre son état avec /mes-demandes.", requestID, candidateLabel(p.Candidate, p.Seasons))}
-	case errors.Is(err, upstream.ErrDenied):
-		return eris.ToolReply{Content: "Seerr a refusé la demande : vérifie tes droits ou ton quota dans le Hub."}
-	case errors.Is(err, upstream.ErrRequestConflict):
-		return eris.ToolReply{Content: "Ce contenu est déjà demandé ou aucune saison supplémentaire n’est à demander. Vérifie /mes-demandes ou Seerr."}
-	default:
-		return eris.ToolReply{Content: "Je ne peux pas confirmer l’enregistrement. Vérifie /mes-demandes ou Seerr avant de réessayer ; je ne renvoie pas automatiquement la demande."}
-	}
+	return s.submitErisRequest(ctx, p)
 }
 
 func (s *Server) erisTextChoice(ctx context.Context, u store.User, caller erisCallerContext, choice string) eris.ToolReply {
@@ -636,7 +626,7 @@ func (s *Server) erisTextChoice(ctx context.Context, u store.User, caller erisCa
 	if parts[1] == "confirm" && caller.Reference != "" && !strings.Contains(caller.Reference, candidateLabel(p.Candidate, p.Seasons)) {
 		return invalid
 	}
-	if parts[1] == "choose" && caller.Reference != "" && caller.Reference != p.ChoicePrompt && caller.Reference != eris.ChoiceClarification {
+	if parts[1] == "choose" && caller.Reference != "" && eris.MediaReplyFacts(caller.Reference) != p.ChoicePrompt && caller.Reference != eris.ChoiceClarification {
 		return invalid
 	}
 	return s.resolveErisChoice(ctx, u, caller.UserID, choice, caller.Private, true)

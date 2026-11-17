@@ -62,8 +62,12 @@ func start() error {
 		return err
 	}
 	defer memory.Close()
-	c := eris.New("https://api.openai.com/v1", "", model)
-	c.V2, c.Protocol, c.KeyFile, c.Memory = true, "responses", key, memory
+	endpoint, protocol := "https://api.openai.com/v1", "responses"
+	if model == "dolly2-security" {
+		endpoint, protocol = "https://zro.moonmath.ai/v1", "chat-completions"
+	}
+	c := eris.New(endpoint, "", model)
+	c.V2, c.Protocol, c.KeyFile, c.Memory = true, protocol, key, memory
 	return converse(os.Stdin, os.Stdout, c)
 }
 

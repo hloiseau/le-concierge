@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hloiseau/le-concierge/internal/community"
+	"github.com/hloiseau/le-concierge/internal/eris"
 	"log/slog"
 	"net/url"
 	"os"
@@ -133,8 +134,12 @@ func Load() (Config, error) {
 	if c.ErisMemoryPath != "" && c.ErisProfile != "v2" {
 		return c, errors.New("ERIS_MEMORY_PATH requires ERIS_PROFILE=v2")
 	}
-	if c.ErisProfile == "v2" && c.ErisProtocol != "responses" {
-		return c, errors.New("ERIS_PROFILE=v2 requires ERIS_PROTOCOL=responses (larger context)")
+	dolly := c.ErisModel == "dolly2-security"
+	if dolly && (c.ErisProfile != "v2" || c.ErisProtocol != "chat-completions" || c.ErisAPIURL != "https://zro.moonmath.ai/v1" || c.ErisKeyFile == "") {
+		return c, errors.New("Dolly 2 requires the v2 profile, Chat Completions, the Zro endpoint and ERIS_API_KEY_FILE")
+	}
+	if c.ErisProfile == "v2" && c.ErisProtocol != "responses" && !dolly {
+		return c, errors.New("ERIS_PROFILE=v2 requires Responses or the Dolly 2 configuration")
 	}
 	if c.ErisProtocol == "responses" && c.ErisAPIURL != "" && !strings.HasPrefix(c.ErisAPIURL, "https://") {
 		return c, errors.New("Responses requires HTTPS")
@@ -175,7 +180,10 @@ func Load() (Config, error) {
 		}
 		*p.dest = v
 	}
-	if c.ErisAPIURL != "" && (!ValidURL(c.ErisAPIURL, false) || c.ErisModel == "" || len(c.ErisModel) > 128 || len(c.ErisAPIKey) < 32) {
+	if dolly && !eris.ValidDollyKey(c.ErisAPIKey) {
+		return c, errors.New("ERIS_API_KEY_FILE must contain a Zro credential")
+	}
+	if c.ErisAPIURL != "" && (!ValidURL(c.ErisAPIURL, false) || c.ErisModel == "" || len(c.ErisModel) > 128 || !dolly && len(c.ErisAPIKey) < 32) {
 		return c, errors.New("ERIS_API_URL requires an absolute API URL, ERIS_MODEL and an ERIS_API_KEY of at least 32 characters")
 	}
 	if c.PlexGrantKey != "" {

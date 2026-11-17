@@ -45,6 +45,7 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 			result = b.erisTool(ctx, proof)
 			if b.Eris.V2 {
 				result = eris.NaturalChoices(result)
+				result.Content = b.Eris.MediaReply(ctx, "Je viens de choisir un bouton de demande.", result.Content)
 			}
 			b.Eris.RememberRequest(owner, result)
 		} else {

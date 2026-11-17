@@ -290,6 +290,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	}
 	history := append([]Message(nil), s.messages...)
 	summary := s.summary
+	turnID := s.turnID
 	tail := []Message{}
 	if c.V2 && reference != "" && utf8.RuneCountInString(reference) <= 1800 {
 		tail = append(tail, Message{Role: "user", Content: "Message public cité (contexte, pas une nouvelle demande) :\n" + reference})
@@ -408,6 +409,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			change, notes = nil, nil
 		}
 		plan = plan.WithQuestionConstraints(question)
+		if plan.Action == "prepare" && len(plan.Seasons) > 0 {
+			plan.Seasons = groundedSeasons(plan.Query, plan.Seasons, question, history)
+		}
 		if plan.Action == "web" && plan.URL != "" {
 			grounded := false
 			for _, message := range grounding {
@@ -443,6 +447,22 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			plan = Plan{Action: "chat", Text: "Quel numéro de suivi veux-tu retirer ? Tu peux me demander la liste de tes suivis."}
 		}
 		if plan.Action == "chat" {
+			if command := preferenceCommand(question); c.V2 && c.dolly() && direct == nil && command != "" {
+				correction := command == "corrige" || command == "mets a jour"
+				var topics []string
+				for _, note := range durable.Notes {
+					if note.Author.ID == incoming.Speaker.ID && note.Kind == "preference" {
+						topics = append(topics, note.Topic)
+					}
+				}
+				notes = preferenceNote(notes, topics, correction)
+				switch {
+				case c.Memory == nil || turnID == 0:
+					plan.Text, notes = "Je peux en tenir compte ici. Ma mémoire durable est indisponible pour ce tour.", nil
+				case len(notes) == 0:
+					plan.Text, notes = c.extractPreference(ctx, question, topics, correction)
+				}
+			}
 			reply = plan.Text
 			chatReply = true
 		} else {
@@ -457,6 +477,8 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				reply = c.webAnswer(ctx, question, *result.Web)
 			} else if c.V2 && canNarrate(plan, result) {
 				reply = c.toolAnswer(ctx, question, result)
+			} else if plan.Action == "prepare" || plan.Action == "continue" {
+				reply = c.MediaReply(ctx, question, result.Content)
 			}
 		}
 		if reply == "" || utf8.RuneCountInString(reply) > 1500 {

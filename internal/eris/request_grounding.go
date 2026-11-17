@@ -1,12 +1,50 @@
 package eris
 
 import (
+	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 )
+
+var seasonNumbers = regexp.MustCompile(`(?i)\bsaisons?\s+([0-9]{1,4}(?:(?:\s*,\s*|\s+et\s+)[0-9]{1,4})*)\b`)
+var seasonNumber = regexp.MustCompile(`[0-9]+`)
+
+func groundedSeasons(title string, seasons []int, question string, history []Message) []int {
+	// A spelling correction can reuse the latest season named by this member.
+	// A fresh instruction, catalogue result or quoted assistant turn cannot.
+	bareTitle := func(text string) bool {
+		return len(titleWords(text)) == len(titleWords(title)) && prepareTitleMentioned(title, []Message{{Role: "user", Content: text}})
+	}
+	if bareTitle(question) {
+		for i := len(history) - 1; i >= 0; i-- {
+			turn := history[i]
+			if turn.Role != "user" || bareTitle(turn.Content) {
+				continue
+			}
+			if prepareTitleMentioned(title, []Message{turn}) {
+				question = turn.Content
+			}
+			break
+		}
+	}
+	numbers := map[int]bool{}
+	for _, group := range seasonNumbers.FindAllStringSubmatch(question, -1) {
+		for _, raw := range seasonNumber.FindAllString(group[1], -1) {
+			n, _ := strconv.Atoi(raw)
+			numbers[n] = true
+		}
+	}
+	for _, season := range seasons {
+		if !numbers[season] {
+			return nil
+		}
+	}
+	return seasons
+}
 
 func foldTitleAccents(s string) string {
 	return strings.Map(func(r rune) rune {
