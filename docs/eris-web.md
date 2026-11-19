@@ -8,7 +8,7 @@ L'API vérifie l'identité Discord et le serveur avant toute recherche. Le web p
 
 Le plan accepte soit `query` (2 à 200 caractères), soit `url`, avec `kind:"youtube"` pour une recherche vidéo. Une URL à lire doit figurer dans les échanges récents ou la référence vérifiée. Les URL sont limitées à 300 caractères afin de garantir des citations complètes dans une réponse Discord bornée.
 
-Une requête SearXNG et trois preuves au maximum, avec cinq candidats examinés. Deux pages au plus sont lues après une recherche web ; un échec conserve l'extrait de recherche avec son statut explicite. Pour YouTube, le moteur recherche les vidéos et oEmbed vérifie le titre, la chaîne et le lien canonique. Aucune vidéo n'est visionnée ou transcrite par cet outil.
+Une requête SearXNG et trois preuves au maximum, avec cinq candidats acceptables examinés parmi cinquante résultats au plus. Les URL invalides, privées ou dupliquées ne consomment pas ces cinq places. Deux pages au plus sont lues après une recherche web ; un échec conserve l'extrait de recherche avec son statut explicite. Pour YouTube, le moteur recherche les vidéos et oEmbed vérifie le titre, la chaîne et le lien canonique. Aucune vidéo n'est visionnée ou transcrite par cet outil.
 
 Chaque lecture est limitée à 512 Kio, cinq secondes, trois redirections et aux formats HTML/texte. Le traitement global dure quinze secondes maximum. Les scripts, styles et éléments de navigation sont écartés. Les pages nécessitant JavaScript, PDF, authentification ou contournement d'une protection ne sont pas prises en charge.
 
@@ -18,7 +18,7 @@ Une seconde passe du modèle reçoit seulement la question et les preuves datée
 
 `ERIS_WEB_URL` est une configuration d'opérateur vers une instance **privée** de SearXNG, jamais un paramètre du membre ou du modèle. Vide, il désactive recherche et lecture de liens. Le moteur n'a aucune clé Plex/Discord/Seerr et le client public ne réutilise aucun client de service, cookie, jeton ou proxy d'environnement.
 
-`deploy/eris-web.override.yaml` ajoute une instance sans port publié, avec une image épinglée par digest, un utilisateur non privilégié, des ressources bornées et les formats JSON activés. Les moteurs sont Brave, DuckDuckGo et YouTube. Fournir un `SEARXNG_SECRET` aléatoire privé dans l'environnement de Compose. Le montage des réglages est relatif au répertoire du fichier Compose principal : avec les exemples `deploy/*.yaml`, `./searxng/settings.yml` pointe vers le fichier fourni.
+`deploy/eris-web.override.yaml` ajoute une instance sans port publié, avec une image épinglée par digest, un utilisateur non privilégié, des ressources bornées et les formats JSON activés. Les moteurs sont Bing, DuckDuckGo et YouTube. Brave a été retiré après l'apparition de redirections chiffrées renvoyées en URL invalides par l'intégration, qui masquaient les résultats exploitables des autres moteurs. Fournir un `SEARXNG_SECRET` aléatoire privé dans l'environnement de Compose. Le montage des réglages est relatif au répertoire du fichier Compose principal : avec les exemples `deploy/*.yaml`, `./searxng/settings.yml` pointe vers le fichier fourni.
 
 Exemple local, en complément de la configuration Discord v2 existante :
 

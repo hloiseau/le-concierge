@@ -1,6 +1,6 @@
 use_default_settings:
   engines:
-    keep_only: [brave, duckduckgo, youtube]
+    keep_only: [bing, duckduckgo, youtube]
 search:
   formats: [json]
   safe_search: 1
@@ -13,5 +13,9 @@ outgoing:
   request_timeout: 3.0
   max_request_timeout: 5.0
 engines:
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
   - name: youtube
     disabled: false
