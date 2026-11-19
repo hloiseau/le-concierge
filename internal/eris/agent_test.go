@@ -36,7 +36,7 @@ func testAgentRequest(t *testing.T, modelName string) {
 		}
 		name, arguments := "lookup_media", `{"query":"Madagascar","kind":"movie"}`
 		if rounds == 2 {
-			name, arguments = "request_media", `{"mediaId":123,"kind":"movie"}`
+			name, arguments = "request_media", `{"mediaId":123,"kind":"movie","targetDiscordId":"self"}`
 			if !strings.Contains(string(payload["messages"]), `tool_call_id`) || !strings.Contains(string(payload["messages"]), `Madagascar`) {
 				t.Error("tool result not passed back to the model")
 			}

@@ -58,6 +58,9 @@ func featureModelServer(handler http.Handler) *httptest.Server {
 				for name, target := range agentActions {
 					if target == action {
 						delete(fields, "action")
+						if action == "request" && fields["targetDiscordId"] == nil {
+							fields["targetDiscordId"] = json.RawMessage(`"self"`)
+						}
 						arguments, _ := json.Marshal(fields)
 						call := ToolCall{ID: "fixture_call", Type: "function"}
 						call.Function.Name = name

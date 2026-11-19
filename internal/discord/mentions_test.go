@@ -111,7 +111,7 @@ func TestReplyToErisUsesNativeToolsAndSendsNoChoices(t *testing.T) {
 				questions = append(questions, message.Content)
 			}
 		}
-		return botResponse(200, `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"req_1","type":"function","function":{"name":"request_media","arguments":"{\"mediaId\":881,\"kind\":\"movie\"}"}}]}}]}`), nil
+		return botResponse(200, `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"req_1","type":"function","function":{"name":"request_media","arguments":"{\"mediaId\":881,\"kind\":\"movie\",\"targetDiscordId\":\"self\"}"}}]}}]}`), nil
 	})
 	b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		var in eris.ToolRequest

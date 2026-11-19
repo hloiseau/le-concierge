@@ -105,7 +105,7 @@ func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
 		(ref.GuildID == "" || ref.GuildID == m.GuildID) && r.ChannelID == m.ChannelID &&
 		r.Author != nil && r.Author.Bot && r.Author.ID == botID && r.WebhookID == ""
 	named := m.Type == discordgo.MessageTypeDefault && m.MessageReference == nil && len(m.Mentions) == 0 && len(m.MentionRoles) == 0 && !m.MentionEveryone && !strings.Contains(m.Content, "<@") && erisAddress.MatchString(strings.TrimSpace(m.Content))
-	if !explicit && !reply && !named {
+	if !explicit && !reply && !named && !order66Invocation(m.Content, botID) {
 		return "", false
 	}
 	question := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(m.Content, normal, ""), nickname, ""))
@@ -144,7 +144,8 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 	if !ok {
 		question = strings.TrimSpace(event.Content)
 	}
-	explicit := ok && (event.MessageReference == nil || strings.Contains(event.Content, "<@"+b.Config.DiscordClientID+">") || strings.Contains(event.Content, "<@!"+b.Config.DiscordClientID+">"))
+	order66 := order66Invocation(event.Content, b.Config.DiscordClientID)
+	explicit := order66 || ok && (event.MessageReference == nil || strings.Contains(event.Content, "<@"+b.Config.DiscordClientID+">") || strings.Contains(event.Content, "<@!"+b.Config.DiscordClientID+">"))
 	if b.Eris.SkipPublicFollowup(owner, question, explicit) {
 		return
 	}
@@ -190,6 +191,9 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 			if reply == "" {
 				reply = "⚠️ `ERIS_INPUT_TOO_LONG`"
 			}
+		} else if order66 {
+			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
+			reply = b.erisOrder66(ctx, s, event.Message)
 		} else if question != "" || len(event.Attachments) > 0 || len(event.Embeds) > 0 {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID

@@ -14,8 +14,8 @@ func erisData(value any) eris.ToolReply {
 	return eris.ToolReply{Content: string(raw)}
 }
 
-func (s *Server) erisAgentMedia(ctx context.Context, u store.User, caller erisCallerContext, p eris.Plan) eris.ToolReply {
-	member, err := s.resolveSeerr(ctx, u)
+func (s *Server) erisAgentMedia(ctx context.Context, actor, owner store.User, p eris.Plan) eris.ToolReply {
+	member, err := s.resolveSeerr(ctx, owner)
 	if err != nil {
 		return erisData(map[string]string{"error": "seerr_access_unavailable"})
 	}
@@ -37,14 +37,10 @@ func (s *Server) erisAgentMedia(ctx context.Context, u store.User, caller erisCa
 	if err != nil {
 		return erisData(map[string]string{"error": "media_identity_unverified", "outcome": "not_sent"})
 	}
-	current, err := s.Store.UserByDiscord(ctx, caller.UserID)
-	if err != nil || current.ID != u.ID || current.PlexID != u.PlexID {
-		return erisData(map[string]string{"error": "access_changed", "outcome": "not_sent"})
-	}
-	if _, err = s.grant(ctx, current); err != nil {
+	if err = s.revalidateErisRequestOwner(ctx, actor, owner); err != nil {
 		return erisData(map[string]string{"error": "access_expired", "outcome": "not_sent"})
 	}
-	request := erisMediaRequest{UserID: u.ID, SeerrID: member, Candidate: candidate, Seasons: p.Seasons}
+	request := erisMediaRequest{UserID: owner.ID, SeerrID: member, Candidate: candidate, Seasons: p.Seasons}
 	// Identity and grant were verified by erisTool; submit retains the durable
 	// idempotency receipt and member permissions, with no human-choice state.
 	return s.submitErisRequest(ctx, request)

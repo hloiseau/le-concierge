@@ -34,6 +34,9 @@ func (s *Server) submitErisRequest(ctx context.Context, p erisMediaRequest) eris
 	}
 	if !reserved {
 		if previousID != 0 {
+			if err := s.Upstream.VerifyMediaRequestOwner(ctx, base, secret, previousID, p.SeerrID, p.Candidate, seasons); err != nil {
+				return erisFailure("stored_request_owner_unverified_do_not_retry")
+			}
 			return receipt("already_created", previousID)
 		}
 		page, readErr := s.Upstream.Requests(ctx, base, secret, p.SeerrID, 0)

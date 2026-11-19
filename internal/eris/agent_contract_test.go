@@ -11,7 +11,7 @@ import (
 
 func TestEveryToolReturnsFactsToTheModelForItsOwnReply(t *testing.T) {
 	cases := map[string]string{
-		"lookup_media": `{"query":"Madagascar"}`, "request_media": `{"mediaId":953,"kind":"movie"}`,
+		"lookup_media": `{"query":"Madagascar"}`, "request_media": `{"mediaId":953,"kind":"movie","targetDiscordId":"self"}`,
 		"movie_collection": `{"mediaId":953}`, "search_plex": `{"query":"Madagascar"}`,
 		"recommend": `{"genre":"thriller"}`, "recent": `{}`, "status": `{}`, "monitoring": `{}`,
 		"web": `{"query":"Madagascar 4 annonce"}`, "cinema": `{"query":"Madagascar"}`,

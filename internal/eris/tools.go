@@ -12,29 +12,30 @@ import (
 )
 
 type Plan struct {
-	Action         string   `json:"action"`
-	Query          string   `json:"query,omitempty"`
-	MediaID        int64    `json:"mediaId,omitempty"`
-	Relation       string   `json:"relation,omitempty"`
-	Source         string   `json:"source,omitempty"`
-	Kind           string   `json:"kind,omitempty"`
-	Genre          string   `json:"genre,omitempty"`
-	MaxMinutes     int      `json:"maxMinutes,omitempty"`
-	Unwatched      bool     `json:"unwatched,omitempty"`
-	Seasons        []int    `json:"seasons,omitempty"`
-	Text           string   `json:"text,omitempty"`
-	URL            string   `json:"url,omitempty"`
-	Year           int      `json:"year,omitempty"`
-	RequestID      int64    `json:"requestId,omitempty"`
-	SubscriptionID int64    `json:"subscriptionId,omitempty"`
-	Channel        string   `json:"channel,omitempty"`
-	Setting        string   `json:"setting,omitempty"`
-	Value          string   `json:"value,omitempty"`
-	Options        []string `json:"options,omitempty"`
-	DurationHours  int      `json:"durationHours,omitempty"`
-	Multiselect    bool     `json:"multiselect,omitempty"`
-	StartAt        string   `json:"startAt,omitempty"`
-	EndAt          string   `json:"endAt,omitempty"`
+	Action          string   `json:"action"`
+	Query           string   `json:"query,omitempty"`
+	MediaID         int64    `json:"mediaId,omitempty"`
+	TargetDiscordID string   `json:"targetDiscordId,omitempty"`
+	Relation        string   `json:"relation,omitempty"`
+	Source          string   `json:"source,omitempty"`
+	Kind            string   `json:"kind,omitempty"`
+	Genre           string   `json:"genre,omitempty"`
+	MaxMinutes      int      `json:"maxMinutes,omitempty"`
+	Unwatched       bool     `json:"unwatched,omitempty"`
+	Seasons         []int    `json:"seasons,omitempty"`
+	Text            string   `json:"text,omitempty"`
+	URL             string   `json:"url,omitempty"`
+	Year            int      `json:"year,omitempty"`
+	RequestID       int64    `json:"requestId,omitempty"`
+	SubscriptionID  int64    `json:"subscriptionId,omitempty"`
+	Channel         string   `json:"channel,omitempty"`
+	Setting         string   `json:"setting,omitempty"`
+	Value           string   `json:"value,omitempty"`
+	Options         []string `json:"options,omitempty"`
+	DurationHours   int      `json:"durationHours,omitempty"`
+	Multiselect     bool     `json:"multiselect,omitempty"`
+	StartAt         string   `json:"startAt,omitempty"`
+	EndAt           string   `json:"endAt,omitempty"`
 }
 
 func ParsePlan(raw string) (Plan, error) {
@@ -49,6 +50,9 @@ func ParsePlan(raw string) (Plan, error) {
 
 func (p Plan) Validate() error {
 	invalid := errors.New("invalid media plan")
+	if p.TargetDiscordID != "" && ((p.TargetDiscordID != "self" && !discordID(p.TargetDiscordID)) || (p.Action != "request" && p.Action != "status")) {
+		return invalid
+	}
 	if p.Action == "lookup" || p.Action == "collection" || p.Action == "request" {
 		if p.Text != "" || p.Relation != "" || p.Source != "" || p.Genre != "" || p.MaxMinutes != 0 || p.Unwatched || p.URL != "" || p.RequestID != 0 || p.SubscriptionID != 0 || p.Channel != "" || p.Setting != "" || p.Value != "" || len(p.Options) > 0 || p.DurationHours != 0 || p.Multiselect || p.StartAt != "" || p.EndAt != "" {
 			return invalid
@@ -197,14 +201,14 @@ func (p Plan) Validate() error {
 
 // Proof is supplied by the Discord transport, never by the model.
 type ToolRequest struct {
-	Plan             Plan            `json:"plan"`
-	Interaction      json.RawMessage `json:"interaction,omitempty"`
-	Timestamp        string          `json:"timestamp,omitempty"`
-	Signature        string          `json:"signature,omitempty"`
-	ChannelID        string          `json:"channelId,omitempty"`
-	MessageID        string          `json:"messageId,omitempty"`
-	ContextMessageID string          `json:"contextMessageId,omitempty"`
-	CallID           string          `json:"callId,omitempty"`
+	Plan             Plan   `json:"plan"`
+	Interaction      []byte `json:"interaction,omitempty"`
+	Timestamp        string `json:"timestamp,omitempty"`
+	Signature        string `json:"signature,omitempty"`
+	ChannelID        string `json:"channelId,omitempty"`
+	MessageID        string `json:"messageId,omitempty"`
+	ContextMessageID string `json:"contextMessageId,omitempty"`
+	CallID           string `json:"callId,omitempty"`
 }
 
 type ToolReply struct {

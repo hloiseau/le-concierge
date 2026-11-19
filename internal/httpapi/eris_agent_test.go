@@ -49,6 +49,8 @@ func TestNativeMediaToolsReadResolveAndRequestWithoutChoices(t *testing.T) {
 			return response(200, `{"id":953,"title":"Madagascar","releaseDate":"2005-01-01","collection":{"id":14740}}`), nil
 		case "/api/v1/collection/14740":
 			return response(200, `{"id":14740,"parts":[{"id":953,"title":"Madagascar","releaseDate":"2005-01-01"},{"id":10527,"title":"Madagascar 2","releaseDate":"2008-01-01"},{"id":80321,"title":"Madagascar 3","releaseDate":"2012-01-01"}]}`), nil
+		case "/api/v1/request/411":
+			return response(200, `{"id":411,"type":"movie","requestedBy":{"id":2},"media":{"tmdbId":953}}`), nil
 		case "/api/v1/request":
 			posts++
 			if r.Method != "POST" || r.Header.Get("X-Api-User") != "2" {

@@ -90,11 +90,20 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		fail("rate_limited")
 		return
 	}
+	owner := u
+	if input.Plan.Action == "request" || input.Plan.Action == "status" {
+		var code string
+		owner, code = s.erisRequestOwner(ctx, u, input.Plan.TargetDiscordID)
+		if code != "" {
+			fail(code)
+			return
+		}
+	}
 	var reply eris.ToolReply
 	if input.Plan.Action == "lookup" || input.Plan.Action == "collection" || input.Plan.Action == "request" {
-		reply = s.erisAgentMedia(ctx, u, caller, input.Plan)
+		reply = s.erisAgentMedia(ctx, u, owner, input.Plan)
 	} else {
-		reply = s.runErisTool(ctx, u, grant, caller.UserID, input.Plan, caller.Private)
+		reply = s.runErisTool(ctx, owner, grant, caller.UserID, input.Plan, caller.Private)
 	}
 	current, err := s.Store.UserByDiscord(ctx, caller.UserID)
 	if err == nil && current.ID == u.ID && current.PlexID == u.PlexID {
@@ -105,6 +114,13 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fail("access_expired")
 		return
+	}
+	if input.Plan.Action == "request" || input.Plan.Action == "status" {
+		if err := s.revalidateErisRequestOwner(ctx, u, owner); err != nil {
+			fail("request_scope_changed")
+			return
+		}
+		reply = erisOwnedRequestResult(reply, u, owner)
 	}
 	write(reply)
 }

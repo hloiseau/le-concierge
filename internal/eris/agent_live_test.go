@@ -104,3 +104,54 @@ func TestLiveAgentStructuredTools(t *testing.T) {
 		})
 	}
 }
+
+func TestLiveAgentDelegation(t *testing.T) {
+	key := os.Getenv("ERIS_AGENT_KEY_FILE")
+	if key == "" {
+		t.Skip("native agent lab not enabled")
+	}
+	c := New(os.Getenv("ERIS_AGENT_API_URL"), "", "dolly2-security")
+	c.V2, c.KeyFile = true, key
+	providerStatus := 0
+	c.HTTP.Transport = personalityStatusTransport{status: &providerStatus}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	writes, reads := 0, 0
+	run := func(_ context.Context, p Plan) (ToolReply, error) {
+		t.Logf("tool=%s recipient=%q", p.Action, p.TargetDiscordID)
+		switch p.Action {
+		case "lookup":
+			return ToolReply{Content: `{"candidates":[{"id":270946,"title":"Les Pingouins de Madagascar","year":"2014","mediaType":"movie"}]}`}, nil
+		case "request":
+			if p.TargetDiscordID != "22222" {
+				t.Error("request was attributed to Hugo instead of Keftcha")
+				return ToolReply{Content: `{"error":"wrong_recipient_not_sent"}`}, nil
+			}
+			writes++
+			return ToolReply{Content: `{"status":"created","requestId":415,"requestOwner":{"discordId":"22222","name":"Keftcha"},"actedBy":{"discordId":"11111","name":"Hugo"},"requestOwnerVerified":true,"plexAvailability":"not_checked"}`}, nil
+		case "status":
+			if p.TargetDiscordID != "22222" {
+				t.Error("pronoun lost Keftcha as recipient")
+				return ToolReply{Content: `{"error":"wrong_recipient"}`}, nil
+			}
+			reads++
+			return ToolReply{Content: `{"requestOwner":{"discordId":"22222","name":"Keftcha"},"requestOwnerVerified":true,"requests":[{"requestId":415,"title":"Les Pingouins de Madagascar","status":"processing"}]}`}, nil
+		default:
+			return ToolReply{Content: `{"error":"not_in_scenario"}`}, nil
+		}
+	}
+	owner := "23456:11111:33333"
+	in := DiscordInput{MessageID: "99991", Speaker: Speaker{ID: "11111", Name: "Hugo"}, Mentions: []Speaker{{ID: "22222", Name: "Keftcha"}}}
+	first, err := c.ReplyWithDiscordContext(ctx, owner, "Tu peux DL Les Pingouins de Madagascar pour Keftcha ? <@22222>", false, "", in, run)
+	if err != nil {
+		t.Fatal(err, "provider_status", providerStatus)
+	}
+	t.Logf("reply=%q", first)
+	c.Delivered(owner, "88888", first)
+	in.MessageID, in.Mentions = "99992", nil
+	second, err := c.ReplyWithDiscordContext(ctx, owner, "Ok, tu peux me montrer ses demandes ?", false, "", in, run)
+	t.Logf("reply=%q", second)
+	if err != nil || writes != 1 || reads != 1 {
+		t.Fatal(err, writes, reads)
+	}
+}
