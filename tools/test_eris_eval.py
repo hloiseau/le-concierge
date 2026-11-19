@@ -5,7 +5,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest.mock import patch
 from urllib.error import HTTPError
-from eris_eval import ROOT, check, go_constant, http_reply, load_cases
+from eris_eval import ROOT, TEXT_ONLY_INSTRUCTIONS, check, conversation_cases, go_constant, http_reply, load_cases
 
 
 class EvalTests(unittest.TestCase):
@@ -14,7 +14,15 @@ class EvalTests(unittest.TestCase):
         self.assertEqual(len(cases), 24)
         self.assertEqual(len(load_cases(ROOT / "evals/eris/cases.json", "holdout")), 12)
         self.assertIn("Tu es Eris", go_constant(ROOT / "internal/eris/chat.go", "Persona"))
-        self.assertIn('"action":"prepare"', go_constant(ROOT / "internal/eris/tools.go", "ToolInstructions"))
+        self.assertIn("request_media", go_constant(ROOT / "internal/eris/agent.go", "agentInstructions"))
+        self.assertIn('"action":"chat"', TEXT_ONLY_INSTRUCTIONS)
+
+    def test_text_runner_excludes_archived_tool_plans(self):
+        path = ROOT / "evals/eris/cases.json"
+        cases = conversation_cases(path, "all")
+        self.assertTrue(cases)
+        self.assertLess(len(cases), len(load_cases(path, "all")))
+        self.assertTrue(all(case["expect"]["action"] == "chat" for case in cases))
 
     def test_catches_false_success_and_unsolicited_filters(self):
         case = {"id": "clarify", "expect": {"action": "chat"}, "required_any": ["titre"], "forbidden": ["ne peux pas"]}
@@ -26,9 +34,9 @@ class EvalTests(unittest.TestCase):
             self.assertTrue(check(case, raw), raw)
 
     def test_exact_season_and_reference(self):
-        case = {"id": "season", "expect": {"action": "prepare", "query": "The Bear", "seasons": [3]}}
+        case = {"id": "season", "expect": {"action": "request", "mediaId": 100, "seasons": [3]}}
         self.assertFalse(check(case, json.dumps(case["expect"])))
-        self.assertTrue(check(case, '{"action":"prepare","query":"The Bear","seasons":[1,2,3]}'))
+        self.assertTrue(check(case, '{"action":"request","mediaId":100,"seasons":[1,2,3]}'))
 
     def test_http_contract_and_no_redirect(self):
         requests = []
