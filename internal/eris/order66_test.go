@@ -15,11 +15,11 @@ func TestOrder66AsksNaturallyWhenThereIsNoIdentifiableTarget(t *testing.T) {
 			Tools    json.RawMessage `json:"tools"`
 		}
 		if json.NewDecoder(r.Body).Decode(&payload) != nil || len(payload.Tools) != 0 {
-			t.Error("roleplay gained external tools")
+			t.Error("verbal reply gained external tools")
 		}
 		var conversation struct {
-			Invoker Speaker        `json:"invoker"`
-			Turns   []RoleplayTurn `json:"conversation"`
+			Invoker Speaker       `json:"invoker"`
+			Turns   []Order66Turn `json:"conversation"`
 		}
 		json.Unmarshal([]byte(payload.Messages[len(payload.Messages)-1].Content), &conversation)
 		if conversation.Invoker.ID != "11111" || len(conversation.Turns) != 1 {
@@ -31,9 +31,9 @@ func TestOrder66AsksNaturallyWhenThereIsNoIdentifiableTarget(t *testing.T) {
 	c := New(server.URL, "", "model")
 	c.V2 = true
 	actor := Speaker{ID: "11111", Name: "Hugo"}
-	reply, err := c.Order66(context.Background(), actor, []RoleplayTurn{{Author: actor, Text: "ordre66"}})
+	reply, err := c.Order66(context.Background(), actor, []Order66Turn{{Author: actor, Text: "ordre66"}})
 	if err != nil || reply != "Qui est ma cible ?" || len(c.sessions) != 0 {
-		t.Fatal("ambiguous roleplay was not an isolated clarification", reply, err)
+		t.Fatal("ambiguous verbal attack was not an isolated clarification", reply, err)
 	}
 }
 
@@ -59,9 +59,9 @@ func TestOrder66CanDemonstrateWithoutARealMember(t *testing.T) {
 						t.Error("demo was forced into a missing-member clarification")
 					}
 				}
-				answer := `{"action":"chat","text":"L’adversaire imaginaire s’effondre."}`
+				answer := `{"action":"chat","text":"Tu confonds parler fort et avoir quelque chose à dire."}`
 				if scenario.bystander {
-					answer = `{"targetDiscordId":"","text":"L’adversaire imaginaire s’effondre."}`
+					answer = `{"targetDiscordId":"","text":"Tu confonds parler fort et avoir quelque chose à dire."}`
 				}
 				json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: answer}}}})
 			}))
@@ -69,13 +69,13 @@ func TestOrder66CanDemonstrateWithoutARealMember(t *testing.T) {
 			c := New(server.URL, "", "model")
 			c.V2 = true
 			actor := Speaker{ID: "11111", Name: "Hugo"}
-			turns := []RoleplayTurn{}
+			turns := []Order66Turn{}
 			if scenario.bystander {
-				turns = append(turns, RoleplayTurn{Author: Speaker{ID: "22222", Name: "Autre membre"}, Text: "Salut"})
+				turns = append(turns, Order66Turn{Author: Speaker{ID: "22222", Name: "Autre membre"}, Text: "Salut"})
 			}
-			turns = append(turns, RoleplayTurn{Author: actor, Text: scenario.question})
+			turns = append(turns, Order66Turn{Author: actor, Text: scenario.question})
 			reply, err := c.Order66(context.Background(), actor, turns)
-			if err != nil || reply != "L’adversaire imaginaire s’effondre." || calls != 1 {
+			if err != nil || reply != "Tu confonds parler fort et avoir quelque chose à dire." || calls != 1 {
 				t.Fatal("test without a real target was refused", reply, err, calls)
 			}
 		})

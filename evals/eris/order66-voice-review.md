@@ -1,5 +1,7 @@
 # Ordre 66 : correction de voix du 19 novembre 2026
 
+**Consigne actuelle : attaque exclusivement verbale, sans roleplay ni scène physique.** Les sections antérieures consignent les essais qui précédaient cette clarification de Hugo ; leurs consignes corporelles ne sont plus celles du bot.
+
 Le retour de Hugo relève une scène grandiloquente (« sigil rouge »), une attaque interrompue et une chute expliquant que c'est du théâtre. Eris traite ensuite « cringe » comme une demande de supprimer toute menace physique.
 
 La consigne dédiée demandait une scène « théâtrale » et répétait sa nature fictive sans expliquer comment garder ce cadre implicite. Elle demande désormais une courte répartie familière de comédie horrifique, avec la même personnalité, sans décor fantasy ni annulation de l'action. La mention de la cible vérifiée est ajoutée par le transport ; ce format est distinct du texte libre du modèle. L'auteur reste exclu des cibles.
@@ -37,3 +39,13 @@ Le contrôle opt-in `TestLiveOrder66DemoWithoutATarget` remplace l'ancien petit 
 - La relance accepte la démonstration, mais reste abstraite et ajoute une didascalie. La consigne générale est ensuite précisée pour garder une action courte sur une victime fictive identifiable, sans didascalie ni conséquence annoncée pour tout le groupe. Cet ajustement éditorial n'a pas fait l'objet d'un nouvel appel au modèle.
 
 Le contrôle confirme l'acceptation des deux demandes sans cible réelle ; il ne mesure pas la variété ou la qualité de toutes les répliques.
+
+## Clarification : une attaque verbale
+
+Hugo précise que « attaque » signifie verbalement : Eris reste une IA et ne doit pas raconter de scène physique. Les consignes d'ordre 66, celles des relances et la phrase de voix générale qui incitait à « ouvrir en deux » sont corrigées ensemble. Le contexte dédié s'appelle désormais `Order66Turn`. Les contrôles d'identité et l'exclusion de l'auteur restent actifs.
+
+Le premier petit contrôle réel de `TestLiveOrder66VerbalAttackAndDemo` utilise deux générations : une attaque ciblée sur des propos arrogants synthétiques, puis un exemple sans cible. La première réponse est verbale et vise l'ID attendu. La seconde invite encore à fournir le test ; ce résultat ne valide donc pas l'exécution immédiate de l'exemple. Ces deux réponses consomment 8 423 jetons.
+
+La consigne de relance demande ensuite de produire directement l'exemple en inventant un propos banal d'un interlocuteur fictif, sans nouvelle confirmation. Seul le sous-test `untargeted_example` est rejoué : une génération, 5 567 jetons. Il produit une répartie à propos d'un rangement de bureau, sans narration physique ni destinataire Discord. Total de ce contrôle : trois générations, 13 990 jetons. Aucun outil externe ni message Discord envoyé.
+
+Les assertions éditoriales signalent certaines formulations physiques déjà observées ; elles ne constituent pas une preuve sémantique exhaustive. Aucun filtre de mots n'est ajouté au bot et les réparties restent libres.

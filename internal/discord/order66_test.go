@@ -23,7 +23,7 @@ func TestOrder66AddressesErisWithoutASlashOrMention(t *testing.T) {
 	}
 	for _, text := range []string{"Le film parle de l'ordre66", "ordre660", "ordre66bis"} {
 		if order66Invocation(text, "12345") {
-			t.Errorf("ordinary conversation triggered roleplay: %q", text)
+			t.Errorf("ordinary conversation triggered ordre66: %q", text)
 		}
 	}
 }
@@ -44,7 +44,7 @@ func TestOrder66ContextUsesOnlyPublicVerifiedInterlocutors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			m := base()
 			change(m)
-			if _, ok := roleplayTurn(m, "33333", "12345"); ok {
+			if _, ok := order66Turn(m, "33333", "12345"); ok {
 				t.Fatal("untrusted context accepted")
 			}
 		})
@@ -53,12 +53,12 @@ func TestOrder66ContextUsesOnlyPublicVerifiedInterlocutors(t *testing.T) {
 	m.Mentions = []*discordgo.User{{ID: "12345", Bot: true}, {ID: "fake"}, {ID: "22222", Username: "Keftcha"}}
 	m.MessageReference = &discordgo.MessageReference{MessageID: "55555", ChannelID: "33333", GuildID: "23456"}
 	m.ReferencedMessage = &discordgo.Message{ID: "55555", ChannelID: "33333", Author: &discordgo.User{ID: "22222", Username: "Keftcha"}}
-	turn, ok := roleplayTurn(m, "33333", "12345")
+	turn, ok := order66Turn(m, "33333", "12345")
 	if !ok || len(turn.Mentions) != 1 || turn.Mentions[0].ID != "22222" || turn.ReplyTo == nil || turn.ReplyTo.ID != "22222" {
 		t.Fatal("direct verified target was lost", turn)
 	}
 	m.MessageReference.GuildID = "77777"
-	if turn, _ = roleplayTurn(m, "33333", "12345"); turn.ReplyTo != nil {
+	if turn, _ = order66Turn(m, "33333", "12345"); turn.ReplyTo != nil {
 		t.Fatal("cross-guild reference accepted")
 	}
 }
@@ -79,9 +79,9 @@ func TestOrder66TargetsTheInterlocutorAndNeverItsInvoker(t *testing.T) {
 				json.NewDecoder(r.Body).Decode(&payload)
 				all, _ := json.Marshal(payload.Messages)
 				if len(payload.Tools) != 0 || models == 1 && (!strings.Contains(string(all), "Keftcha") || !strings.Contains(string(all), "Hugo")) {
-					t.Error("roleplay lost its real interlocutors or exposed external tools")
+					t.Error("verbal reply lost its real interlocutors or exposed external tools")
 				}
-				answer, _ := json.Marshal(map[string]string{"targetDiscordId": target, "text": "Je te plaque au sol."})
+				answer, _ := json.Marshal(map[string]string{"targetDiscordId": target, "text": "Tu confonds parler fort et avoir quelque chose à dire."})
 				if models == 2 {
 					if strings.Contains(string(all), "targetDiscordId") {
 						t.Error("unsafe target was still being selected")
@@ -104,18 +104,18 @@ func TestOrder66TargetsTheInterlocutorAndNeverItsInvoker(t *testing.T) {
 				}
 				sends++
 				raw, _ := io.ReadAll(r.Body)
-				if target == "22222" && !strings.Contains(string(raw), "Je te plaque") {
-					t.Error("valid scene was not delivered", string(raw))
+				if target == "22222" && !strings.Contains(string(raw), "Tu confonds") {
+					t.Error("valid verbal reply was not delivered", string(raw))
 				}
 				var sent struct {
 					Content string `json:"content"`
 				}
 				json.Unmarshal(raw, &sent)
 				if target == "22222" && !strings.HasPrefix(sent.Content, "<@22222> ") {
-					t.Error("second-person roleplay still appears addressed to the invoker", sent.Content)
+					t.Error("second-person reply still appears addressed to the invoker", sent.Content)
 				}
-				if target != "22222" && strings.Contains(string(raw), "Je te plaque") {
-					t.Error("unverified or self-targeted roleplay was published")
+				if target != "22222" && strings.Contains(string(raw), "Tu confonds") {
+					t.Error("unverified or self-targeted reply was published")
 				}
 				if target != "22222" && sent.Content != "Qui veux-tu que je vise ?" {
 					t.Error("unsafe target became a technical error", sent.Content)
