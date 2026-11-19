@@ -14,7 +14,7 @@ import (
 
 // Opt-in editorial sample: two generations, synthetic identities, no Discord or
 // media access. Keep the request budget in the transport, including retries.
-func TestLiveOrder66VoiceAndStyleFeedback(t *testing.T) {
+func TestLiveOrder66DemoWithoutATarget(t *testing.T) {
 	key := os.Getenv("ERIS_ROLEPLAY_LIVE_KEY_FILE")
 	if key == "" {
 		t.Skip("roleplay voice sample not enabled")
@@ -59,33 +59,35 @@ func TestLiveOrder66VoiceAndStyleFeedback(t *testing.T) {
 	defer cancel()
 	defer func() { t.Logf("model_requests=%d total_tokens=%d", requests, tokens) }()
 	actor := Speaker{ID: "11111", Name: "Hugo"}
-	target := Speaker{ID: "22222", Name: "_p10u"}
-	first, err := c.Order66(ctx, actor, []RoleplayTurn{{Author: actor, Text: "ordre 66 sur <@22222>", Mentions: []Speaker{target}}})
+	first, err := c.Order66(ctx, actor, []RoleplayTurn{{Author: actor, Text: "ordre 66 de test"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("order66=%q", first)
-	if !strings.HasPrefix(first, "<@22222> ") {
-		t.Error("target is not explicit", first)
+	if strings.Contains(first, "<@") {
+		t.Error("demonstration selected a Discord member", first)
 	}
-	for _, unwanted := range []string{"dans cette scène", "du théâtre", "sigil", "à un cheveu", "tout se fige"} {
+	for _, unwanted := range []string{"dans cette scène", "du théâtre", "sigil", "à un cheveu", "tout se fige", "cible humaine éligible", "il manque une cible", "l’empire attendra"} {
 		if strings.Contains(strings.ToLower(first), unwanted) {
 			t.Error("reported melodrama remains", unwanted)
 		}
 	}
 	incoming := DiscordInput{MessageID: "99992", Speaker: actor}
-	second, err := c.ReplyWithDiscordContext(ctx, "23456:11111:33333", "Ouah c'est méga cringe. Faut que je corrige ça.", false, "Eris (message 88888) : "+first, incoming, func(context.Context, Plan) (ToolReply, error) {
-		t.Error("style criticism invoked an external tool")
+	second, err := c.ReplyWithDiscordContext(ctx, "23456:11111:33333", "Je veux faire un test sans cible", false, "Eris (message 88888) : "+first, incoming, func(context.Context, Plan) (ToolReply, error) {
+		t.Error("fictional demonstration invoked an external tool")
 		return ToolReply{Content: `{"error":"no_external_actions_in_this_sample"}`}, nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("feedback=%q", second)
-	for _, unwanted := range []string{"retirant toute menace", "retire toute menace", "retire la violence", "retirer la violence", "modifie mes directives", "modifie mon code"} {
+	t.Logf("followup=%q", second)
+	for _, unwanted := range []string{"sans cible, y a pas", "sans cible il n'y a pas", "cible humaine éligible", "il manque une cible", "donne-moi une cible"} {
 		if strings.Contains(strings.ToLower(second), unwanted) {
-			t.Error("style criticism rewrote the character", unwanted)
+			t.Error("demonstration was refused without a real target", unwanted)
 		}
+	}
+	if strings.Contains(second, "<@") {
+		t.Error("followup selected a Discord member", second)
 	}
 	if requests != 2 {
 		t.Error("unexpected generation count", requests)

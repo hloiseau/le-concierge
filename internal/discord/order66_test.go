@@ -14,7 +14,7 @@ import (
 )
 
 func TestOrder66AddressesErisWithoutASlashOrMention(t *testing.T) {
-	for _, question := range []string{"ordre66", "Ordre 66 !", "<@12345> ordre66", "Eris, ordre66"} {
+	for _, question := range []string{"ordre66", "Ordre 66 !", "<@12345> ordre66", "Eris, ordre66", "<@12345> ordre 66 de test"} {
 		m := mentionFixture().Message
 		m.Content, m.Mentions = question, nil
 		if _, ok := ErisQuestion(m, "12345"); !ok {
@@ -83,10 +83,10 @@ func TestOrder66TargetsTheInterlocutorAndNeverItsInvoker(t *testing.T) {
 				}
 				answer, _ := json.Marshal(map[string]string{"targetDiscordId": target, "text": "Je te plaque au sol."})
 				if models == 2 {
-					if !strings.Contains(string(all), "clarification_required") {
-						t.Error("unsafe target did not lead to clarification")
+					if strings.Contains(string(all), "targetDiscordId") {
+						t.Error("unsafe target was still being selected")
 					}
-					answer = []byte(`{"text":"Qui veux-tu que je vise ?"}`)
+					answer = []byte(`{"action":"chat","text":"Qui veux-tu que je vise ?"}`)
 				}
 				raw, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": eris.Message{Role: "assistant", Content: string(answer)}}}})
 				return botResponse(200, string(raw)), nil
@@ -151,17 +151,11 @@ func TestOrder66WithoutAHumanInterlocutorAsksInsteadOfFailing(t *testing.T) {
 					Tools    json.RawMessage
 				}
 				json.NewDecoder(r.Body).Decode(&payload)
-				var facts struct {
-					Result struct {
-						Status   string `json:"status"`
-						Eligible int    `json:"eligibleTargetCount"`
-					} `json:"result"`
-				}
-				json.Unmarshal([]byte(payload.Messages[len(payload.Messages)-1].Content), &facts)
-				if len(payload.Tools) != 0 || facts.Result.Status != "clarification_required" || facts.Result.Eligible != 0 {
+				all, _ := json.Marshal(payload.Messages)
+				if len(payload.Tools) != 0 || strings.Contains(string(all), "targetDiscordId") {
 					t.Error("model was allowed to invent an interlocutor")
 				}
-				return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"text\":\"Qui veux-tu que je vise ?\"}"}}]}`), nil
+				return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Qui veux-tu que je vise ?\"}"}}]}`), nil
 			})
 			b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { tools++; return botResponse(500, `{}`), nil })
 			s, _ := discordgo.New("Bot fixture")

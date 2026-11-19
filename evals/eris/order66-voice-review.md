@@ -24,3 +24,16 @@ Le rejeu privé avant correction reçoit HTTP 200 et un JSON de forme correcte, 
 Le parcours sans interlocuteur passe désormais directement par la formulation d'une clarification, sans tâche de sélection de cible. Une cible inconnue ou l'auteur renvoyés par le modèle déclenchent aussi une clarification neuve, sans publier le texte rejeté. Le modèle n'est pas relancé après une panne de génération. Les erreurs de génération, de format et de cible ont des diagnostics fixes sans contenu privé.
 
 Le test unitaire a échoué avant modification puis passe. Les tests Discord couvrent l'historique vide, l'auteur et le bot seuls, le pair trop ancien, les cibles inconnues et l'auteur protégé. Un seul rejeu réel avant et un seul après ont consommé respectivement 2 769 et 2 315 jetons ; le second reçoit une clarification sans cible en un appel. Aucun message Discord ni outil média n'est exécuté. La capture privée et le diagnostic temporaire sont conservés hors du code livré.
+
+## Démonstration sans cible — retour de 23:21
+
+La clarification imposée refusait aussi « ordre 66 de test », puis la discussion refusait « Je veux faire un test sans cible ». C'était une restriction introduite par l'application, pas un prérequis du roleplay. Le parcours sans destinataire utilise maintenant les mêmes consignes de personnage que le parcours ciblé et le format normal de discussion, sans le faux résultat d'opération `clarification_required`. Le modèle peut jouer une démonstration contre un adversaire imaginaire anonyme ou demander qui viser selon l'intention. Il n'a aucun identifiant de membre à sélectionner dans cette réponse. La consigne de discussion couvre aussi la relance exacte et ne transforme pas un ancien refus du personnage en règle.
+
+Les tests de démonstration ont échoué avant correction et passent après, y compris avec un membre présent dans le contexte mais non désigné comme cible. Les tests de refus de l'auteur et des IDs inconnus restent actifs.
+
+Le contrôle opt-in `TestLiveOrder66DemoWithoutATarget` remplace l'ancien petit échantillon de voix. Il joue les deux messages exacts avec des identités synthétiques et un transport limité à deux générations : 8 405 jetons, aucun outil exécuté ni message Discord envoyé.
+
+- Le premier message produit une action corporelle sur un adversaire anonyme, sans demander un destinataire réel.
+- La relance accepte la démonstration, mais reste abstraite et ajoute une didascalie. La consigne générale est ensuite précisée pour garder une action courte sur une victime fictive identifiable, sans didascalie ni conséquence annoncée pour tout le groupe. Cet ajustement éditorial n'a pas fait l'objet d'un nouvel appel au modèle.
+
+Le contrôle confirme l'acceptation des deux demandes sans cible réelle ; il ne mesure pas la variété ou la qualité de toutes les répliques.
