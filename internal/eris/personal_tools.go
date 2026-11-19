@@ -2,7 +2,6 @@ package eris
 
 import (
 	"errors"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -15,7 +14,7 @@ func (p Plan) validatePersonalTool() error {
 		return invalid
 	}
 	if p.Action == "follow" {
-		if strings.TrimSpace(p.Query) != p.Query || strings.ContainsFunc(p.Query, unicode.IsControl) || utf8.RuneCountInString(p.Query) < 2 || utf8.RuneCountInString(p.Query) > 200 || (p.Kind != "" && p.Kind != "movie" && p.Kind != "show") || (p.Year != 0 && (p.Year < 1801 || p.Year > 2999)) || (p.Channel != "" && p.Channel != "hub" && p.Channel != "discord") || len(p.Seasons) > 1 || (len(p.Seasons) > 0 && (p.Kind != "show" || p.Seasons[0] < 1 || p.Seasons[0] > 1000)) {
+		if strings.TrimSpace(p.Query) != p.Query || strings.ContainsFunc(p.Query, unicode.IsControl) || (p.MediaID == 0 && utf8.RuneCountInString(p.Query) < 2) || p.MediaID < 0 || p.MediaID > 2147483647 || (p.MediaID > 0 && (p.Query != "" || p.Kind == "")) || utf8.RuneCountInString(p.Query) > 200 || (p.Kind != "" && p.Kind != "movie" && p.Kind != "show") || (p.Year != 0 && (p.Year < 1801 || p.Year > 2999)) || (p.Channel != "" && p.Channel != "hub" && p.Channel != "discord") || len(p.Seasons) > 1 || (len(p.Seasons) > 0 && (p.Kind != "show" || p.Seasons[0] < 1 || p.Seasons[0] > 1000)) {
 			return invalid
 		}
 		return nil
@@ -60,37 +59,3 @@ func validPreference(setting, value string) bool {
 	}
 	return false
 }
-
-var followIntent = regexp.MustCompile(`(?i)(?:préviens|previens|avertis|notifie|abonne|suivre|suis|alerte)[ -]`)
-var stopFollowIntent = regexp.MustCompile(`(?i)(?:arrête|arrete|retire|désabonne|desabonne|supprime|ne .*plus|me .*plus)`)
-var preferenceIntent = regexp.MustCompile(`(?i)(?:active|désactive|desactive|coupe|mets|met |règle|regle|change|limite|je veux|ne .*plus|pas de)`)
-var directMessageIntent = regexp.MustCompile(`(?i)(?:\bdm\b|priv[ée]|discord)`)
-
-func subscriptionMentioned(id int64, messages []Message) bool {
-	pattern := regexp.MustCompile(`(?i)(?:#|suivi\s*(?:n[°o]\s*)?)` + strconv.FormatInt(id, 10) + `(?:$|[^0-9])`)
-	for _, message := range messages {
-		if message.Role != "system" && pattern.MatchString(message.Content) {
-			return true
-		}
-	}
-	return false
-}
-
-// The transport supplies this question; model output cannot authorize a write.
-func PersonalWriteRequested(question string, p Plan) bool {
-	switch p.Action {
-	case "follow":
-		return followIntent.MatchString(question) && !stopFollowIntent.MatchString(question) && (p.Channel != "discord" || directMessageIntent.MatchString(question))
-	case "unfollow":
-		return stopFollowIntent.MatchString(question)
-	case "preferences":
-		return p.Setting == "" || preferenceIntent.MatchString(question)
-	default:
-		return true
-	}
-}
-
-const PersonalToolInstructions = `
-Suivre une disponibilité sur demande : {"action":"follow","query":"titre seul","kind":"movie","year":2021,"channel":"hub"}. Omet l'année inconnue. Série : kind:"show", seasons:[2] pour une saison précise, sinon premier épisode accessible de la série. channel:"discord" seulement si un DM est demandé ; cela n'active pas le consentement DM. Aucun ajout média implicite.
-Consulter mes suivis : {"action":"follows"}. Retirer un suivi : {"action":"unfollow","subscriptionId":7}, avec le numéro donné par l'outil ; sans numéro utilise {"action":"unfollow"} pour proposer les suivis à retirer. Une sélection proposée continue l'intention initiale sans la faire répéter. Retirer un suivi ne supprime ni une demande Seerr ni un fichier.
-Réglages personnels, en privé : {"action":"preferences"}. Modifier un réglage explicitement demandé : {"action":"preferences","setting":"enabled","value":"false"}. Réglages disponibles : enabled (notifications générales), discordDmEnabled, allUnwatched (rappels de retraits non vus), availableUnwatched (relances des demandes disponibles non vues), dailyCap (1–100), quietHours (ex. "22-8", heures Europe/Paris), daysBefore (jours avant retrait, ex. "7,2"). Les booléens sont les chaînes "true"/"false". Un réglage par tour ; demande une précision pour une valeur manquante ou plusieurs réglages distincts. Ne désactive pas les notifications générales pour retirer un seul suivi. N'annonce une modification qu'après le résultat vérifié de l'outil.`

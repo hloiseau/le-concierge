@@ -95,7 +95,7 @@ func TestReplyTargetMustBeErisInTheSameChannel(t *testing.T) {
 	}
 }
 
-func TestReplyToErisOffersSeerrChoicesInChannel(t *testing.T) {
+func TestReplyToErisUsesNativeToolsAndSendsNoChoices(t *testing.T) {
 	b, _ := signedCommand(t, "eris")
 	b.Eris.URL = "http://model.test/v1"
 	b.Config.BotAPIURL = "http://api.test"
@@ -103,20 +103,23 @@ func TestReplyToErisOffersSeerrChoicesInChannel(t *testing.T) {
 	b.Eris.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		var body struct{ Messages []eris.Message }
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Messages[max(0, len(body.Messages)-2)].Role == "tool" {
+			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Hot Fuzz est demandé.\"}"}}]}`), nil
+		}
 		for _, message := range body.Messages {
 			if message.Role == "user" {
 				questions = append(questions, message.Content)
 			}
 		}
-		return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"prepare\",\"query\":\"Hot Fuzz\",\"kind\":\"movie\"}"}}]}`), nil
+		return botResponse(200, `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"req_1","type":"function","function":{"name":"request_media","arguments":"{\"mediaId\":881,\"kind\":\"movie\",\"targetDiscordId\":\"self\"}"}}]}}]}`), nil
 	})
 	b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 		var in eris.ToolRequest
 		_ = json.NewDecoder(r.Body).Decode(&in)
-		if in.MessageID != "99999" || in.ChannelID != "33333" || in.Plan.Query != "Hot Fuzz" {
+		if in.MessageID != "99999" || in.ChannelID != "33333" || in.Plan.MediaID != 881 || in.CallID != "tool-1" {
 			t.Error("reply proof or title lost")
 		}
-		return botResponse(200, `{"content":"Choisis Hot Fuzz.","buttons":[{"id":"eris:choose:`+strings.Repeat("a", 64)+`","label":"Choisir 1"}]}`), nil
+		return botResponse(200, `{"content":"{\"status\":\"created\",\"requestId\":411}"}`), nil
 	})
 	s, _ := discordgo.New("Bot fixture")
 	replies := 0
@@ -127,8 +130,9 @@ func TestReplyToErisOffersSeerrChoicesInChannel(t *testing.T) {
 		var payload map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&payload)
 		raw, _ := json.Marshal(payload)
-		if !strings.Contains(string(raw), "eris:choose:") || strings.Contains(string(raw), "eris:open:") {
-			t.Error("missing public Seerr choices")
+		components, _ := payload["components"].([]any)
+		if !strings.Contains(string(raw), "Hot Fuzz est demandé.") || len(components) != 0 {
+			t.Error("native result lost or choices survived", string(raw))
 		}
 		replies++
 		return botResponse(200, `{"id":"88888"}`), nil
@@ -306,18 +310,23 @@ func TestMentionsGatewayReceivesResumesAndStops(t *testing.T) {
 	}
 }
 
-func TestBareAndOversizedMentionsDoNotCallTheModel(t *testing.T) {
+func TestBareMentionGetsModelReplyAndOversizedMentionIsRejected(t *testing.T) {
 	for _, question := range []string{"", strings.Repeat("é", 501)} {
 		b, _ := signedCommand(t, "eris")
+		calls := 0
+		b.Eris.URL = "https://model.example"
 		b.Eris.HTTP.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
-			t.Error("unexpected inference")
-			return botResponse(500, ""), nil
+			calls++
+			if question != "" {
+				return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"text\":\"Ton message dépasse la longueur acceptée.\"}"}}]}`), nil
+			}
+			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Oui, je t’écoute.\"}"}}]}`), nil
 		})
 		s, _ := discordgo.New("Bot fixture-token")
 		count := 0
 		s.Client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
 			count++
-			if !strings.HasSuffix(r.URL.Path, "/messages") {
+			if !strings.HasSuffix(r.URL.Path, "/messages") && !strings.HasSuffix(r.URL.Path, "/typing") {
 				t.Error("unexpected route")
 			}
 			return botResponse(200, `{"id":"88888"}`), nil
@@ -326,8 +335,17 @@ func TestBareAndOversizedMentionsDoNotCallTheModel(t *testing.T) {
 		m.Content = "<@12345> " + question
 		b.handleMention(context.Background(), s, m)
 		b.Wait()
-		if count != 1 {
-			t.Fatal("missing guidance")
+		want := 1
+		if question == "" {
+			want = 2
+			if calls != 1 {
+				t.Fatal("bare mention did not reach the model", calls)
+			}
+		} else if calls != 1 {
+			t.Fatal("input limit was not explained by the model")
+		}
+		if count != want {
+			t.Fatal("missing response", count, want)
 		}
 	}
 }

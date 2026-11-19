@@ -1,5 +1,7 @@
 # Terrain de test Eris — issue #62
 
+Depuis le 19 novembre 2026, les runners Python sans fonctions natives testent uniquement la voix et filtrent les cas de discussion. Les anciens plans média et leurs résultats restent des archives, sans équivalence avec le parcours actuel. Pour les outils, utiliser les tests Go `TestEveryToolReturnsFactsToTheModelForItsOwnReply`, `TestResponsesNativeToolLoopReplaysReasoningAndFunctionResult` et les laboratoires facultatifs `TestLiveAgentMadagascar` et `TestLiveAgentStructuredTools`. Voir le [contrat actuel](../../docs/eris-natural-requests.md).
+
 La [refonte du contexte et de la voix](context-refactor.md), sur `fix/eris-voice-context`, audite le prompt réellement envoyé, corrige la répétition des épisodes récents et partage une voix proche de la demande actuelle. Les recherches, comparaisons et conversations complètes sont conservées ; la production n'est pas modifiée par cette recette.
 
 But : comparer la personnalité actuellement en production et une candidate plus spontanée, absurde et mordante, sans perdre le classement Plex/Seerr. Voir le [corpus sourcé](references.md).

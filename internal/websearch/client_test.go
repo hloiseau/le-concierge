@@ -105,6 +105,24 @@ func TestSearchReadsPagesAndLabelsFallbackSnippets(t *testing.T) {
 	}
 }
 
+func TestMalformedSearchLinksDoNotHideUsableResults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var items []map[string]string
+		for range 6 {
+			items = append(items, map[string]string{"title": "Broken Brave redirect", "url": "http:///go/v1/encrypted-destination", "content": "unusable"})
+		}
+		items = append(items, map[string]string{"title": "Official announcement", "url": "https://publisher.example/announcement", "content": "Verified release announcement."})
+		json.NewEncoder(w).Encode(map[string]any{"results": items})
+	}))
+	defer server.Close()
+	c := New(server.URL, "")
+	c.public.Transport = transportFunc(func(r *http.Request) (*http.Response, error) { return nil, errors.New("use the search snippet") })
+	r, err := c.Search(context.Background(), "Madagascar 4", false)
+	if err != nil || len(r.Sources) != 1 || r.Sources[0].URL != "https://publisher.example/announcement" {
+		t.Fatalf("valid results were hidden by broken links: %+v %v", r, err)
+	}
+}
+
 func TestYouTubeRequiresVerifiedMetadataAndBoundsAttempts(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("engines") != "youtube" {

@@ -51,7 +51,7 @@ func TestOuicheurLinkIsPersonalPrivateAndRevocable(t *testing.T) {
 	}
 	before := calls
 	r := s.erisGifts(context.Background(), u, eris.Plan{Action: "gifts", Query: "Alice"}, false)
-	if calls != before || !strings.Contains(r.Content, "/eris") {
+	if calls != before || !strings.Contains(r.Content, "private_conversation_required") {
 		t.Fatal("public read", r)
 	}
 	r = s.erisGifts(context.Background(), u, eris.Plan{Action: "gifts", Query: "Alice"}, true)
@@ -60,7 +60,7 @@ func TestOuicheurLinkIsPersonalPrivateAndRevocable(t *testing.T) {
 	}
 	revoked = true
 	r = s.erisGifts(context.Background(), u, eris.Plan{Action: "gifts", Query: "Alice"}, true)
-	if r.Web != nil || !strings.Contains(r.Content, "expiré") {
+	if r.Web != nil || !strings.Contains(r.Content, "ouicheur_link_expired") {
 		t.Fatal("revocation ignored", r)
 	}
 	if _, ok := s.currentOuicheurGrant(u.ID); ok {

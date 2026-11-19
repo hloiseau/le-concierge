@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from eris_eval import ROOT, CodexCallError, codex_reply, go_constant
+from eris_eval import ROOT, CodexCallError, TEXT_ONLY_INSTRUCTIONS, codex_reply, go_constant
 
 
 def check_reply(raw, scenario):
@@ -80,7 +80,7 @@ def main():
     system = (go_constant(args.character, "CharacterPersona")
               + go_constant(ROOT / "internal/eris/canon.go", "CharacterCanon")
               + (go_constant(ROOT / "internal/eris/discord_context.go", "discordContextInstructions") if context else "")
-              + go_constant(ROOT / "internal/eris/tools.go", "ToolInstructions")
+              + TEXT_ONLY_INSTRUCTIONS
               + go_constant(ROOT / "internal/eris/turn_taking.go", "TurnTakingInstructions")
               + go_constant(args.character, "MemoryInstructions")
               + go_constant(ROOT / "internal/eris/durable_memory.go", "DurableMemoryInstructions"))

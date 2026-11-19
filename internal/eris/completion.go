@@ -23,8 +23,13 @@ func ValidDollyKey(key string) bool {
 }
 
 func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool, budgets ...completionBudget) (string, error) {
+	message, err := c.completeMessage(ctx, messages, withTools, nil, budgets...)
+	return message.Content, err
+}
+
+func (c *Chat) completeMessage(ctx context.Context, messages []Message, withTools bool, definitions []toolDefinition, budgets ...completionBudget) (Message, error) {
 	if c.V2 && textRunes(messages) > contextTextLimit {
-		return "", ErrUnavailable
+		return Message{}, ErrUnavailable
 	}
 	rawLimit := 1500
 	tokens := 160
@@ -36,13 +41,13 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 	}
 	if c.Protocol == "responses" {
 		if c.dolly() {
-			return "", ErrUnavailable
+			return Message{}, ErrUnavailable
 		}
-		return c.responses(ctx, messages, rawLimit)
+		return c.responseMessage(ctx, messages, withTools, definitions, rawLimit)
 	}
 	for _, message := range messages {
 		if len(message.Images) > 0 {
-			return "", ErrUnavailable
+			return Message{}, ErrUnavailable
 		}
 	}
 	temperature := 0.65
@@ -60,15 +65,19 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 	if withTools {
 		payload["response_format"] = map[string]string{"type": "json_object"}
 	}
+	if len(definitions) > 0 {
+		payload["tools"], payload["tool_choice"] = definitions, "auto"
+		delete(payload, "response_format")
+	}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, "POST", c.URL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return "", ErrUnavailable
+		return Message{}, ErrUnavailable
 	}
 	req.Header.Set("Content-Type", "application/json")
 	key, err := c.apiKey()
 	if err != nil || c.dolly() && !ValidDollyKey(key) {
-		return "", ErrUnavailable
+		return Message{}, ErrUnavailable
 	}
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
@@ -77,18 +86,18 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", ErrUnavailable
+		return Message{}, ErrUnavailable
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return "", ErrBusy
+		return Message{}, ErrBusy
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", ErrUnavailable
+		return Message{}, ErrUnavailable
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, bodyLimit+1))
 	if err != nil || int64(len(raw)) > bodyLimit {
-		return "", ErrUnavailable
+		return Message{}, ErrUnavailable
 	}
 	var completion struct {
 		Model   string `json:"model"`
@@ -98,16 +107,18 @@ func (c *Chat) complete(ctx context.Context, messages []Message, withTools bool,
 		} `json:"choices"`
 	}
 	if json.Unmarshal(raw, &completion) != nil || len(completion.Choices) != 1 || completion.Choices[0].Message.Role != "assistant" {
-		return "", ErrUnavailable
+		return Message{}, ErrUnavailable
 	}
-	if c.dolly() && (completion.Model != c.Model || completion.Choices[0].FinishReason != "stop") {
-		return "", ErrUnavailable
+	message := completion.Choices[0].Message
+	toolResponse := len(definitions) > 0 && len(message.ToolCalls) > 0 && len(message.ToolCalls) <= 6 && completion.Choices[0].FinishReason == "tool_calls"
+	if c.dolly() && (completion.Model != c.Model || (completion.Choices[0].FinishReason != "stop" && !toolResponse)) {
+		return Message{}, ErrUnavailable
 	}
-	reply := strings.TrimSpace(completion.Choices[0].Message.Content)
-	if reply == "" || !utf8.ValidString(reply) || utf8.RuneCountInString(reply) > rawLimit {
-		return "", ErrUnavailable
+	message.Content = strings.TrimSpace(message.Content)
+	if (!toolResponse && message.Content == "") || !utf8.ValidString(message.Content) || utf8.RuneCountInString(message.Content) > rawLimit || (len(message.ToolCalls) > 0 && !toolResponse) {
+		return Message{}, ErrUnavailable
 	}
-	return reply, nil
+	return message, nil
 }
 
 func (c *Chat) apiKey() (string, error) {

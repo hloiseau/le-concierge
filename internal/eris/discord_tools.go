@@ -2,7 +2,6 @@ package eris
 
 import (
 	"errors"
-	"regexp"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -40,22 +39,7 @@ func (p Plan) validateDiscordCreation() error {
 	return nil
 }
 
-var publishIntent = regexp.MustCompile(`(?i)(?:crée|cree|créer|creer|fais|faire|lance|lancer|organise|organiser|programme|programmer)`)
-var pollWord = regexp.MustCompile(`(?i)(?:sondage|vote)`)
-var eventWord = regexp.MustCompile(`(?i)(?:soir[ée]e|[ée]v[ée]nement)`)
-
-func DiscordCreationRequested(question string, p Plan) bool {
-	if !publishIntent.MatchString(question) {
-		return false
-	}
-	return p.Action == "poll" && pollWord.MatchString(question) || p.Action == "event" && eventWord.MatchString(question)
-}
-
 func PublicTextMentioned(text, question, reference string) bool {
 	normalize := func(s string) string { return " " + strings.Join(words(s), " ") + " " }
 	return strings.Contains(normalize(question), normalize(text)) || reference != "" && strings.Contains(normalize(reference), normalize(text))
 }
-
-const DiscordToolInstructions = `
-Sondage Discord explicitement demandé : {"action":"poll","text":"question","options":["choix A","choix B"],"durationHours":24}. Deux à dix choix réellement donnés dans le message ou une référence publique, jamais issus d'une mémoire privée. Question explicite si donnée ; sinon question neutre. Durée par défaut 24 h, multiselect:true seulement si demandé. Il sera publié dans le salon actuel ; aucun envoi avant résultat de l'application.
-Soirée/événement Discord explicitement demandé : {"action":"event","text":"nom donné","startAt":"date RFC3339 avec décalage","endAt":"date RFC3339 avec décalage"}. Nom, date, début et fin doivent être connus ; demande les précisions manquantes. Heures par défaut Europe/Paris, utilise l'horloge fournie pour les dates relatives. L'événement renvoie au salon actuel, sans rejoindre de salon vocal. Une proposition ou une question sur les possibilités reste chat. Aucun autre salon, serveur ou participant à notifier choisi par le modèle.`

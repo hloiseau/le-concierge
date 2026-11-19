@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -21,18 +19,8 @@ type erisCreation struct {
 }
 
 func (s *Server) erisDiscordCreation(ctx context.Context, caller erisCallerContext, p eris.Plan) eris.ToolReply {
-	clarify := eris.ToolReply{Content: "Précise la création souhaitée, avec les choix du sondage ou le nom et les horaires de la soirée à publier."}
+	clarify := erisFailure("creation_details_required")
 	if p.Validate() != nil || !config.Snowflake(caller.ChannelID) || s.Config.DiscordBotToken == "" {
-		return clarify
-	}
-	requested := eris.DiscordCreationRequested(caller.Question, p)
-	if !requested && caller.ReferenceByEris && (strings.Contains(strings.ToLower(caller.Reference), "précise") || strings.Contains(strings.ToLower(caller.Reference), "manque")) && (strings.Contains(strings.ToLower(caller.Reference), "sondage") || strings.Contains(strings.ToLower(caller.Reference), "soirée")) {
-		requested = eris.PublicTextMentioned(p.Text, caller.Question, "")
-		for _, option := range p.Options {
-			requested = requested || eris.PublicTextMentioned(option, caller.Question, "")
-		}
-	}
-	if !requested {
 		return clarify
 	}
 	if p.Action == "poll" {
@@ -42,7 +30,7 @@ func (s *Server) erisDiscordCreation(ctx context.Context, caller erisCallerConte
 			}
 		}
 		if !eris.PublicTextMentioned(p.Text, caller.Question, caller.Reference) {
-			p.Text = "Quel choix préférez-vous ?"
+			return erisFailure("public_question_not_grounded")
 		}
 		if p.DurationHours == 0 {
 			p.DurationHours = 24
@@ -53,7 +41,7 @@ func (s *Server) erisDiscordCreation(ctx context.Context, caller erisCallerConte
 		}
 		start, _ := time.Parse(time.RFC3339, p.StartAt)
 		if !start.After(time.Now().Add(time.Minute)) || start.After(time.Now().AddDate(1, 0, 0)) {
-			return eris.ToolReply{Content: "Donne une date de début future, dans l’année à venir, et une heure de fin après le début."}
+			return erisFailure("event_time_out_of_range")
 		}
 		if p.Query != "" && !eris.PublicTextMentioned(p.Query, caller.Question, caller.Reference) {
 			p.Query = ""
@@ -61,16 +49,16 @@ func (s *Server) erisDiscordCreation(ctx context.Context, caller erisCallerConte
 	}
 	var channel discordgo.Channel
 	if err := s.Upstream.JSON(ctx, "GET", "https://discord.com/api/v10/channels/"+caller.ChannelID, map[string]string{"Authorization": "Bot " + s.Config.DiscordBotToken}, "", &channel); err != nil || channel.ID != caller.ChannelID || channel.GuildID != s.Config.DiscordGuildID {
-		return eris.ToolReply{Content: "Je ne peux pas vérifier le salon de publication."}
+		return erisFailure("channel_unverified")
 	}
 	if p.Action == "event" {
 		if !s.erisPublicEventChannel(ctx, channel) {
-			return eris.ToolReply{Content: "Un événement du serveur est visible au-delà d’un salon privé. Demande sa création depuis un salon texte visible par tout le serveur, dont je peux vérifier les droits."}
+			return erisFailure("public_event_requires_verified_public_channel")
 		}
 	}
 	raw, _ := json.Marshal(p)
 	key := digest(caller.UserID + ":" + caller.ChannelID + ":" + string(raw))
-	unknown := eris.ToolReply{Content: "Je ne peux pas confirmer la création. Vérifie le salon ou les événements du serveur avant de réessayer ; je ne renvoie pas automatiquement cette création."}
+	unknown := erisFailure("creation_outcome_unknown_do_not_retry")
 	s.mu.Lock()
 	if s.erisCreations == nil {
 		s.erisCreations = map[string]erisCreation{}
@@ -86,7 +74,7 @@ func (s *Server) erisDiscordCreation(ctx context.Context, caller erisCallerConte
 	}
 	if len(s.erisCreations) >= 256 {
 		s.mu.Unlock()
-		return eris.ToolReply{Content: "Trop de créations récentes. Réessaie plus tard."}
+		return erisFailure("creation_capacity_reached")
 	}
 	// shortcut: local uncertainty lasts 15 min; use a durable ledger for longer recovery.
 	s.erisCreations[key] = erisCreation{Expires: time.Now().Add(15 * time.Minute), Reply: unknown}
@@ -115,19 +103,19 @@ func (s *Server) erisDiscordCreation(ctx context.Context, caller erisCallerConte
 		payload = map[string]any{"name": p.Text, "privacy_level": 2, "entity_type": 3, "scheduled_start_time": p.StartAt, "scheduled_end_time": p.EndAt, "entity_metadata": map[string]string{"location": location}, "description": p.Query}
 		var existing []upstream.DiscordCreated
 		if err := s.Upstream.JSON(ctx, "GET", "https://discord.com/api/v10/guilds/"+s.Config.DiscordGuildID+"/scheduled-events", map[string]string{"Authorization": "Bot " + s.Config.DiscordBotToken}, "", &existing); err != nil || len(existing) > 1000 {
-			return finish(eris.ToolReply{Content: "Je ne peux pas vérifier les événements existants ; je n’en crée pas un à l’aveugle."}, true)
+			return finish(erisFailure("event_history_unavailable_not_created"), true)
 		}
 		start, _ := time.Parse(time.RFC3339, p.StartAt)
 		end, _ := time.Parse(time.RFC3339, p.EndAt)
 		for _, event := range existing {
 			if config.Snowflake(event.ID) && event.GuildID == s.Config.DiscordGuildID && event.CreatorID == s.Config.DiscordClientID && event.Name == p.Text && event.EntityType == 3 && event.EntityMetadata.Location == location && event.StartAt.Equal(start) && event.EndAt.Equal(end) {
-				return finish(eris.ToolReply{Content: "Cette soirée existe déjà : https://discord.com/events/" + s.Config.DiscordGuildID + "/" + event.ID}, false)
+				return finish(erisData(map[string]any{"status": "already_exists", "type": "event", "url": "https://discord.com/events/" + s.Config.DiscordGuildID + "/" + event.ID}), false)
 			}
 		}
 	}
 	created, err := s.Upstream.CreateDiscord(ctx, s.Config.DiscordBotToken, s.Config.DiscordGuildID, caller.ChannelID, p.Action, payload)
 	if errors.Is(err, upstream.ErrDenied) {
-		return finish(eris.ToolReply{Content: "Discord a refusé la création. Vérifie les droits du bot dans ce salon : Envoyer des messages/sondages, ou Créer des événements pour une soirée."}, true)
+		return finish(erisFailure("discord_permissions_denied_not_created"), true)
 	}
 	if err != nil {
 		return finish(unknown, false)
@@ -141,18 +129,14 @@ func (s *Server) erisDiscordCreation(ctx context.Context, caller erisCallerConte
 				return finish(unknown, false)
 			}
 		}
-		return finish(eris.ToolReply{Content: "Sondage créé dans ce salon : https://discord.com/channels/" + s.Config.DiscordGuildID + "/" + caller.ChannelID + "/" + created.ID}, false)
+		return finish(erisData(map[string]any{"status": "created", "type": "poll", "url": "https://discord.com/channels/" + s.Config.DiscordGuildID + "/" + caller.ChannelID + "/" + created.ID}), false)
 	}
 	start, _ := time.Parse(time.RFC3339, p.StartAt)
 	end, _ := time.Parse(time.RFC3339, p.EndAt)
 	if created.Name != p.Text || !created.StartAt.Equal(start) || !created.EndAt.Equal(end) || created.EntityMetadata.Location != "https://discord.com/channels/"+s.Config.DiscordGuildID+"/"+caller.ChannelID || created.CreatorID != "" && created.CreatorID != s.Config.DiscordClientID {
 		return finish(unknown, false)
 	}
-	paris, err := time.LoadLocation("Europe/Paris")
-	if err != nil {
-		return finish(unknown, false)
-	}
-	return finish(eris.ToolReply{Content: fmt.Sprintf("Soirée créée : **%s**, du %s au %s (Europe/Paris).\nhttps://discord.com/events/%s/%s", safeText(p.Text), start.In(paris).Format("02/01/2006 15:04"), end.In(paris).Format("02/01/2006 15:04"), s.Config.DiscordGuildID, created.ID)}, false)
+	return finish(erisData(map[string]any{"status": "created", "type": "event", "title": p.Text, "startAt": p.StartAt, "endAt": p.EndAt, "timezone": "Europe/Paris", "url": "https://discord.com/events/" + s.Config.DiscordGuildID + "/" + created.ID}), false)
 }
 
 func (s *Server) erisPublicEventChannel(ctx context.Context, channel discordgo.Channel) bool {

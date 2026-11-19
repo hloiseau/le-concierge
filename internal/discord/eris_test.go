@@ -68,16 +68,40 @@ func TestErisOptionsCannotRequestPublicReplyOrImpersonation(t *testing.T) {
 	}
 }
 
-func TestErisUsageWorksWithoutTheModelOrMediaAPI(t *testing.T) {
+func TestBareErisSlashUsesTheModelAndStaysPrivate(t *testing.T) {
 	b, r := signedCommand(t, "eris")
-	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
-		t.Error("Eris usage must work without a remote service")
-		return botResponse(500, `{}`), nil
+	b.Eris.URL = "http://model.test"
+	stages := []string{}
+	b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/callback"):
+			stages = append(stages, "ack")
+			return botResponse(204, ""), nil
+		case r.URL.Host == "model.test":
+			stages = append(stages, "model")
+			raw, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(raw), "Eris ?") {
+				t.Error("bare slash did not reach model")
+			}
+			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Tu m’appelles ?\"}"}}]}`), nil
+		case strings.HasSuffix(r.URL.Path, "/messages/@original"):
+			stages = append(stages, "reply")
+			raw, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(raw), `"flags":64`) || !strings.Contains(string(raw), "Tu m’appelles ?") {
+				t.Error("lost model response or privacy", string(raw))
+			}
+			return botResponse(200, `{}`), nil
+		default:
+			t.Error("unexpected endpoint", r.URL)
+			return botResponse(500, `{}`), nil
+		}
 	})
+	b.Eris.HTTP.Transport = b.Client.Transport
 	w := httptest.NewRecorder()
 	b.Handler().ServeHTTP(w, r)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"flags":64`) || !strings.Contains(w.Body.String(), "/eris message:") {
-		t.Fatalf("missing private usage: %d %s", w.Code, w.Body)
+	b.Wait()
+	if w.Code != 202 || strings.Join(stages, ",") != "ack,model,reply" {
+		t.Fatal(w.Code, stages)
 	}
 }
 

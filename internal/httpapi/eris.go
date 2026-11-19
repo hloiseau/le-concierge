@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,18 +21,7 @@ import (
 	"github.com/hloiseau/le-concierge/internal/upstream"
 )
 
-type erisPending struct {
-	UserID, PlexID, DiscordID, GuildID, Stage string
-	ChannelID                                 string
-	Choices                                   []eris.Button
-	ChoicePrompt                              string
-	SeerrID                                   int64
-	Candidate                                 upstream.RequestCandidate
-	Seasons                                   []int
-	Private                                   bool
-	Expires                                   time.Time
-	PersonalPlan                              *eris.Plan
-}
+var erisToolCallID = regexp.MustCompile(`^tool-[1-9][0-9]?$`)
 
 func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	if len(s.Config.BotAPISecret) < 32 || subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+s.Config.BotAPISecret)) != 1 {
@@ -45,52 +35,39 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "invalid_body", "Requête invalide.")
 		return
 	}
+	if !erisToolCallID.MatchString(input.CallID) || input.Plan.Validate() != nil || input.Plan.Action == "chat" || input.Plan.Action == "silent" {
+		problem(w, 400, "invalid_call", "Appel outil invalide.")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	caller, err := s.erisCaller(ctx, input)
-	userID, private, component := caller.UserID, caller.Private, caller.Component
 	if err != nil {
 		problem(w, 403, "invalid_caller", "Interaction refusée.")
 		return
 	}
-	if input.Choice != "" && (component != "" || input.Plan.Action != "") {
-		problem(w, 400, "invalid_choice", "Choix invalide.")
+	write := func(reply eris.ToolReply) {
+		if utf8.RuneCountInString(reply.Content) > 12000 {
+			reply = erisFailure("tool_result_too_large")
+		}
+		jsonOut(w, 200, reply)
+	}
+	fail := func(code string) { write(erisFailure(code)) }
+	if !caller.Private && (input.Plan.Action == "preferences" || input.Plan.Unwatched) {
+		fail("private_conversation_required")
 		return
 	}
-	if component == "" && input.Choice == "" && (input.Plan.Validate() != nil || input.Plan.Action == "chat") {
-		problem(w, 400, "invalid_plan", "Outil refusé.")
-		return
-	}
-	write := func(reply eris.ToolReply) { jsonOut(w, 200, reply) }
-	message := func(text string) { write(eris.ToolReply{Content: text}) }
-	if component == "" && eris.IsMediaRemoval(caller.Question) && !s.erisUnfollowChoice(caller, input.Choice) {
-		message(eris.RemovalExplanation)
-		return
-	}
-	if component == "" && !eris.PersonalWriteRequested(caller.Question, input.Plan) {
-		message("Précise le suivi ou le réglage que tu veux modifier. Je n’ai rien changé.")
-		return
-	}
-	if !private && input.Plan.Action == "preferences" {
-		message("Pour tes réglages personnels, utilise /eris message:… en privé.")
-		return
-	}
-	// Watch history is private; request titles and statuses can be shared in-channel.
-	if !private && input.Plan.Unwatched {
-		message("Pour filtrer selon ce que tu as vu ou non, utilise /eris message:… en privé : ton historique de visionnage reste personnel.")
-		return
-	}
-	if component == "" && input.Choice == "" && (input.Plan.Action == "poll" || input.Plan.Action == "event") {
-		if s.rate("eris-publish:"+userID, 2) {
-			message("Patiente un peu avant une autre création Discord.")
+	if input.Plan.Action == "poll" || input.Plan.Action == "event" {
+		if s.rate("eris-publish:"+caller.UserID, 2) {
+			fail("rate_limited")
 			return
 		}
 		write(s.erisDiscordCreation(ctx, caller, input.Plan))
 		return
 	}
-	if component == "" && input.Choice == "" && (input.Plan.Action == "web" || input.Plan.Action == "anime") {
-		if s.rate("eris-web:"+userID, 10) || (input.Plan.Action == "anime" && s.rate("eris-anime:global", 12)) {
-			message("Patiente un peu avant une autre recherche web.")
+	if input.Plan.Action == "web" || input.Plan.Action == "anime" {
+		if s.rate("eris-web:"+caller.UserID, 10) || input.Plan.Action == "anime" && s.rate("eris-anime:global", 12) {
+			fail("rate_limited")
 			return
 		}
 		if input.Plan.Action == "anime" {
@@ -100,84 +77,58 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	u, err := s.Store.UserByDiscord(ctx, userID)
+	u, err := s.Store.UserByDiscord(ctx, caller.UserID)
 	var grant upstream.Grant
 	if err == nil {
 		grant, err = s.grant(ctx, u)
 	}
 	if err != nil {
-		message("Connecte-toi au Hub avec Plex et lie Discord dans Mon compte : " + s.Config.PublicOrigin + "/compte")
+		write(erisData(map[string]any{"error": "hub_access_required", "accountURL": s.Config.PublicOrigin + "/compte"}))
 		return
 	}
 	if s.rate("eris-tools:"+u.ID, 20) {
-		message("Patiente un peu avant une autre recherche.")
+		fail("rate_limited")
 		return
+	}
+	owner := u
+	if input.Plan.Action == "request" || input.Plan.Action == "status" {
+		var code string
+		owner, code = s.erisRequestOwner(ctx, u, input.Plan.TargetDiscordID)
+		if code != "" {
+			fail(code)
+			return
+		}
 	}
 	var reply eris.ToolReply
-	if input.Choice != "" {
-		reply = s.erisTextChoice(ctx, u, caller, input.Choice)
-	} else if component != "" {
-		reply = s.erisConfirmation(ctx, u, userID, component, private)
+	if input.Plan.Action == "lookup" || input.Plan.Action == "collection" || input.Plan.Action == "request" {
+		reply = s.erisAgentMedia(ctx, u, owner, input.Plan)
 	} else {
-		reply = s.runErisTool(ctx, u, grant, userID, input.Plan, private)
-		if input.Plan.Action == "prepare" && len(reply.Buttons) == 1 {
-			parts := strings.Split(reply.Buttons[0].ID, ":")
-			s.mu.Lock()
-			pending, ok := s.erisPending[parts[2]]
-			s.mu.Unlock()
-			if ok && eris.ExplicitRequest(caller.Question, pending.Candidate.Title, pending.Candidate.Year, pending.Candidate.Kind, pending.Seasons) {
-				reply = s.resolveErisChoice(ctx, u, userID, reply.Buttons[0].ID, private, true)
-			}
-		}
+		reply = s.runErisTool(ctx, owner, grant, caller.UserID, input.Plan, caller.Private)
 	}
-	current, e := s.Store.UserByDiscord(ctx, userID)
-	if e == nil && current.ID == u.ID && current.PlexID == u.PlexID {
-		_, e = s.grant(ctx, current)
+	current, err := s.Store.UserByDiscord(ctx, caller.UserID)
+	if err == nil && current.ID == u.ID && current.PlexID == u.PlexID {
+		_, err = s.grant(ctx, current)
 	} else {
-		e = upstream.ErrDenied
+		err = upstream.ErrDenied
 	}
-	if e != nil {
-		message("Ton accès a expiré. Reconnecte-toi au Hub avec Plex.")
+	if err != nil {
+		fail("access_expired")
 		return
 	}
-	if utf8.RuneCountInString(reply.Content) > 1500 {
-		reply.Content = string([]rune(reply.Content)[:1490]) + "…"
-	}
-	// Bind the entire offered set to the verified channel, never caller metadata.
-	s.mu.Lock()
-	for _, b := range reply.Buttons {
-		parts := strings.Split(b.ID, ":")
-		if len(parts) == 3 {
-			if p, ok := s.erisPending[parts[2]]; ok {
-				p.ChannelID, p.Private, p.Choices = caller.ChannelID, private, append([]eris.Button(nil), reply.Buttons...)
-				p.ChoicePrompt = eris.NaturalChoices(reply).Content
-				s.erisPending[parts[2]] = p
-			}
+	if input.Plan.Action == "request" || input.Plan.Action == "status" {
+		if err := s.revalidateErisRequestOwner(ctx, u, owner); err != nil {
+			fail("request_scope_changed")
+			return
 		}
+		reply = erisOwnedRequestResult(reply, u, owner)
 	}
-	s.mu.Unlock()
 	write(reply)
 }
 
-func (s *Server) erisUnfollowChoice(caller erisCallerContext, choice string) bool {
-	parts := strings.Split(choice, ":")
-	if len(parts) != 3 || parts[0] != "eris" {
-		return false
-	}
-	s.mu.Lock()
-	pending, exists := s.erisPending[parts[2]]
-	s.mu.Unlock()
-	if !exists || pending.PersonalPlan == nil || pending.PersonalPlan.Action != "unfollow" || pending.DiscordID != caller.UserID || pending.ChannelID != caller.ChannelID || pending.Private != caller.Private || time.Now().After(pending.Expires) {
-		return false
-	}
-	id, matched := eris.MatchChoice(caller.Question, pending.Choices)
-	return matched && id == choice
-}
-
 type erisCallerContext struct {
-	UserID, ChannelID, Component, Question, Reference string
-	Private                                           bool
-	ReferenceByEris                                   bool
+	UserID, ChannelID, Question, Reference string
+	Private                                bool
+	ReferenceByEris                        bool
 }
 
 func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCallerContext, error) {
@@ -193,18 +144,14 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 		if e != nil || command != "eris" {
 			return erisCallerContext{}, upstream.ErrDenied
 		}
-		component := ""
-		if i.Type == 3 {
-			if i.Message.Author.ID != s.Config.DiscordClientID {
-				return erisCallerContext{}, upstream.ErrDenied
-			}
-			component = i.Data.CustomID
+		if i.Type != 2 {
+			return erisCallerContext{}, upstream.ErrDenied
 		}
-		if !s.erisEvent("eris:" + i.ID) {
+		if !s.erisEvent("eris:" + i.ID + ":" + in.CallID) {
 			return erisCallerContext{}, upstream.ErrDenied
 		}
 		options, _ := discord.CommandOptions(i)
-		return erisCallerContext{UserID: i.Member.User.ID, ChannelID: i.ChannelID, Private: i.Type != 3 || i.Message.Flags&64 != 0, Component: component, Question: options.ChatMessage}, nil
+		return erisCallerContext{UserID: i.Member.User.ID, ChannelID: i.ChannelID, Private: true, Question: options.ChatMessage}, nil
 	}
 	if in.Timestamp != "" || in.Signature != "" || !config.Snowflake(in.ChannelID) || !config.Snowflake(in.MessageID) || (in.ContextMessageID != "" && !config.Snowflake(in.ContextMessageID)) || s.Config.DiscordBotToken == "" {
 		return erisCallerContext{}, upstream.ErrDenied
@@ -220,7 +167,7 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 	if err := s.Upstream.JSON(ctx, "GET", "https://discord.com/api/v10/channels/"+in.ChannelID+"/messages/"+in.MessageID, headers, "", &m); err != nil {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
-	if m.ID != in.MessageID || m.ChannelID != in.ChannelID || m.Author == nil || m.Author.Bot || !config.Snowflake(m.Author.ID) || m.WebhookID != "" || (m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply) || time.Since(m.Timestamp) > 5*time.Minute || time.Until(m.Timestamp) > 30*time.Second {
+	if m.ID != in.MessageID || m.ChannelID != in.ChannelID || strings.TrimSpace(m.Content) == "" || m.Author == nil || m.Author.Bot || !config.Snowflake(m.Author.ID) || m.WebhookID != "" || (m.Type != discordgo.MessageTypeDefault && m.Type != discordgo.MessageTypeReply) || time.Since(m.Timestamp) > 5*time.Minute || time.Until(m.Timestamp) > 30*time.Second {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
 	m.GuildID = channel.GuildID
@@ -243,7 +190,7 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 		reference = anchor.Content
 		referenceByEris = true
 	}
-	if !addressed || strings.TrimSpace(question) == "" || !s.erisEvent("eris:mention:"+m.ID) {
+	if !addressed || !s.erisEvent("eris:mention:"+m.ID+":"+in.CallID) {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
 	if in.ContextMessageID == "" && m.ReferencedMessage != nil {
@@ -270,7 +217,6 @@ func (s *Server) erisEvent(id string) bool {
 }
 
 func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant, discordID string, p eris.Plan, private bool) eris.ToolReply {
-	reply := eris.ToolReply{Content: "Je ne peux pas vérifier ces informations pour le moment. Réessaie plus tard."}
 	switch p.Action {
 	case "gifts":
 		return s.erisGifts(ctx, u, p, private)
@@ -284,157 +230,92 @@ func (s *Server) runErisTool(ctx context.Context, u store.User, g upstream.Grant
 		return s.erisPreferences(ctx, u, g, p)
 	case "monitoring":
 		if !s.Config.MonitoringEnabled || s.Monitoring == nil {
-			return eris.ToolReply{Content: "Mes capteurs ne sont pas branchés : les mesures du NAS ne sont pas activées 👀"}
+			return erisFailure("monitoring_unavailable")
 		}
 		snapshot, err := s.Monitoring.Current(ctx, s.Config)
 		if err != nil {
-			return reply
+			return erisFailure("monitoring_unavailable")
 		}
-		reply.Content = erisMetrics(snapshot.Metrics)
-		reply.Narrate = true
+		return eris.ToolReply{Content: erisMetrics(snapshot.Metrics)}
 	case "search", "recommend":
 		if p.Action == "recommend" && p.Relation != "" {
 			return s.erisRelatedMovies(ctx, u, g, discordID, p, private)
 		}
 		items, err := s.Upstream.AssistantMedia(ctx, s.Config.PlexURL, s.Config.PlexServerID, g, upstream.MediaFilter{Query: p.Query, Kind: p.Kind, Genre: p.Genre, MaxMinutes: p.MaxMinutes, Unwatched: p.Unwatched})
 		if err != nil {
-			return reply
+			return erisFailure("plex_catalogue_unavailable")
 		}
-		if len(items) == 0 {
-			reply.Content = "Aucun titre lisible correspondant dans ton catalogue Plex. Tu peux préciser le titre ou élargir les critères."
-			reply.Narrate = true
-			return reply
-		}
-		reply.Content = "**Disponibles sur Plex**"
-		if p.Unwatched {
-			reply.Content += " · non marqués vus"
-		}
-		if p.Genre != "" {
-			reply.Content += " · " + safeText(p.Genre)
-		}
-		if p.MaxMinutes > 0 {
-			reply.Content += fmt.Sprintf(" · moins de %d min", p.MaxMinutes)
-		}
+		projected := []map[string]any{}
 		for _, m := range items {
-			kind := "film"
-			if m.Type == "show" {
-				kind = "série"
-			}
-			reply.Content += "\n\n**" + safeText(m.Title) + "**"
-			if m.Year > 0 {
-				reply.Content += fmt.Sprintf(" (%d)", m.Year)
-			}
-			reply.Content += " · " + kind
-			if m.Minutes > 0 {
-				reply.Content += fmt.Sprintf(" · %d min", m.Minutes)
-				if m.Type == "show" {
-					reply.Content += "/épisode"
-				}
-			}
-			if len(m.Genres) > 0 {
-				reply.Content += " · " + safeText(strings.Join(m.Genres, ", "))
-			}
-			if m.Summary != "" {
-				reply.Content += "\n" + safeText(m.Summary)
-			}
+			item := map[string]any{"title": m.Title, "year": m.Year, "kind": m.Type, "minutes": m.Minutes, "genres": m.Genres, "summary": m.Summary, "playable": true}
 			if private {
-				reply.Content += "\n[Ouvrir dans Plex](" + m.URL + ")"
+				item["url"] = m.URL
 			}
+			projected = append(projected, item)
 		}
-		reply.Narrate = true
+		return erisData(map[string]any{"catalogue": "plex", "items": projected, "unwatched": p.Unwatched})
 	case "recent":
 		page, err := s.Upstream.RecentPage(ctx, s.Config.PlexURL, s.Config.PlexServerID, g, 0, 3)
-		if err == nil {
-			reply.Content = recentMessage(page.Items, s.Config.PublicOrigin, private)
-			reply.Narrate = true
+		if err != nil {
+			return erisFailure("plex_recent_unavailable")
 		}
+		items := []map[string]any{}
+		for _, m := range page.Items {
+			item := map[string]any{"title": m.Title, "year": m.Year, "kind": m.Type, "subtitle": m.Subtitle, "addedAt": m.AddedAt}
+			if private {
+				item["url"] = m.URL
+			}
+			items = append(items, item)
+		}
+		return erisData(map[string]any{"catalogue": "plex", "items": items, "partial": page.NextOffset != nil})
 	case "status":
 		id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
 		if err != nil {
-			return reply
+			return erisFailure("request_status_unavailable")
 		}
 		items, err := s.Upstream.FindPersonalRequests(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, id, p.Query)
 		if err != nil {
-			return reply
+			return erisFailure("request_status_unavailable")
 		}
-		reply.Content = "**Tes demandes**"
-		reply.Narrate = true
-		if len(items) == 0 {
-			reply.Content = "Aucune demande correspondante sur ton compte."
-		}
-		for index, m := range items {
-			if index == 5 {
-				reply.Content += "\nLa suite dans /mes-demandes."
+		projected := []map[string]any{}
+		for i, m := range items {
+			if i == 5 {
 				break
 			}
-			reply.Content += "\n• " + safeText(m.Title) + " — " + statusLabel(m.Status)
-			if m.Is4k != nil && *m.Is4k {
-				reply.Content += " · 4K"
-			}
-			if len(m.Seasons) > 0 {
-				reply.Content += fmt.Sprintf(" · saisons %v", m.Seasons)
-			}
+			projected = append(projected, map[string]any{"requestId": m.ID, "title": m.Title, "status": m.Status, "is4k": m.Is4k, "seasons": m.Seasons})
 		}
-	case "prepare":
-		if p.Kind == "show" && len(p.Seasons) == 0 {
-			reply.Content = "Quelle saison souhaites-tu demander ? Précise le titre et le numéro de saison."
-			return reply
-		}
-		id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
-		if err != nil {
-			return reply
-		}
-		items, err := s.Upstream.SearchRequestCandidates(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, id, p.Query, p.Kind)
-		if err != nil {
-			return reply
-		}
-		reply.Content = "J’ai trouvé ça dans Seerr. Choisis le bon titre :"
-		if len(items) == 0 {
-			reply.Content = "Aucun titre trouvé dans le catalogue de demandes. Précise le titre ou l’année."
-		}
-		for index, m := range items {
-			if m.Kind == "tv" && len(p.Seasons) == 0 {
-				continue
-			}
-			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: discordID, GuildID: s.Config.DiscordGuildID, SeerrID: id, Candidate: m, Seasons: p.Seasons, Private: private, Stage: "choose", Expires: time.Now().Add(10 * time.Minute)}
-			key := s.saveErisPending(pending)
-			if key == "" {
-				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
-			}
-			reply.Content += fmt.Sprintf("\n%d. %s", index+1, candidateLabel(m, p.Seasons))
-			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Choisir %d", index+1), Title: m.Title, Year: m.Year, Number: index + 1})
-		}
-		if len(items) > 0 && len(reply.Buttons) == 0 {
-			reply.Content = "Précise le numéro de saison pour demander cette série."
-		}
+		return erisData(map[string]any{"requests": projected, "partial": len(items) > 5})
 	}
-	return reply
+	return erisFailure("unsupported_tool")
 }
 
-// Deliberately select aggregate hardware values, never viewers or host identifiers.
+// Hardware aggregates only; stale measurements never carry a numeric value.
 func erisMetrics(metrics map[string]store.MetricValue) string {
-	value := func(key, format string, scale float64) string {
+	selected := map[string]store.MetricValue{}
+	for _, key := range []string{"cpu_percent", "cpu_temperature", "memory_used_bytes", "memory_total_bytes", "gpu_video_percent", "storage_used_bytes", "storage_total_bytes"} {
 		m := metrics[key]
 		if m.Status != "available" || m.Value == nil {
-			return "indisponible"
+			m.Value = nil
+			if m.Status == "" || m.Status == "available" {
+				m.Status = "unavailable"
+			}
 		}
-		return fmt.Sprintf(format, *m.Value/scale)
+		m.Unit = store.MetricUnits[key]
+		selected[key] = m
 	}
-	return "Le pouls du NAS 🩺\nCPU : " + value("cpu_percent", "%.0f %%", 1) + " · " + value("cpu_temperature", "%.0f °C", 1) +
-		"\nRAM : " + value("memory_used_bytes", "%.1f Gio", 1<<30) + " / " + value("memory_total_bytes", "%.1f Gio", 1<<30) +
-		"\nGPU vidéo : " + value("gpu_video_percent", "%.0f %%", 1) +
-		"\nStockage : " + value("storage_used_bytes", "%.1f Tio", 1<<40) + " / " + value("storage_total_bytes", "%.1f Tio", 1<<40)
+	raw, _ := json.Marshal(map[string]any{"metrics": selected})
+	return string(raw)
 }
 
 func (s *Server) erisRelatedMovies(ctx context.Context, u store.User, g upstream.Grant, discordID string, p eris.Plan, private bool) eris.ToolReply {
-	failure := eris.ToolReply{Content: "Je n’ai pas pu vérifier les recommandations dans Seerr. Réessaie dans un instant."}
+	failure := erisFailure("recommendations_unavailable")
 	id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
 	if err != nil {
 		return failure
 	}
 	result, err := s.Upstream.RelatedMovies(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, id, p.Query, p.Relation)
 	if errors.Is(err, upstream.ErrMediaReference) {
-		return eris.ToolReply{Content: "Je ne trouve pas ce film de référence sans ambiguïté. Précise son titre exact."}
+		return erisData(map[string]any{"status": "ambiguous_reference"})
 	}
 	if err != nil {
 		return failure
@@ -457,177 +338,13 @@ func (s *Server) erisRelatedMovies(ctx context.Context, u store.User, g upstream
 		}
 		result.Items = items
 	}
-	if len(result.Items) == 0 {
-		if p.Source == "seerr" {
-			return eris.ToolReply{Content: "Je n’ai trouvé aucun autre film correspondant à proposer dans Seerr sans contenu déjà disponible ou en cours de demande."}
-		}
-		return eris.ToolReply{Content: "Je n’ai trouvé aucun film correspondant lisible dans ton Plex parmi ces recommandations. Je peux aussi chercher dans Seerr."}
+	items := []map[string]any{}
+	for _, m := range result.Items {
+		items = append(items, map[string]any{"id": m.ID, "title": m.Title, "year": m.Year, "overview": m.Overview, "sharedGenres": m.SharedGenres})
 	}
-	reply := eris.ToolReply{Content: "Si tu veux prolonger **" + safeText(result.Reference.Title) + "** 🍿", Narrate: true}
-	if p.Relation == "director" {
-		reply.Content += " : voilà ce que **" + safeText(result.Director) + "** a aussi réalisé"
-	} else {
-		reply.Content += " : quelques cousins à essayer"
+	catalogue := "plex"
+	if p.Source == "seerr" {
+		catalogue = "seerr"
 	}
-	if p.Source != "seerr" {
-		reply.Content += " · disponibles sur Plex"
-	}
-	if p.Unwatched {
-		reply.Content += " · non marqués vus"
-	}
-	for index, m := range result.Items {
-		reply.Content += fmt.Sprintf("\n\n%d. **%s**", index+1, safeText(m.Title))
-		if m.Year != "" {
-			reply.Content += " (" + m.Year + ")"
-		}
-		if len(m.SharedGenres) > 0 {
-			reply.Content += "\n" + safeText(strings.Join(m.SharedGenres, ", "))
-		}
-		if m.Overview != "" {
-			reply.Content += "\n" + safeText(m.Overview)
-		}
-		if p.Source == "seerr" {
-			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: discordID, GuildID: s.Config.DiscordGuildID, SeerrID: id, Candidate: m.RequestCandidate, Private: private, Stage: "choose", Expires: time.Now().Add(10 * time.Minute)}
-			key := s.saveErisPending(pending)
-			if key == "" {
-				return eris.ToolReply{Content: "Trop de choix en attente. Réessaie dans quelques minutes."}
-			}
-			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Demander %d", index+1), Title: m.Title, Year: m.Year, Number: index + 1})
-		}
-	}
-	return reply
-}
-
-func candidateLabel(m upstream.RequestCandidate, seasons []int) string {
-	title := safeText(m.Title)
-	if m.Year != "" {
-		title += " (" + m.Year + ")"
-	}
-	if m.Kind == "tv" {
-		title += fmt.Sprintf(" · série, saisons %v", seasons)
-	} else {
-		title += " · film"
-	}
-	return title
-}
-
-func (s *Server) saveErisPending(p erisPending) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.erisPending == nil {
-		s.erisPending = map[string]erisPending{}
-	}
-	for key, entry := range s.erisPending {
-		if time.Now().After(entry.Expires) {
-			delete(s.erisPending, key)
-		}
-	}
-	if len(s.erisPending) >= 256 {
-		return ""
-	}
-	key := token()
-	s.erisPending[key] = p
-	return key
-}
-
-func (s *Server) erisConfirmation(ctx context.Context, u store.User, discordID, customID string, private bool) eris.ToolReply {
-	return s.resolveErisChoice(ctx, u, discordID, customID, private, false)
-}
-
-func (s *Server) resolveErisChoice(ctx context.Context, u store.User, discordID, customID string, private, submit bool) eris.ToolReply {
-	parts := strings.Split(customID, ":")
-	invalid := eris.ToolReply{Content: "Ce choix a expiré ou a déjà été utilisé. Relance ta demande avec /eris."}
-	if len(parts) != 3 {
-		return invalid
-	}
-	s.mu.Lock()
-	p, ok := s.erisPending[parts[2]]
-	if !ok || time.Now().After(p.Expires) || p.UserID != u.ID || p.PlexID != u.PlexID || p.DiscordID != discordID || p.GuildID != s.Config.DiscordGuildID || p.Private != private || (parts[1] != "cancel" && parts[1] != p.Stage) {
-		s.mu.Unlock()
-		return invalid
-	}
-	// Consume before network work: concurrent/replayed clicks cannot issue a second POST.
-	delete(s.erisPending, parts[2])
-	for _, choice := range p.Choices {
-		if fields := strings.Split(choice.ID, ":"); len(fields) == 3 {
-			delete(s.erisPending, fields[2])
-		}
-	}
-	s.mu.Unlock()
-	if parts[1] == "cancel" {
-		if p.PersonalPlan != nil {
-			return eris.ToolReply{Content: "Choix abandonné. Aucun suivi modifié."}
-		}
-		return eris.ToolReply{Content: "Demande annulée. Rien n’a été envoyé."}
-	}
-	if p.PersonalPlan != nil {
-		current, err := s.Store.UserByDiscord(ctx, discordID)
-		if err != nil || current.ID != u.ID || current.PlexID != u.PlexID {
-			return invalid
-		}
-		g, err := s.grant(ctx, current)
-		if err != nil {
-			return invalid
-		}
-		if p.PersonalPlan.Action == "unfollow" {
-			return s.erisFollows(ctx, current, g, *p.PersonalPlan)
-		}
-		if p.PersonalPlan.Action != "follow" {
-			return invalid
-		}
-		member, err := s.resolveSeerr(ctx, current)
-		if err != nil || member != p.SeerrID {
-			return invalid
-		}
-		select {
-		case s.reminderGate <- struct{}{}:
-			defer func() { <-s.reminderGate }()
-		case <-ctx.Done():
-			return invalid
-		}
-		return s.erisFollowCandidate(ctx, current, *p.PersonalPlan, p.Candidate)
-	}
-	if parts[1] == "choose" && !submit {
-		p.Stage = "confirm"
-		key := s.saveErisPending(p)
-		if key == "" {
-			return invalid
-		}
-		return eris.ToolReply{Content: "Je demande **" + candidateLabel(p.Candidate, p.Seasons) + "** pour toi ?\nQualité standard. Si Seerr l’approuve, le téléchargement pourra démarrer.", Buttons: []eris.Button{{ID: "eris:confirm:" + key, Label: "Confirmer la demande"}, {ID: "eris:cancel:" + key, Label: "Annuler"}}}
-	}
-	id, err := s.Upstream.SeerrUser(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, u.PlexID)
-	current, e := s.Store.UserByDiscord(ctx, discordID)
-	if err != nil || e != nil || id != p.SeerrID || current.ID != u.ID || current.PlexID != u.PlexID {
-		return invalid
-	}
-	if _, err = s.grant(ctx, current); err != nil {
-		return invalid
-	}
-	return s.submitErisRequest(ctx, p)
-}
-
-func (s *Server) erisTextChoice(ctx context.Context, u store.User, caller erisCallerContext, choice string) eris.ToolReply {
-	invalid := eris.ToolReply{Content: "Je n’ai pas de choix correspondant ici. Redis-moi le titre à demander."}
-	parts := strings.Split(choice, ":")
-	if len(parts) != 3 || parts[0] != "eris" {
-		return invalid
-	}
-	s.mu.Lock()
-	p, ok := s.erisPending[parts[2]]
-	s.mu.Unlock()
-	if !ok || caller.ChannelID == "" || caller.ChannelID != p.ChannelID {
-		return invalid
-	}
-	id, matched := eris.MatchChoice(caller.Question, p.Choices)
-	if !matched || id != choice {
-		return invalid
-	}
-	// A reply elsewhere cannot approve this title even if it says "yes".
-	if parts[1] == "confirm" && caller.Reference != "" && !strings.Contains(caller.Reference, candidateLabel(p.Candidate, p.Seasons)) {
-		return invalid
-	}
-	if parts[1] == "choose" && caller.Reference != "" && eris.MediaReplyFacts(caller.Reference) != p.ChoicePrompt && caller.Reference != eris.ChoiceClarification {
-		return invalid
-	}
-	return s.resolveErisChoice(ctx, u, caller.UserID, choice, caller.Private, true)
+	return erisData(map[string]any{"reference": result.Reference, "director": result.Director, "relation": p.Relation, "catalogue": catalogue, "playable": p.Source != "seerr", "unwatched": p.Unwatched, "items": items})
 }

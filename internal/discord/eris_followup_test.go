@@ -122,6 +122,9 @@ func TestFollowupUsesDeliveredContextAndCurrentAuthorWithoutPing(t *testing.T) {
 			b.Eris.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 				var payload struct{ Messages []eris.Message }
 				_ = json.NewDecoder(r.Body).Decode(&payload)
+				if len(payload.Messages) > 0 && payload.Messages[max(0, len(payload.Messages)-2)].Role == "tool" {
+					return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Le CPU est à 10 %.\"}"}}]}`), nil
+				}
 				raw := `{"action":"chat","text":"Et toi, ça va ?"}`
 				if strings.Contains(payload.Messages[0].Content, `"addressed"`) {
 					classifications.Add(1)
@@ -137,14 +140,14 @@ func TestFollowupUsesDeliveredContextAndCurrentAuthorWithoutPing(t *testing.T) {
 					raw = fmt.Sprintf(`{"addressed":%t}`, mode != "not addressed")
 				} else if generation.Add(1) > 1 {
 					all, _ := json.Marshal(payload.Messages)
-					if !strings.Contains(string(all), "Eris (message 88888)") || !strings.Contains(payload.Messages[len(payload.Messages)-1].Content, "Je vais bien") {
+					if !strings.Contains(string(all), "Eris (message 88888)") || !strings.Contains(payload.Messages[len(payload.Messages)-1].Content, map[bool]string{true: "Nickel", false: "Je vais bien"}[mode == "acknowledgement"]) {
 						t.Error("lost public context or actual input")
 					}
 					if mode == "another member" && !strings.Contains(string(all), "23456:22222:33333") {
 						t.Error("borrowed first member identity")
 					}
 					raw = `{"action":"chat","text":"Tant mieux !"}`
-					if mode == "model silence" {
+					if mode == "model silence" || mode == "acknowledgement" {
 						raw = `{"action":"silent"}`
 					}
 					if mode == "interrupted generation" {
@@ -154,7 +157,7 @@ func TestFollowupUsesDeliveredContextAndCurrentAuthorWithoutPing(t *testing.T) {
 						b.handleMention(context.Background(), nil, other)
 					}
 					if mode == "tool" || mode == "interrupted generation" {
-						raw = `{"action":"monitoring"}`
+						return botResponse(200, `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"cpu_1","type":"function","function":{"name":"monitoring","arguments":"{}"}}]}}]}`), nil
 					}
 				}
 				body, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": eris.Message{Role: "assistant", Content: raw}}}})
@@ -244,8 +247,8 @@ func TestFollowupUsesDeliveredContextAndCurrentAuthorWithoutPing(t *testing.T) {
 			if !wantReply && tools.Load() != 0 {
 				t.Fatal("ignored message called tool")
 			}
-			if mode == "acknowledgement" && (classifications.Load() != 0 || generation.Load() != 1) {
-				t.Fatal("acknowledgement triggered inference")
+			if mode == "acknowledgement" && (classifications.Load() != 1 || generation.Load() != 2) {
+				t.Fatal("acknowledgement silence was not decided by the model")
 			}
 			if mode == "tool" && tools.Load() != 1 {
 				t.Fatal("tool not called")

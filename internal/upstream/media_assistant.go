@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -18,6 +19,26 @@ type MediaFilter struct {
 	Query, Kind, Genre string
 	MaxMinutes         int
 	Unwatched          bool
+}
+
+// An administrator can reassign or remove a request after we saved its receipt.
+// A persisted ID alone no longer proves who owns the request now.
+func (c *Client) VerifyMediaRequestOwner(ctx context.Context, base, key string, id, user int64, media RequestCandidate, seasons []int) error {
+	var request seerrRequest
+	if err := c.JSON(ctx, "GET", fmt.Sprintf("%s/api/v1/request/%d", base, id), map[string]string{"X-Api-Key": key}, "", &request); err != nil {
+		return err
+	}
+	actual := []int{}
+	for _, season := range request.Seasons {
+		actual = append(actual, season.Number)
+	}
+	expected := slices.Clone(seasons)
+	slices.Sort(actual)
+	slices.Sort(expected)
+	if request.ID != id || request.RequestedBy.ID != user || request.Media.TmdbID != media.ID || request.Type != media.Kind || !slices.Equal(actual, expected) {
+		return ErrDenied
+	}
+	return nil
 }
 
 type MediaSuggestion struct {

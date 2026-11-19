@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +12,7 @@ import (
 
 func TestChatOnlyKeepsDurableMemoryWithoutExternalActions(t *testing.T) {
 	m := openTestMemory(t)
-	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	model := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct{ Messages []Message }
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
@@ -73,7 +73,7 @@ func TestForgetDoesNotClearOtherGuildCachedHistory(t *testing.T) {
 	}
 	c.sessions["23456:11111:33333"] = &conversation{messages: []Message{{Role: "user", Content: "Premier serveur"}}, expires: time.Now().Add(time.Hour)}
 	c.sessions["34567:11111:44444"] = &conversation{messages: []Message{{Role: "user", Content: "Second serveur"}}, expires: time.Now().Add(time.Hour)}
-	if _, err := c.Reply(context.Background(), "34567:11111", "", true); err != nil {
+	if _, err := c.Reply(context.Background(), "34567:11111", "", true); err != ErrUnavailable {
 		t.Fatal(err)
 	}
 	if c.publicRooms["23456:33333"] == nil || len(c.sessions["23456:11111:33333"].messages) != 1 {

@@ -1,94 +1,35 @@
 # Eris sur Discord
 
-Le [profil v2](eris-v2.md) ajoute la personnalité révisée, les références publiques et le transport Responses. Son évolution [ERIS-01](eris-01-memory.md) ajoute la mémoire durable des membres et épisodes, le silence et un contexte ambiant optionnel. Le profil v2 nécessite une activation explicite ; les informations ci-dessous décrivent le profil historique.
+Eris utilise des [outils natifs et des réponses libres](eris-natural-requests.md). Le modèle résout les demandes avec le catalogue et le contexte ; il pose sa propre question si une ambiguïté reste réelle. Les anciens menus, confirmations et réponses conversationnelles préfabriquées ont été retirés.
 
-Le bot conserve son compte, ses identifiants, ses commandes, les liaisons Plex/Discord et ses données. L’image applicative reste `ghcr.io/hloiseau/le-concierge` (version de production épinglée par SHA) et la base conserve son chemin actuel. Il n’y a pas de migration à effectuer.
+## Discussion et mémoire
 
-## État installé
+`@Eris Salut` ouvre un échange public. Une mention seule reçoit aussi une réponse du modèle. Le bouton **Répondre** de Discord et les [relances vérifiées](eris-v2.md) permettent de continuer. `/eris` ou `/eris message:…` répond en privé. Les messages sont limités à 500 caractères ; deux générations peuvent avancer en parallèle et les relances attendent le tour actif.
 
-Au 22 octobre 2026, le bot/API `20f96b6` et le runtime `5dd08ded` sont déployés. Voir le [bilan daté](status-2026-10-22.md) pour la recette, les mesures réelles et le [travail restant](https://github.com/hloiseau/le-concierge/issues/62). La personnalité et le classement des intentions restent imparfaits ; la recette brute est à 25/32, et non 32/32.
+Le [profil v2](eris-v2.md) ajoute la personnalité, les noms vérifiés, les références publiques et les [souvenirs sourcés](eris-01-memory.md). Les échanges privés sont séparés par membre ; les échanges publics restent dans leur serveur et leur salon. Les résultats personnels des outils ne sont pas enregistrés comme souvenirs durables de discussion.
 
-## Nom Discord
+`/eris oublier:true` efface les données du membre sur ce serveur, sans supprimer les messages Discord publiés. L'effacement précède la confirmation rédigée par le modèle et fonctionne même si celui-ci est indisponible. `/eris-salon` reste réservé aux administrateurs : il active, désactive ou lit la participation spontanée, puis le modèle explique le résultat vérifié.
 
-`DISCORD_BOT_NAME=Eris` synchronise le nom d’utilisateur du bot et son surnom sur `DISCORD_GUILD_ID` au démarrage. La synchronisation vérifie d’abord le compte associé au token, lit les noms existants et ne les modifie que si nécessaire. Le bot doit avoir la permission **Changer le pseudo** pour son surnom. Un refus Discord ou une limite de changement de nom ne bloque pas les commandes ; consulter le journal puis réessayer plus tard avec :
+Le [guide multi-serveurs](eris-multiple-servers.md) décrit les serveurs autorisés uniquement à discuter. Aucun outil externe n'y est annoncé ou exécuté. Les aides et formulaires des commandes sont des éléments d'interface ; les réponses du personnage sont générées.
 
-```sh
-/app/bot --sync-identity
-```
+## Outils
 
-`DISCORD_BOT_NAME=disabled` désactive cette synchronisation. Le nom de l’application affiché dans OAuth2 se règle séparément dans Discord Developer Portal → General Information. Le code ne modifie pas l’avatar.
+Lier Discord dans **Mon compte** du Hub après connexion Plex permet de demander un média, vérifier sa présence dans Plex, obtenir une recommandation, consulter ses demandes, suivre une disponibilité ou modifier ses réglages privés. « Demande Madagascar » identifie et demande directement le film ; « tous les films Madagascar » utilise la collection officielle. Aucun numéro ou bouton n'est imposé au membre.
 
-## Discuter avec Eris
+Les mêmes appels natifs servent au [web](eris-web.md), aux [fiches cinéma](eris-cinema.md), au diagnostic, aux anime/manga, aux cadeaux et aux créations Discord. Une simple question ou recommandation n'autorise pas une écriture. Le modèle ne dispose d'aucun outil de suppression de média ou d'annulation d'une demande envoyée.
 
-Pour l'ajouter sur un autre serveur uniquement pour discuter, voir le
-[guide multi-serveurs](eris-multiple-servers.md). Le serveur principal conserve
-les fonctions média ; les autres doivent être explicitement autorisés.
+L'API valide chaque action et sa preuve Discord. Une commande signée ou un message relu auprès de Discord détermine l'auteur, le serveur, le salon et la portée privée ; le modèle ne choisit pas cette identité. Les droits personnels sont revalidés, y compris après une lecture et avant une écriture. Les accès Plex/Seerr, quotas, consentements DM et protections contre les doublons restent ceux du Hub.
 
-- `@Eris Salut` : mentionner le compte Eris et recevoir une réponse dans le même salon ou fil. Le bouton **Répondre** de Discord permet ensuite de continuer sans réécrire la mention.
-- `/eris` : afficher comment lui parler.
-- `/eris message:Salut Eris` : démarrer ou poursuivre une conversation.
-- `/eris oublier:true` : effacer la conversation sans appeler le modèle.
-- `/eris message:On recommence oublier:true` : effacer puis envoyer un nouveau message.
+Une demande créée ne prouve pas sa disponibilité ni son arrivée future dans Plex. Les résultats incertains sont indiqués au modèle sans réessai aveugle. Les filtres de visionnage, cadeaux et réglages restent privés. Les titres, états et saisons des demandes peuvent être consultés dans un salon, sans données d'autres comptes ni liens Plex personnels.
 
-Les réponses à `/eris` sont éphémères, visibles uniquement par leur auteur. Les mentions et réponses à Eris sont publiques dans le salon concerné, sans notification de masse. Une réponse doit référencer un message d'Eris dans le même salon ; écrire son nom seul, mentionner un rôle ou répondre à quelqu'un d'autre ne déclenche pas le chat. Les messages des bots, webhooks, serveurs non autorisés et messages privés sont ignorés. Il n’est pas nécessaire de lier Plex pour discuter.
+## Configuration
 
-Quand le moteur et le token Discord sont configurés, le bot ouvre une connexion Gateway avec `GUILD_MESSAGES`. Pour recevoir aussi le texte des réponses dont la notification est désactivée, activer **Message Content Intent** dans l'application Discord, puis `DISCORD_MESSAGE_CONTENT=true` dans le bot. Le réglage est désactivé par défaut ; sans lui, [Discord transmet seulement certains contenus, dont les mentions du bot](https://docs.discord.com/developers/events/gateway#message-content-intent). Même activé, les messages non adressés à Eris sont écartés avant tout appel au modèle ou à l'API média. Accorder **Voir le salon**, **Envoyer des messages**, **Lire l’historique des messages** et, pour les fils, **Envoyer des messages dans les fils**. La connexion se rétablit après une coupure ; un échec ne bloque pas les commandes HTTP.
+Dans le conteneur bot, configurer explicitement `ERIS_API_URL`, `ERIS_MODEL`, `ERIS_PROTOCOL` (`chat-completions` ou `responses`) et le fichier secret `ERIS_API_KEY_FILE` monté en lecture seule. L'URL contient le préfixe API, par exemple `/v1` ; le transport ajoute `/chat/completions` ou `/responses`. Le moteur doit accepter les fonctions natives. Le profil `ERIS_PROFILE=v2` et `ERIS_MEMORY_PATH` activent la mémoire décrite ci-dessus. Aucun fournisseur de secours n'est choisi automatiquement.
 
-La mémoire contient au plus deux échanges précédents, expire après 30 minutes d’inactivité et disparaît au redémarrage. Le chat privé est séparé des conversations publiques, elles-mêmes séparées par membre et par salon ou fil. `/eris oublier:true` efface toutes ces mémoires pour le membre sur ce serveur, sans supprimer les messages déjà publiés dans Discord. Le bot conserve au plus 256 conversations et accepte deux traitements de chat simultanés, séparés des traitements média. Une conversation doit attendre dix secondes entre deux générations ordinaires. Les messages sont limités à 500 caractères. Aucun historique n’est écrit dans SQLite ni dans les journaux.
+`DISCORD_BOT_NAME=Eris` synchronise le nom du bot et son surnom au démarrage ; `disabled` désactive cette synchronisation. `DISCORD_MESSAGE_CONTENT=true`, avec l'intent correspondant dans Discord, permet les relances et le contexte ambiant. La participation spontanée reste activée salon par salon. Les permissions nécessaires sont **Voir le salon**, **Envoyer des messages**, **Lire l'historique** et l'envoi dans les fils utilisés.
 
-Eris se présente comme Eris, le bot lui-même. Elle répond brièvement, avec ses goûts, du franc-parler et un humour pince-sans-rire. Une provocation dirigée contre elle peut recevoir une pique ; une confidence sérieuse appelle de l'écoute, et elle doit arrêter de chambrer quand on le demande. Exprimer un goût, comme « mon film préféré est Hot Fuzz », appelle une réponse de discussion ; une demande suivante comme « tu peux le demander dans Seerr ? » reprend le titre de la mémoire courte.
+Sans moteur disponible, le transport affiche un code technique, sans réponse préfabriquée du personnage. Les commandes média existantes et `/aide` restent disponibles indépendamment de la génération.
 
-## Chercher et demander des médias
+## Validation
 
-Lier Discord dans **Mon compte** du Hub après une connexion Plex permet de demander naturellement :
-
-- `@Eris Tu as Arrival sur Plex ?` : titres lisibles, synopsis, genre et durée.
-- `@Eris Un thriller de moins de deux heures pour ce soir` : jusqu’à trois titres vérifiés dans le catalogue accessible au membre.
-- `@Eris Des films proches de Hot Fuzz ?` : recommandations Seerr croisées avec le catalogue Plex du membre ; si nécessaire, complément avec au moins deux genres communs vérifiés, indiqués dans la réponse.
-- `@Eris Du même réalisateur que Hot Fuzz à demander dans Seerr ?` : recherche du réalisateur dans les crédits, puis de sa filmographie. Les titres disponibles, bloqués ou en cours de demande sont exclus ; les boutons publics conservent une confirmation séparée avant tout envoi.
-- `@Eris Quoi de neuf ?` : derniers ajouts Plex.
-- `/eris message:Un film de science-fiction que je n’ai pas vu` : filtre les contenus non marqués vus sur ce compte Plex ; cela ne prouve pas qu’ils n’ont jamais été vus ailleurs.
-- `@Eris Ma demande de Dune est prête ?` : demandes du compte Seerr associé à l’identité Plex, avec leur état.
-- `@Eris Demande Hot Fuzz` : choisir le titre et son année dans le salon, puis **Confirmer la demande** ou **Annuler**. Pour une série, préciser les saisons, par exemple « demande la saison 2 de Severance ». `/eris message:Demande Hot Fuzz` garde le même parcours en réponse éphémère.
-
-Une demande dans le salon cherche directement dans Seerr et affiche les choix, la confirmation et le résultat dans ce salon. Seul son auteur peut utiliser les boutons, une fois et pendant dix minutes. Chaque clic public reçoit une nouvelle réponse : le clic d'un autre membre ne peut pas remplacer le message initial. Les boutons d'une demande éphémère ne peuvent pas servir dans un parcours public. Le résultat rejoint uniquement la mémoire de la conversation concernée. Les titres, états et saisons des demandes du membre sont consultables en salon. Les filtres de visionnage restent privés. La participation spontanée et les relances sans mention sont décrites dans le guide Eris v2. Les recherches publiques n’exposent ni historique, ni demandes d'autres membres, ni liens personnels Plex. Les droits Plex du membre sont utilisés pour vérifier la lecture ; l’état global Seerr ne prouve pas sa disponibilité personnelle.
-
-Le modèle produit une intention JSON limitée aux outils autorisés. Le bot demande le mode JSON contraint au moteur local, à température 0,45 pour varier les formulations. Le code valide les filtres, appelle l’API puis affiche les résultats sans les faire réécrire par le modèle. Aucun jeton, URL interne ou identité technique n’est fourni au modèle. Le texte des résultats rejoint seulement la mémoire courte de la conversation concernée, pour comprendre « le deuxième » ou une préférence corrigée. Une sortie invalide demande une précision plutôt que d’exécuter une action.
-
-Une absence dans Plex n'empêche pas une recherche dans le catalogue Seerr. Pour préparer une demande, le titre doit être présent dans le message ou la mémoire de cette conversation ; sinon Eris demande de le préciser. Les exemples de sa consigne, les conversations d'autres membres et la mémoire expirée ne peuvent pas fournir le titre. Un titre traduit ou reformulé au point de ne plus correspondre au texte de la conversation peut aussi nécessiter une précision.
-
-`POST /internal/eris` exige le secret bot/API et une preuve Discord. Pour `/eris` et les boutons, l’API revérifie l’interaction signée. Pour un message, elle relit le message et son salon auprès de Discord et vérifie auteur humain, serveur, fraîcheur et mention explicite ou référence à un message d'Eris dans le même salon. L’association Discord/Plex et l’accès courant sont revérifiés avant publication. Les appels sont bornés à 20 secondes et limités par compte.
-
-La préparation d’une demande est en lecture seule. Les choix expirent après dix minutes et au redémarrage, restent liés au compte et sont consommés avant tout envoi. Seul le bouton de confirmation déclenche le POST Seerr, sous l’identité Seerr du membre (`X-Api-User`, vérifiée via `/auth/me`), sans contourner droits, quotas ou approbations. Qualité standard ; aucune sélection de serveur, dossier ou profil par le modèle. Un double clic ne renvoie pas la demande. Après une erreur ambiguë, Eris demande de vérifier Seerr avant de réessayer. Un simple « oui » dans le chat ne vaut pas confirmation.
-
-Limites : recherche de trois titres au maximum par réponse ; recommandations sur un catalogue complet de 5 000 titres maximum, sinon refus de conclure ; recherche personnelle par titre bornée à 1 000 demandes. Les saisons doivent être explicites, les épisodes individuels et demandes 4K ne sont pas proposés par ce parcours. Les résultats factuels sont rendus en français ; certaines recommandations formulées en anglais restent mal reconnues et demandent une précision. Les commandes média existantes restent disponibles.
-
-## Connecter le moteur local
-
-Renseigner **dans le conteneur bot** :
-
-```yaml
-DISCORD_BOT_NAME: Eris
-ERIS_API_URL: http://eris-runtime:8090/v1
-ERIS_MODEL: eris-qwen35-9b-v1
-ERIS_API_KEY_FILE: /run/secrets/eris_api_key
-```
-
-Monter le fichier secret en lecture seule dans le bot et dans le moteur. Générer sa valeur avec `openssl rand -hex 32`. Ne pas conserver également `ERIS_API_KEY` si `_FILE` est renseigné. L’URL contient `/v1` ; le bot ajoute `/chat/completions`. HTTP convient au réseau Docker privé ; utiliser HTTPS si le moteur est sur une autre machine.
-
-Le service d’inférence et ses instructions d’installation sont dans le dépôt privé d’Eris, dossier `server/`. Il charge **Qwen3.5 9B en GGUF Q4_K_M**, avec une révision et une empreinte épinglées. La personnalité d’Eris est fournie par le bot ; les poids Qwen ne sont pas réentraînés. Les deux candidats LFM ont échoué à la recette Discord. Le navigateur Eris conserve son moteur actuel, et les poids et souvenirs privés ne sont pas recopiés dans ce dépôt public.
-
-Les deux conteneurs doivent partager un réseau Docker pour résoudre `eris-runtime`. Le Compose du moteur accepte le nom du réseau existant via `ERIS_NETWORK` ; aucun port d’inférence n’est publié. Le service dispose de quatre CPU et 6 Go de RAM. Le profil Arc A310 du dépôt privé ajoute Vulkan, huit couches GPU et des lots de 128 tokens ; environ 1,85 Go de mémoire vidéo sont utilisés, le reste du modèle reste sur CPU. Le profil CPU demeure disponible. Le bot limite chaque appel à 50 secondes et n’effectue aucun repli vers un fournisseur externe. Le moteur refuse les générations incomplètes qui dépassent ses 160 tokens ou sa limite souple de 42 secondes.
-
-L’URL vide désactive seulement la génération. `/eris` explique alors que le moteur n’est pas connecté, `/eris oublier:true` fonctionne et toutes les commandes média restent disponibles. Ne renseigner l’URL qu’une fois le moteur prêt ; un échec de génération ne remplace pas une réponse par un résultat inventé.
-
-## Vérifier la mise en service
-
-1. Démarrer le moteur avec le fichier GGUF vérifié et vérifier son état de santé.
-2. Vérifier l’identité, les commandes, la mémoire et le français avec les scénarios du guide privé sur le profil CPU ou GPU retenu ; pour le GPU, mesurer aussi le partage avec Plex.
-3. Recréer le bot avec les paramètres ci-dessus et l’image de la branche validée, puis vérifier son nom et `/aide`.
-4. Tester deux membres : leur historique doit rester séparé ; tester l’effacement et les commandes média pendant une génération.
-
-Les tests automatisés couvrent le protocole HTTP, les signatures, les réponses privées, l’isolation des conversations, l’effacement, les limites, les erreurs et l’identité Discord. Ils ne remplacent pas la lecture des réponses du modèle réel, ni la recette finale dans Discord.
-
-Le [terrain de test conversationnel](../evals/eris/README.md) compare les consignes sur des scénarios synthétiques séparés. Le [laboratoire interactif](eris-interactive-lab.md) permet une recette tour par tour avec des outils simulés. Ces bancs n'envoient pas de messages Discord ni d'actions média. La version actuellement installée est le main `13ffb1b`, [livré après la recette humaine](eris-release-2026-10-27.md) ; les essais et leur validation restent distingués du déploiement.
+`go test ./...` et `go vet ./...` couvrent les contrats, identités, accès, mémoire, doublons et résultats. Les fonctions natives sont vérifiées en Chat Completions et Responses. Le [laboratoire interactif](eris-interactive-lab.md) et les tests facultatifs avec le modèle réel utilisent des actions simulées ; ils ne remplacent pas une recette volontaire dans Discord. Les anciens bilans datés restent des archives des versions précédentes.

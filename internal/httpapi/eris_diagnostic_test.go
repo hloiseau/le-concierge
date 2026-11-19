@@ -52,10 +52,10 @@ func TestErisDiagnosticAllowsMemberAndStopsForeignRequestBeforeArr(t *testing.T)
 		})
 		reply := s.erisDiagnostic(context.Background(), u, s.grants[u.ID], eris.Plan{Action: "diagnostic", RequestID: 7})
 		if foreign {
-			if arrReads != 0 || !strings.Contains(reply.Content, "pas pu vérifier") || reply.Narrate || reply.Diagnostic != nil {
+			if arrReads != 0 || !strings.Contains(reply.Content, "diagnostic_unavailable") || reply.Diagnostic != nil {
 				t.Fatal("foreign request disclosed", arrReads, reply)
 			}
-		} else if arrReads == 0 || !strings.Contains(reply.Content, "75 %") || !strings.Contains(reply.Content, "indexation") || !reply.Narrate || reply.Diagnostic == nil || !reply.Diagnostic.Valid() || reply.Diagnostic.ProgressPercent == nil || *reply.Diagnostic.ProgressPercent != 75 {
+		} else if arrReads == 0 || !strings.Contains(reply.Content, `"progressPercent":75`) || !strings.Contains(reply.Content, `"stage":"downloading"`) || reply.Diagnostic == nil || !reply.Diagnostic.Valid() || reply.Diagnostic.ProgressPercent == nil || *reply.Diagnostic.ProgressPercent != 75 {
 			t.Fatal("member diagnosis missing", reply)
 		}
 		if strings.Contains(reply.Content, "private") || strings.Contains(reply.Content, "secret") || strings.Contains(reply.Content, "6.4.4") || strings.Contains(reply.Content, "admin-secret") {

@@ -31,7 +31,7 @@ func TestErisFollowsReuseAvailabilityConsentAndIdempotency(t *testing.T) {
 	plan := eris.Plan{Action: "follow", Query: "Shared film", Kind: "movie", Year: 2021}
 	for range 2 {
 		r := s.erisFollows(ctx, u, g, plan)
-		if !strings.Contains(r.Content, "Suivi #") || !strings.Contains(r.Content, "Hub") {
+		if !strings.Contains(r.Content, `"subscriptionId":1`) || !strings.Contains(r.Content, `"channel":"hub"`) {
 			t.Fatal(r)
 		}
 	}
@@ -41,7 +41,7 @@ func TestErisFollowsReuseAvailabilityConsentAndIdempotency(t *testing.T) {
 	}
 	plan.Channel = "discord"
 	r := s.erisFollows(ctx, u, g, plan)
-	if !strings.Contains(r.Content, "consentement") {
+	if !strings.Contains(r.Content, "discord_dm_consent_or_configuration_required") {
 		t.Fatal("DM activated without consent", r)
 	}
 	preferences, _ := s.Store.GetReminderPreferences(ctx, u.ID)
@@ -55,7 +55,7 @@ func TestErisFollowsReuseAvailabilityConsentAndIdempotency(t *testing.T) {
 	seed(t, s, "22222", true)
 	bob, _ := s.Store.User(ctx, "22222")
 	r = s.erisFollows(ctx, bob, s.grants[bob.ID], eris.Plan{Action: "unfollow", SubscriptionID: items[0].ID})
-	if !strings.Contains(r.Content, "ne trouve pas") {
+	if !strings.Contains(r.Content, "subscription_not_found_not_removed") {
 		t.Fatal("another owner removed a follow", r)
 	}
 	_, total, _ = s.Store.Subscriptions(ctx, u.ID, 0)
@@ -65,7 +65,7 @@ func TestErisFollowsReuseAvailabilityConsentAndIdempotency(t *testing.T) {
 	source.available = true
 	plan.Channel = "hub"
 	r = s.erisFollows(ctx, u, g, plan)
-	if !strings.Contains(r.Content, "déjà accessible") {
+	if !strings.Contains(r.Content, "already_available") {
 		t.Fatal(r)
 	}
 	_, total, _ = s.Store.Subscriptions(ctx, u.ID, 0)
@@ -88,7 +88,7 @@ func TestErisPersonalWritesRejectRevokedGrantAndVerifyPreferences(t *testing.T) 
 		{Action: "preferences", Setting: "daysBefore", Value: "10,3"},
 	} {
 		r := s.erisPreferences(ctx, u, g, change)
-		if !strings.Contains(r.Content, "enregistré et relu") {
+		if !strings.Contains(r.Content, "saved_and_verified") {
 			t.Fatal(change, r)
 		}
 	}
@@ -101,7 +101,7 @@ func TestErisPersonalWritesRejectRevokedGrantAndVerifyPreferences(t *testing.T) 
 		t.Fatal("modified another member")
 	}
 	r := s.erisPreferences(ctx, u, g, eris.Plan{Action: "preferences", Setting: "discordDmEnabled", Value: "true"})
-	if !strings.Contains(r.Content, "pas activés") {
+	if !strings.Contains(r.Content, "discord_dm_unavailable_not_changed") {
 		t.Fatal("server-disabled DM accepted", r)
 	}
 	item, err := s.Store.SaveSubscription(ctx, u.ID, store.SubscriptionTarget{Type: "movie", TMDBID: 12}, "hub")
@@ -133,13 +133,13 @@ func TestErisFollowOutageAndRevocationNeverPersist(t *testing.T) {
 		}
 		r := s.erisFollows(ctx, u, g, eris.Plan{Action: "follow", Query: "Shared film", Kind: "movie"})
 		_, total, _ := s.Store.Subscriptions(ctx, u.ID, 0)
-		if total != 0 || strings.Contains(r.Content, "enregistré") {
+		if total != 0 || strings.Contains(r.Content, `"status":"created"`) {
 			t.Fatal(state, total, r)
 		}
 	}
 }
 
-func TestErisTransportQuestionCannotBeReplacedByModelWriteIntent(t *testing.T) {
+func TestErisUnlinkedAccountCannotModifyPreferences(t *testing.T) {
 	s := fixture(t)
 	s.Config.BotAPISecret = strings.Repeat("s", 32)
 	s.Upstream.HTTP.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
@@ -148,7 +148,7 @@ func TestErisTransportQuestionCannotBeReplacedByModelWriteIntent(t *testing.T) {
 	})
 	in := signedErisTool(t, s, eris.Plan{Action: "preferences", Setting: "enabled", Value: "false"}, strings.Replace(erisSlash, "Arrival", "Quels sont mes réglages ?", 1))
 	w := callErisTool(s, in)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "rien changé") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "hub_access_required") {
 		t.Fatal(w.Code, w.Body.String())
 	}
 }

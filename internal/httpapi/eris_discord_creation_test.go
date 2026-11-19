@@ -78,7 +78,7 @@ func TestPollVerifiesCallerAndPayloadAndDeduplicatesConfirmedOrUncertain(t *test
 			}
 			continue
 		}
-		if state == "success" && !strings.Contains(r.Content, "/55555") || state == "uncertain" && !strings.Contains(r.Content, "pas confirmer") || state == "refused" && !strings.Contains(r.Content, "refusé") {
+		if state == "success" && !strings.Contains(r.Content, "/55555") || state == "uncertain" && !strings.Contains(r.Content, "creation_outcome_unknown_do_not_retry") || state == "refused" && !strings.Contains(r.Content, "discord_permissions_denied_not_created") {
 			t.Fatal(state, r)
 		}
 		if state != "refused" {
@@ -143,7 +143,7 @@ func TestEventUsesVerifiedChannelAndKnownFutureTimesAndExistingEvent(t *testing.
 		if state != "create" && posts != 0 {
 			t.Fatal("unexpected duplicate/past/private event", state, r, posts)
 		}
-		if state == "existing" && !strings.Contains(r.Content, "existe déjà") {
+		if state == "existing" && !strings.Contains(r.Content, "already_exists") {
 			t.Fatal(r)
 		}
 	}

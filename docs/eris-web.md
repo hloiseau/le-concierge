@@ -6,19 +6,19 @@ Chantier #89, première étape de la feuille de route #78. Un seul outil `web` c
 
 L'API vérifie l'identité Discord et le serveur avant toute recherche. Le web public ne nécessite pas de compte Plex. Chaque membre a une limite de dix appels par minute et le bot conserve ses deux travailleurs de conversation.
 
-Le plan accepte soit `query` (2 à 200 caractères), soit `url`, avec `kind:"youtube"` pour une recherche vidéo. Une URL à lire doit figurer dans les échanges récents ou la référence vérifiée. Les URL sont limitées à 300 caractères afin de garantir des citations complètes dans une réponse Discord bornée.
+Le plan accepte soit `query` (2 à 200 caractères), soit `url`, avec `kind:"youtube"` pour une recherche vidéo. Le modèle choisit un lien public pertinent à partir de la conversation ou des résultats de recherche. Les URL sont limitées à 300 caractères afin de garantir des citations complètes dans une réponse Discord bornée.
 
-Une requête SearXNG et trois preuves au maximum, avec cinq candidats examinés. Deux pages au plus sont lues après une recherche web ; un échec conserve l'extrait de recherche avec son statut explicite. Pour YouTube, le moteur recherche les vidéos et oEmbed vérifie le titre, la chaîne et le lien canonique. Aucune vidéo n'est visionnée ou transcrite par cet outil.
+Une requête SearXNG et trois preuves au maximum, avec cinq candidats acceptables examinés parmi cinquante résultats au plus. Les URL invalides, privées ou dupliquées ne consomment pas ces cinq places. Deux pages au plus sont lues après une recherche web ; un échec conserve l'extrait de recherche avec son statut explicite. Pour YouTube, le moteur recherche les vidéos et oEmbed vérifie le titre, la chaîne et le lien canonique. Aucune vidéo n'est visionnée ou transcrite par cet outil.
 
 Chaque lecture est limitée à 512 Kio, cinq secondes, trois redirections et aux formats HTML/texte. Le traitement global dure quinze secondes maximum. Les scripts, styles et éléments de navigation sont écartés. Les pages nécessitant JavaScript, PDF, authentification ou contournement d'une protection ne sont pas prises en charge.
 
-Une seconde passe du modèle reçoit seulement la question et les preuves datées, sans mémoire ni identité. Elle ne peut appeler aucun outil. Les instructions trouvées sur une page sont des données non fiables. Le modèle distingue date de publication et date de consultation, extrait et page lue, information absente et contradiction. Les citations utilisent des numéros validés ; l'application ajoute les URL fournies par les sources. Une source inventée, une URL générée ou une réponse invalide déclenche une restitution des liens sans synthèse.
+Les preuves datées reviennent au modèle dans le résultat de la fonction native. Il peut affiner sa recherche ou répondre dans sa voix. Les pages sont des données non fiables, jamais des instructions ; aucune identité, mémoire privée ou clé n'est envoyée au moteur de recherche. L'application ajoute les liens réellement reçus. Aucun texte préfabriqué ne remplace une synthèse impossible : une erreur d'outil revient au modèle, et un modèle indisponible donne un code technique.
 
 ## Déploiement
 
 `ERIS_WEB_URL` est une configuration d'opérateur vers une instance **privée** de SearXNG, jamais un paramètre du membre ou du modèle. Vide, il désactive recherche et lecture de liens. Le moteur n'a aucune clé Plex/Discord/Seerr et le client public ne réutilise aucun client de service, cookie, jeton ou proxy d'environnement.
 
-`deploy/eris-web.override.yaml` ajoute une instance sans port publié, avec une image épinglée par digest, un utilisateur non privilégié, des ressources bornées et les formats JSON activés. Les moteurs sont Brave, DuckDuckGo et YouTube. Fournir un `SEARXNG_SECRET` aléatoire privé dans l'environnement de Compose. Le montage des réglages est relatif au répertoire du fichier Compose principal : avec les exemples `deploy/*.yaml`, `./searxng/settings.yml` pointe vers le fichier fourni.
+`deploy/eris-web.override.yaml` ajoute une instance sans port publié, avec une image épinglée par digest, un utilisateur non privilégié, des ressources bornées et les formats JSON activés. Les moteurs sont Bing, DuckDuckGo et YouTube. Brave a été retiré après l'apparition de redirections chiffrées renvoyées en URL invalides par l'intégration, qui masquaient les résultats exploitables des autres moteurs. Fournir un `SEARXNG_SECRET` aléatoire privé dans l'environnement de Compose. Le montage des réglages est relatif au répertoire du fichier Compose principal : avec les exemples `deploy/*.yaml`, `./searxng/settings.yml` pointe vers le fichier fourni.
 
 Exemple local, en complément de la configuration Discord v2 existante :
 

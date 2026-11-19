@@ -105,7 +105,7 @@ func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
 		(ref.GuildID == "" || ref.GuildID == m.GuildID) && r.ChannelID == m.ChannelID &&
 		r.Author != nil && r.Author.Bot && r.Author.ID == botID && r.WebhookID == ""
 	named := m.Type == discordgo.MessageTypeDefault && m.MessageReference == nil && len(m.Mentions) == 0 && len(m.MentionRoles) == 0 && !m.MentionEveryone && !strings.Contains(m.Content, "<@") && erisAddress.MatchString(strings.TrimSpace(m.Content))
-	if !explicit && !reply && !named {
+	if !explicit && !reply && !named && !order66Invocation(m.Content, botID) {
 		return "", false
 	}
 	question := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(m.Content, normal, ""), nickname, ""))
@@ -144,7 +144,8 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 	if !ok {
 		question = strings.TrimSpace(event.Content)
 	}
-	explicit := ok && (event.MessageReference == nil || strings.Contains(event.Content, "<@"+b.Config.DiscordClientID+">") || strings.Contains(event.Content, "<@!"+b.Config.DiscordClientID+">"))
+	order66 := order66Invocation(event.Content, b.Config.DiscordClientID)
+	explicit := order66 || ok && (event.MessageReference == nil || strings.Contains(event.Content, "<@"+b.Config.DiscordClientID+">") || strings.Contains(event.Content, "<@!"+b.Config.DiscordClientID+">"))
 	if b.Eris.SkipPublicFollowup(owner, question, explicit) {
 		return
 	}
@@ -181,26 +182,31 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 			proof.ContextMessageID = anchor.ID
 			reference = "Eris (message " + anchor.ID + ") : " + anchor.Content
 		}
-		reply := "Oui ? Mentionne-moi avec ton message pour discuter ici, ou utilise /eris pour une conversation privée."
-		var components []discordgo.MessageComponent
+		reply := ""
+		if question == "" && len(event.Attachments) == 0 && len(event.Embeds) == 0 {
+			question = "Eris ?"
+		}
 		if utf8.RuneCountInString(question) > 500 {
-			reply = "Fais un peu plus court : 500 caractères maximum par message."
+			reply, _ = b.Eris.Explain(ctx, "", map[string]any{"error": "input_too_long", "maxCharacters": 500})
+			if reply == "" {
+				reply = "⚠️ `ERIS_INPUT_TOO_LONG`"
+			}
+		} else if order66 {
+			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
+			reply = b.erisOrder66(ctx, s, event.Message)
 		} else if question != "" || len(event.Attachments) > 0 || len(event.Embeds) > 0 {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
 			incoming := b.erisDiscordInput(ctx, s, event.Message)
 			result := b.erisDiscordReply(ctx, owner, question, false, proof, reference, incoming)
 			reply = result.Content
-			for _, button := range result.Buttons {
-				components = append(components, discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Style: discordgo.SecondaryButton, Label: button.Label, CustomID: button.ID}}})
-			}
 		}
 		// Deliberate silence is a valid public turn.
 		if reply == "" || (!ok && !b.currentErisTurn(event.ChannelID, event.ID)) {
 			return
 		}
 		sent, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
-			Content: reply, Reference: event.Reference(), Components: components,
+			Content: reply, Reference: event.Reference(),
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}, discordgo.WithContext(ctx))
 		if err != nil {

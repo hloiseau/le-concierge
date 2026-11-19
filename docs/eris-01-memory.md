@@ -69,7 +69,7 @@ L'oubli ne supprime ni les messages déjà publiés sur Discord ni les sauvegard
 
 ## Silence et contexte récent
 
-Les réponses implicites « oui », « merci », « tkt pas » ou contenant seulement un emoji ne déclenchent plus systématiquement de génération. Les choix média actifs sont préservés. Une demande de silence interrompt les réponses implicites du salon ; une mention explicite rouvre la discussion. Le modèle peut aussi choisir `silent`, sans publication Discord. Une commande privée reçoit toujours une réponse utilisable.
+Le modèle décide si un acquiescement, un merci ou un emoji appelle une réponse, avec le contexte. Aucun filtre lexical ne coupe ces messages et aucun choix média n'est stocké. Une demande de silence interrompt les réponses implicites du salon ; une mention explicite rouvre la discussion. Le modèle peut choisir `silent` en public, sans publication Discord. En privé, il doit formuler une réponse.
 
 Quand `DISCORD_MESSAGE_CONTENT=true`, le Gateway peut ajouter des messages ambiants à une fenêtre RAM d'un salon déjà actif. Aucun salon n'est activé par la seule conversation ambiante. La fenêtre expire après trente minutes d'inactivité, garde 64 échanges et en injecte jusqu'à 40 pour 16 000 caractères de texte au maximum. Ces extraits peuvent venir du membre actuel : une abréviation expliquée juste avant une mention reste ainsi compréhensible. Un extrait `ambient` sert seulement de contexte, jamais de demande ou de permission d'action.
 

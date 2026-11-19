@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +33,7 @@ func TestDollyChatCompletion(t *testing.T) {
 			if err := os.WriteFile(keyFile, []byte(test.key+"\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var payload struct {
 					Model    string `json:"model"`
 					Effort   string `json:"reasoning_effort"`
@@ -71,7 +71,7 @@ func TestDollyRepairsMissedMemoryCorrectionOnDelivery(t *testing.T) {
 	for _, reply := range []string{first, missed, repaired, missed, repaired} {
 		replies <- reply
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case reply := <-replies:
 			dollyCompletion(w, "dolly2-security", "stop", reply)
@@ -124,54 +124,5 @@ func TestDollyRepairsMissedMemoryCorrectionOnDelivery(t *testing.T) {
 	checkNote("bergamote")
 	if len(replies) != 0 {
 		t.Fatal("did not run the scoped extraction")
-	}
-}
-
-func TestDollySeasonGroundingAndReceiptVoice(t *testing.T) {
-	responses := make(chan string, 4)
-	for _, reply := range []string{
-		`{"action":"prepare","query":"Les Veilleurs d’Orbite","kind":"show","seasons":[2]}`,
-		`{"opening":1}`,
-		`{"action":"prepare","query":"Les Veilleurs d’Orbite","kind":"show","seasons":[2]}`,
-		`{"opening":99}`,
-	} {
-		responses <- reply
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case reply := <-responses:
-			dollyCompletion(w, "dolly2-security", "stop", reply)
-		default:
-			w.WriteHeader(500)
-		}
-	}))
-	defer server.Close()
-	chat := New(server.URL, "sk-"+strings.Repeat("z", 22), "dolly2-security")
-	chat.V2 = true
-	const owner = "12345:23456:34567"
-	const facts = "Quelle saison veux-tu ?"
-	chat.sessions[owner] = &conversation{messages: []Message{
-		{Role: "user", Content: "Les Veilleurs d’Orbite sont disponibles sur Plex ?"},
-		{Role: "assistant", Content: "La saison 2 est manquante.", toolResult: true},
-	}}
-	got, err := chat.ReplyWithTools(context.Background(), owner, "Demande la série Les Veilleurs d’Orbite dans Seerr.", false, func(_ context.Context, p Plan) (ToolReply, error) {
-		if len(p.Seasons) != 0 {
-			t.Errorf("assistant result authorized a season: %v", p.Seasons)
-		}
-		return ToolReply{Content: facts}, nil
-	})
-	if err != nil || got == facts || MediaReplyFacts(got) != facts {
-		t.Fatalf("fact changed or voice missing: %q, %v", got, err)
-	}
-	chat.Delivered(owner, "45670", got)
-	const receipt = "Demande #27 créée : Les Veilleurs d’Orbite, saison 2."
-	got, err = chat.ReplyWithTools(context.Background(), owner, "Demande la saison 2 des Veilleurs d’Orbite.", false, func(_ context.Context, p Plan) (ToolReply, error) {
-		if len(p.Seasons) != 1 || p.Seasons[0] != 2 {
-			t.Errorf("explicit season dropped: %+v", p)
-		}
-		return ToolReply{Content: receipt}, nil
-	})
-	if err != nil || got != receipt {
-		t.Fatalf("invalid narration changed receipt: %q, %v", got, err)
 	}
 }

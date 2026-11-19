@@ -15,6 +15,10 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# These CLI replays have no native function transport. Tool behavior belongs in
+# the real Go agent lab; archived plan cases remain readable for past reports.
+TEXT_ONLY_INSTRUCTIONS = '\nAucun outil externe n’est disponible dans ce test de voix. Réponds en JSON {"action":"chat","text":"ta réponse"}, sans prétendre avoir consulté un service ou exécuté une action.'
+
 
 def go_constant(path, name):
     match = re.search(r"const " + re.escape(name) + r" = `([^`]*)`", path.read_text(encoding="utf-8"))
@@ -40,6 +44,10 @@ def load_cases(path, split):
     return [case for case in cases if split == "all" or case["split"] == split]
 
 
+def conversation_cases(path, split):
+    return [case for case in load_cases(path, split) if case["expect"]["action"] == "chat"]
+
+
 def check(case, raw):
     """Mechanical checks, not a humor score or a replacement for Go ParsePlan."""
     try:
@@ -49,7 +57,7 @@ def check(case, raw):
     if not isinstance(plan, dict):
         return ["not an object"]
     failures = [f"{key}: expected {value!r}" for key, value in case["expect"].items() if plan.get(key) != value]
-    known = {"action", "query", "relation", "source", "kind", "genre", "maxMinutes", "unwatched", "seasons", "text"}
+    known = {"action", "query", "mediaId", "relation", "source", "kind", "genre", "maxMinutes", "unwatched", "seasons", "text"}
     if set(plan) - known:
         failures.append("unknown fields")
     if plan.get("unwatched") and not case["expect"].get("unwatched"):
@@ -166,11 +174,11 @@ def main():
         parser.error("timeout and limit must be positive")
     baseline = go_constant(ROOT / "internal/eris/chat.go", "Persona")
     persona = baseline if args.persona == "baseline" else (ROOT / "evals/eris/persona.txt").read_text(encoding="utf-8").strip()
-    system = persona + go_constant(ROOT / "internal/eris/tools.go", "ToolInstructions")
+    system = persona + TEXT_ONLY_INSTRUCTIONS
     if args.backend == "http" and len(system) > 2200:
         parser.error("The local Eris protocol allows 2200 prompt characters; use baseline or validate a shorter candidate first")
     cases_path = ROOT / "evals/eris/cases.json"
-    cases = load_cases(cases_path, args.split)
+    cases = conversation_cases(cases_path, args.split)
     if args.limit:
         cases = cases[:args.limit]
     report = {"backend": args.backend, "model_requested": args.model or "CLI default (not pinned)",

@@ -58,14 +58,6 @@ func (r Result) Links(ids []int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (r Result) Fallback() string {
-	var ids []int
-	for i := range r.Sources {
-		ids = append(ids, i+1)
-	}
-	return "Voici les sources trouvées ; je n’ai pas pu en faire une synthèse fiable.\n" + r.Links(ids)
-}
-
 type Client struct {
 	endpoint string
 	search   *http.Client
@@ -184,8 +176,9 @@ func (c *Client) searchPages(ctx context.Context, query string, youtube bool, pu
 	r := Result{RetrievedAt: time.Now().UTC().Format(time.RFC3339)}
 	seen := map[string]bool{}
 	reads := 0
+	examined := 0
 	for index, item := range data.Results {
-		if index >= 5 {
+		if index >= 50 || examined >= 5 {
 			break
 		}
 		if len(r.Sources) == MaxSources {
@@ -195,6 +188,7 @@ func (c *Client) searchPages(ctx context.Context, query string, youtube bool, pu
 			continue
 		}
 		seen[item.URL] = true
+		examined++
 		if youtube {
 			if source, err := c.video(ctx, item.URL); err == nil {
 				r.Sources = append(r.Sources, source)

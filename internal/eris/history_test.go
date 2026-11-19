@@ -24,7 +24,7 @@ func historyFixture(turns int) []Message {
 
 func historyModel(t *testing.T, respond func([]Message) string) *httptest.Server {
 	t.Helper()
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Messages []Message }
 		if json.NewDecoder(r.Body).Decode(&in) != nil {
 			t.Error("invalid request")
@@ -174,7 +174,7 @@ func TestSummaryCannotGroundMediaTitleAndUnsentReplyIsRemoved(t *testing.T) {
 		t.Error("summary authorized media")
 		return ToolReply{}, nil
 	})
-	if err != nil || !strings.Contains(text, "Quel titre") {
+	if err != ErrUnavailable || text != "" {
 		t.Fatal(text, err)
 	}
 	encoded, _ := json.Marshal(prompt)
@@ -323,7 +323,7 @@ func TestSummaryFallbackAndSourcesKeepExactEvidenceWithoutToolOutput(t *testing.
 		t.Fatal("fallback changed quoted evidence")
 	}
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))

@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
+	"sync/atomic"
+
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 func TestConversationIsolationAndForget(t *testing.T) {
 	var prompts [][]Message
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" || r.Header.Get("Authorization") != "Bearer private-key" {
 			t.Error("wrong inference target or credential")
 		}
@@ -41,9 +42,7 @@ func TestConversationIsolationAndForget(t *testing.T) {
 		{"guild:alice", "Bonjour", false}, {"guild:bob", "Salut", false},
 		{"guild:alice", "Tu te souviens ?", false}, {"guild:alice", "Nouvelle conversation", true},
 	} {
-		if s := c.sessions[request.owner]; s != nil {
-			s.next = time.Time{}
-		}
+
 		if _, err := c.Reply(context.Background(), request.owner, request.question, request.forget); err != nil {
 			t.Fatal(err)
 		}
@@ -55,40 +54,49 @@ func TestConversationIsolationAndForget(t *testing.T) {
 		t.Fatal("history lost, shared, or not forgotten")
 	}
 	c.URL = ""
-	if _, err := c.Reply(context.Background(), "guild:alice", "", true); err != nil || c.sessions["guild:alice"] != nil {
+	if _, err := c.Reply(context.Background(), "guild:alice", "", true); !errors.Is(err, ErrUnavailable) || c.sessions["guild:alice"] != nil {
 		t.Fatal("offline forgetting failed")
 	}
 }
 
-func TestConcurrencyAndCooldown(t *testing.T) {
+func TestConcurrentFollowupQueuesAndContinuesWithoutCooldown(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(started)
-		<-release
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"Bonjour."}}]}`))
+	var calls atomic.Int32
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			close(started)
+			<-release
+		}
+		w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"Bonjour."}}]}`))
 	}))
 	defer server.Close()
 	c := New(server.URL, "", "model")
-	done := make(chan error, 1)
-	go func() { _, err := c.Reply(context.Background(), "alice", "Bonjour", false); done <- err }()
+	first := make(chan error, 1)
+	second := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	go func() { _, err := c.Reply(ctx, "alice", "Bonjour", false); first <- err }()
 	<-started
-	if _, err := c.Reply(context.Background(), "alice", "Encore", false); !errors.Is(err, ErrBusy) {
-		t.Fatal("concurrent turn accepted")
-	}
-	if _, err := c.Reply(context.Background(), "alice", "", true); !errors.Is(err, ErrBusy) {
-		t.Fatal("forgot an active generation")
+	go func() { _, err := c.Reply(ctx, "alice", "Encore", false); second <- err }()
+	select {
+	case err := <-second:
+		t.Fatal("followup did not queue", err)
+	case <-time.After(40 * time.Millisecond):
 	}
 	close(release)
-	if err := <-done; err != nil {
+	if err := <-first; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Reply(context.Background(), "alice", "Encore", false); !errors.Is(err, ErrBusy) {
-		t.Fatal("cooldown bypassed")
+	if err := <-second; err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 2 || len(c.sessions["alice"].messages) != 4 {
+		t.Fatal("queued conversation lost history")
 	}
 }
 
 func TestV2DeliveredReplyAllowsImmediateFollowUp(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Salut.\"}"}}]}`))
 	}))
 	defer server.Close()
@@ -102,8 +110,8 @@ func TestV2DeliveredReplyAllowsImmediateFollowUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = c.ReplyWithTools(context.Background(), "guild:alice:channel", "Et toi ?", false, run); !errors.Is(err, ErrBusy) {
-		t.Fatal("undelivered reply must keep its cooldown")
+	if _, err = c.ReplyWithTools(context.Background(), "guild:alice:channel", "Et toi ?", false, run); err != nil {
+		t.Fatal("natural followup was blocked", err)
 	}
 	c.Delivered("guild:alice:channel", "message-id", reply)
 	if _, err := c.ReplyWithTools(context.Background(), "guild:alice:channel", "Et toi ?", false, run); err != nil {
@@ -113,7 +121,7 @@ func TestV2DeliveredReplyAllowsImmediateFollowUp(t *testing.T) {
 
 func TestFailureDoesNotPoisonHistoryOrExposeProviderErrors(t *testing.T) {
 	for _, body := range []string{`{"error":"secret-provider-details"}`, `{"choices":[]}`, `{"choices":[{"message":{"role":"user","content":"secret-provider-details"}}]}`, `{"choices":[{"message":{"role":"assistant","content":""}}]}`, strings.Repeat("x", 17000)} {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
+		server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
 		c := New(server.URL, "", "model")
 		if reply, err := c.Reply(context.Background(), "alice", "Bonjour", false); reply != "" || !errors.Is(err, ErrUnavailable) || len(c.sessions["alice"].messages) != 0 {
 			t.Fatal("failed completion changed history or leaked response")
@@ -124,9 +132,9 @@ func TestFailureDoesNotPoisonHistoryOrExposeProviderErrors(t *testing.T) {
 
 func TestInferenceDoesNotFollowRedirects(t *testing.T) {
 	redirected := false
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = true }))
+	target := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected = true }))
 	defer target.Close()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, 307) }))
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, 307) }))
 	defer server.Close()
 	c := New(server.URL, "private-key", "model")
 	if _, err := c.Reply(context.Background(), "alice", "Bonjour", false); err == nil || redirected {
@@ -144,7 +152,7 @@ func TestForgetClearsPrivateAndChannelMemoryOnlyForThisMember(t *testing.T) {
 		t.Fatal("active channel conversation was forgotten or partial deletion occurred")
 	}
 	c.sessions["guild:alice:channel1"].busy = false
-	if _, err := c.Reply(context.Background(), "guild:alice", "", true); err != nil {
+	if _, err := c.Reply(context.Background(), "guild:alice", "", true); err != ErrUnavailable {
 		t.Fatal(err)
 	}
 	if len(c.sessions) != 2 || c.sessions["guild:bob:channel1"] == nil || c.sessions["guild:alice2:channel1"] == nil {

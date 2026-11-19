@@ -123,7 +123,7 @@ func converse(reader io.Reader, writer io.Writer, c *eris.Chat) error {
 		default:
 			result.Text, err = c.ReplyWithDiscordContext(context.Background(), owner, request.Text, false, "", incoming, func(_ context.Context, plan eris.Plan) (eris.ToolReply, error) {
 				result.Tool = &plan
-				return eris.ToolReply{Content: "Outil simulé : aucune action exécutée, aucune donnée réelle consultée."}, nil
+				return eris.ToolReply{Content: `{"status":"simulated","executed":false,"productionDataRead":false}`}, nil
 			})
 			result.Silent = err == nil && result.Text == ""
 		}

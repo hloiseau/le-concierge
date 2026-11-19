@@ -10,7 +10,7 @@ import (
 
 func (s *Server) erisWeb(ctx context.Context, p eris.Plan) eris.ToolReply {
 	if s.Config.ErisWebURL == "" || s.Web == nil {
-		return eris.ToolReply{Content: "La recherche web n’est pas encore connectée."}
+		return erisFailure("web_not_configured")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -22,7 +22,9 @@ func (s *Server) erisWeb(ctx context.Context, p eris.Plan) eris.ToolReply {
 		result, err = s.Web.Search(ctx, p.Query, p.Kind == "youtube")
 	}
 	if err != nil || !result.Validate() {
-		return eris.ToolReply{Content: "Je n’ai pas de source exploitable pour vérifier ça : le lien ou la recherche n’a pas abouti. Je préfère te le dire plutôt qu’inventer."}
+		return erisFailure("web_evidence_unavailable")
 	}
-	return eris.ToolReply{Content: result.Fallback(), Web: &result}
+	reply := erisData(map[string]any{"status": "evidence_found", "retrievedAt": result.RetrievedAt})
+	reply.Web = &result
+	return reply
 }

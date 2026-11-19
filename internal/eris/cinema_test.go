@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+
 	"testing"
 )
 
@@ -19,7 +19,7 @@ func TestCinemaPlansAndRoutingPreserveExplicitYearAndFocus(t *testing.T) {
 			t.Fatal("invalid plan accepted", raw)
 		}
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"cinema","query":"Dune","year":2021,"kind":"movie","relation":"director"}`}}}})
 	}))
 	defer server.Close()

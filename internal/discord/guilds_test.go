@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/hloiseau/le-concierge/internal/eris"
 )
 
 func TestChatGuildRejectsMediaCommandsAndComponents(t *testing.T) {
@@ -44,7 +43,7 @@ func TestChatGuildRejectsMediaCommandsAndComponents(t *testing.T) {
 }
 
 func TestChatGuildHelpAndUsageHideHub(t *testing.T) {
-	for _, command := range []string{"aide", "eris", "eris-salon"} {
+	for _, command := range []string{"aide"} {
 		for _, guild := range []string{"34567", "45678", ""} {
 			body := fmt.Sprintf(`{"id":"99999","application_id":"12345","guild_id":%q,"channel_id":"33333","type":2,"token":"interaction-token","member":{"permissions":"8","user":{"id":"11111"}},"data":{"name":%q}}`, guild, command)
 			b, r := signedInteraction(t, body)
@@ -94,7 +93,7 @@ func TestChatGuildSignedConversationCannotInvokeTools(t *testing.T) {
 			case strings.HasSuffix(r.URL.Path, "/messages/@original"):
 				stages = append(stages, "reply")
 				raw, _ := io.ReadAll(r.Body)
-				if !strings.Contains(string(raw), eris.ChatOnlyExplanation) || !strings.Contains(string(raw), `"flags":64`) {
+				if !strings.Contains(string(raw), "ERIS_UNAVAILABLE") || !strings.Contains(string(raw), `"flags":64`) {
 					t.Error("missing private capability refusal", string(raw))
 				}
 				return botResponse(200, "{}"), nil

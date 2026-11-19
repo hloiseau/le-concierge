@@ -438,7 +438,7 @@ func parseDurablePlan(raw string, recalled *rememberedWhim, question string) (Pl
 var explicitPreference = regexp.MustCompile(`(?:^|[.!?]\s+)(retiens|memorise|corrige|mets a jour) (?:bien )?(?:cette|ma|la) preference\b`)
 
 func preferenceCommand(question string) string {
-	match := explicitPreference.FindStringSubmatch(foldTitleAccents(choiceText(question)))
+	match := explicitPreference.FindStringSubmatch(foldTitleAccents(strings.TrimSpace(strings.ToLower(question))))
 	if len(match) == 0 {
 		return ""
 	}
@@ -461,9 +461,12 @@ func preferenceNote(notes []memoryNote, topics []string, correction bool) []memo
 }
 
 func (c *Chat) extractPreference(ctx context.Context, question string, topics []string, correction bool) (string, []memoryNote) {
-	const failed = "Je prends le changement en compte ici. Je n’ai pas trouvé de préférence à enregistrer avec certitude."
+	failed := func() (string, []memoryNote) {
+		text, _ := c.Explain(ctx, question, map[string]any{"operation": "remember_preference", "status": "not_saved_unverified"})
+		return text, nil
+	}
 	if correction && len(topics) == 0 {
-		return failed, nil
+		return failed()
 	}
 	data, _ := json.Marshal(struct {
 		Question   string   `json:"message"`
@@ -479,7 +482,7 @@ Extrais une seule préférence exprimée par l'auteur du message. Réponds avec 
 			return plan.Text, notes
 		}
 	}
-	return failed, nil
+	return failed()
 }
 
 func parseRecall(raw string) string {
