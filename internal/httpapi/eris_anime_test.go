@@ -18,7 +18,7 @@ func TestAnimePublicMetadataNeverClaimsFrenchEditionOrNASAvailability(t *testing
 		return response(200, `{"data":{"Page":{"media":[{"id":30013,"type":"MANGA","title":{"english":"One Piece"},"format":"MANGA","status":"RELEASING","description":"A pirate story.","startDate":{"year":1997,"month":7,"day":22}}]}}}`), nil
 	})
 	r := s.erisAnime(context.Background(), eris.Plan{Action: "anime", Kind: "manga", Query: "One Piece"})
-	if r.Web == nil || !r.Web.Validate() || r.Web.Sources[0].Kind != "metadata" || !strings.Contains(r.Web.Sources[0].Text, "Aucune sortie française confirmée") {
+	if r.Web == nil || !r.Web.Validate() || r.Web.Sources[0].Kind != "metadata" || !strings.Contains(r.Web.Sources[0].Text, `"frenchEditionVerified":false`) {
 		t.Fatal(r)
 	}
 	r = s.erisAnime(context.Background(), eris.Plan{Action: "anime", Kind: "manga", Query: "One Piece tome 114", Relation: "french"})

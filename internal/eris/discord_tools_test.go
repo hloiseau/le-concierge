@@ -25,10 +25,7 @@ func TestDiscordPlansCannotChooseDestinationIdentityOrInvalidPayload(t *testing.
 	}
 }
 
-func TestDiscordWritesNeedCreationIntentAndPublicGrounding(t *testing.T) {
-	if DiscordCreationRequested("J'aime les sondages", Plan{Action: "poll"}) || !DiscordCreationRequested("Fais un sondage", Plan{Action: "poll"}) {
-		t.Fatal("creation intent not distinguished")
-	}
+func TestDiscordWritesRequirePublicGrounding(t *testing.T) {
 	if !PublicTextMentioned("Alien (1979)", "Crée un sondage Alien 1979 ou Arrival", "") || PublicTextMentioned("PRIVATE SECRET", "Crée un sondage Alien ou Arrival", "") {
 		t.Fatal("payload not grounded")
 	}

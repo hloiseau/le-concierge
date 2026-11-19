@@ -32,8 +32,15 @@ func TestConversationKeepsSpeakersHistorySilenceAndSimulatedTools(t *testing.T) 
 			}
 			raw = `{"action":"chat","text":"Bonjour Alice."}`
 		case 3:
-			raw = `{"action":"monitoring"}`
+			raw = `{"action":"silent"}`
 		case 4:
+			fmt.Fprint(w, `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"cpu_1","type":"function","function":{"name":"monitoring","arguments":"{}"}}]}}]}`)
+			return
+		case 5:
+			raw = `{"action":"chat","text":"Les outils sont simulés ici."}`
+		case 6:
+			raw = `{"text":"J’ai effacé les souvenirs."}`
+		case 7:
 			raw = `{"action":"chat","text":"Nouvelle question."}`
 		}
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"role": "assistant", "content": raw}}}})
@@ -69,10 +76,10 @@ func TestConversationKeepsSpeakersHistorySilenceAndSimulatedTools(t *testing.T) 
 		}
 		rows = append(rows, row)
 	}
-	if len(rows) != 8 || !rows[0].Ready || rows[0].Model != "test-model" || !rows[2].Observed || !rows[4].Silent || rows[5].Tool == nil || rows[5].Tool.Action != "monitoring" || calls != 4 {
+	if len(rows) != 8 || !rows[0].Ready || rows[0].Model != "test-model" || !rows[2].Observed || !rows[4].Silent || rows[5].Tool == nil || rows[5].Tool.Action != "monitoring" || calls != 7 {
 		t.Fatalf("unexpected conversation: %+v, calls=%d", rows, calls)
 	}
-	if rows[1].Text != "Bonjour Hugo." || rows[3].Text != "Bonjour Alice." || rows[5].Text != "Outil simulé : aucune action exécutée, aucune donnée réelle consultée." || rows[7].Error != "" {
+	if rows[1].Text != "Bonjour Hugo." || rows[3].Text != "Bonjour Alice." || rows[5].Text != "Les outils sont simulés ici." || rows[7].Error != "" {
 		t.Fatal(rows)
 	}
 }

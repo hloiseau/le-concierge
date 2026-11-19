@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
+
 	"path/filepath"
 	"strings"
 	"testing"
@@ -191,7 +191,7 @@ func TestDurableMetadataMustQuoteCurrentHumanAndCannotChangePlan(t *testing.T) {
 	if _, _, _, err := parseDurablePlan(`{"action":"chat","text":"Salut","shell":"rm","memories":[`+note+`]}`, nil, question); err == nil {
 		t.Fatal("metadata weakened strict action validation")
 	}
-	_, _, notes, err := parseDurablePlan(`{"action":"prepare","query":"Alien","kind":"movie","memories":[`+note+`]}`, nil, question)
+	_, _, notes, err := parseDurablePlan(`{"action":"lookup","query":"Alien","kind":"movie","memories":[`+note+`]}`, nil, question)
 	if err != nil || len(notes) != 0 {
 		t.Fatal("media plan created a personal note", notes, err)
 	}
@@ -210,7 +210,7 @@ func TestDurableChatDeliveryRestartRecallAndActionBoundary(t *testing.T) {
 	owner, in := "10000:20000:30000", memoryInput("40001", "20000")
 	raw := `{"action":"chat","text":"Un goût très respectable.","memories":[{"kind":"preference","topic":"cinéma","quote":"J'aime Alien.","summary":"Aime le film Alien.","aliases":["horreur"]}]}`
 	var prompts [][]Message
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct{ Messages []Message }
 		json.NewDecoder(r.Body).Decode(&payload)
 		prompts = append(prompts, payload.Messages)
@@ -236,7 +236,7 @@ func TestDurableChatDeliveryRestartRecallAndActionBoundary(t *testing.T) {
 	raw = `{"action":"prepare","query":"Alien","kind":"movie"}`
 	in.MessageID = "40002"
 	text, err = c.ReplyWithDiscordContext(context.Background(), owner, "demande le film dont tu te souviens", false, "", in, run)
-	if err != nil || !strings.Contains(text, "Quel titre") {
+	if err != ErrUnavailable || text != "" {
 		t.Fatal(text, err)
 	}
 	joined := ""
@@ -254,7 +254,7 @@ func TestDurableRecallOneReadOnlyPass(t *testing.T) {
 			m := openTestMemory(t)
 			observeTest(t, m, "10000:20000:30000", "Je construis Vesper.", "40001")
 			calls := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				raw := `{"action":"recall","query":"Vesper"}`
 				if calls > 1 {
@@ -269,7 +269,7 @@ func TestDurableRecallOneReadOnlyPass(t *testing.T) {
 				t.Fatal("recall executed media action")
 				return ToolReply{}, nil
 			})
-			if err != nil || calls != 2 {
+			if calls != 2 || (err != nil) != (final != `{"action":"chat","text":"Tu construis Vesper."}`) {
 				t.Fatal(calls, err)
 			}
 		})

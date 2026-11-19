@@ -3,9 +3,9 @@ package discord
 import (
 	"context"
 	"encoding/json"
-	"io"
+
 	"net/http"
-	"net/http/httptest"
+
 	"strings"
 	"testing"
 
@@ -20,7 +20,7 @@ func TestErisToolAcceptsGiftEvidenceOnlyForAnEvidenceAction(t *testing.T) {
 			b.Config.BotAPIURL = "http://api.test"
 			evidence := websearch.Result{RetrievedAt: "2026-10-28T12:00:00Z", Sources: []websearch.Source{{Title: "Liste autorisée", URL: "https://gifts.example/lists/one", Text: "Un jeu coopératif.", Kind: "metadata"}}}
 			b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
-				raw, _ := json.Marshal(eris.ToolReply{Content: evidence.Fallback(), Web: &evidence})
+				raw, _ := json.Marshal(eris.ToolReply{Content: `{"status":"evidence_found"}`, Web: &evidence})
 				return botResponse(200, string(raw)), nil
 			})
 			got := b.erisTool(context.Background(), eris.ToolRequest{Plan: eris.Plan{Action: action}})
@@ -31,7 +31,7 @@ func TestErisToolAcceptsGiftEvidenceOnlyForAnEvidenceAction(t *testing.T) {
 	}
 }
 
-func TestErisV2DeliversNarratedDiagnosticFromVerifiedToolReply(t *testing.T) {
+func TestErisDeliversModelDiagnosticAfterNativeToolResult(t *testing.T) {
 	b, _ := signedCommand(t, "eris")
 	b.Eris.V2 = true
 	b.Eris.URL = "http://model.test"
@@ -40,12 +40,15 @@ func TestErisV2DeliversNarratedDiagnosticFromVerifiedToolReply(t *testing.T) {
 	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
 		if req.URL.Host == "api.test" {
 			apiCalls++
-			return botResponse(200, `{"content":"Toy Story 5 : import manuel nécessaire. Un administrateur doit vérifier le fichier.","narrate":true,"diagnostic":{"title":"Toy Story 5","stage":"manual_import","partial":false}}`), nil
+			return botResponse(200, `{"content":"{\"stage\":\"manual_import\"}","diagnostic":{"title":"Toy Story 5","stage":"manual_import","partial":false}}`), nil
 		}
 		modelCalls++
-		raw := `{"action":"diagnostic","query":"Toy Story 5"}`
+		if modelCalls == 1 {
+			return botResponse(200, `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"diag_1","type":"function","function":{"name":"diagnostic","arguments":"{\"query\":\"Toy Story 5\"}"}}]}}]}`), nil
+		}
+		raw := `{"action":"chat","text":"Ça bloque à l’import. Faut qu’un admin vérifie le fichier."}`
 		if modelCalls == 2 {
-			raw = `{"text":"Ça bloque à l’import. Faut qu’un admin vérifie le fichier."}`
+			raw = `{"action":"chat","text":"Ça bloque à l’import. Faut qu’un admin vérifie le fichier."}`
 		}
 		body, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": eris.Message{Role: "assistant", Content: raw}}}})
 		return botResponse(200, string(body)), nil
@@ -57,237 +60,13 @@ func TestErisV2DeliversNarratedDiagnosticFromVerifiedToolReply(t *testing.T) {
 	}
 }
 
-func TestErisToolForwardsSignedProofAndDisplaysPrivateChoices(t *testing.T) {
-	body := `{"id":"99999","application_id":"12345","guild_id":"23456","type":2,"token":"private-interaction-token","member":{"user":{"id":"11111"}},"data":{"name":"eris","options":[{"name":"message","type":3,"value":"Demande Arrival"}]}}`
-	b, r := signedInteraction(t, body)
-	b.Eris.URL = "http://model.test/v1"
-	b.Config.BotAPIURL = "http://api.test"
-	b.Config.BotAPISecret = "service-secret"
-	stages := []string{}
-	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case strings.HasSuffix(req.URL.Path, "/callback"):
-			stages = append(stages, "ack")
-			return botResponse(204, ""), nil
-		case req.URL.Host == "model.test":
-			stages = append(stages, "model")
-			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"prepare\",\"query\":\"Arrival\",\"kind\":\"movie\"}"}}]}`), nil
-		case req.URL.Host == "api.test":
-			stages = append(stages, "api")
-			var in eris.ToolRequest
-			_ = json.NewDecoder(req.Body).Decode(&in)
-			if req.URL.Path != "/internal/eris" || req.Header.Get("Authorization") != "Bearer service-secret" || string(in.Interaction) != body || in.Timestamp != r.Header.Get("X-Signature-Timestamp") || in.Signature != r.Header.Get("X-Signature-Ed25519") || in.Plan.Action != "prepare" || in.MessageID != "" {
-				t.Error("lost transport proof")
-			}
-			return botResponse(200, `{"content":"Choisis le titre.","buttons":[{"id":"eris:choose:`+strings.Repeat("a", 64)+`","label":"Choisir 1"}]}`), nil
-		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
-			stages = append(stages, "reply")
-			raw, _ := io.ReadAll(req.Body)
-			if !strings.Contains(string(raw), `"flags":64`) || !strings.Contains(string(raw), `"parse":[]`) || !strings.Contains(string(raw), "Choisir 1") {
-				t.Error("choices missing or not private")
-			}
-			return botResponse(200, `{}`), nil
-		default:
-			t.Error("unexpected endpoint")
-			return botResponse(500, `{}`), nil
-		}
-	})
-	b.Eris.HTTP.Transport = b.Client.Transport
-	w := httptest.NewRecorder()
-	b.Handler().ServeHTTP(w, r)
-	b.Wait()
-	if w.Code != 202 || strings.Join(stages, ",") != "ack,model,api,reply" {
-		t.Fatal(w.Code, stages)
-	}
-}
-
-func TestErisConfirmationTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
-	for _, input := range []eris.ToolRequest{
-		{Interaction: json.RawMessage(`{"data":{"custom_id":"eris:confirm:` + strings.Repeat("a", 64) + `"}}`)},
-		{Plan: eris.Plan{Action: "prepare", Query: "Arrival", Kind: "movie"}},
-		{Choice: "eris:choose:" + strings.Repeat("a", 64)},
-	} {
-		b, _ := signedCommand(t, "eris")
-		b.Config.BotAPIURL = "http://api.test"
-		calls := 0
-		b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { calls++; return botResponse(502, `{}`), nil })
-		result := b.erisTool(context.Background(), input)
-		if calls != 1 || !strings.Contains(result.Content, "Vérifie /mes-demandes") || len(result.Buttons) > 0 {
-			t.Fatal("unsafe retry after an ambiguous confirmation")
-		}
-	}
-}
-
-func TestErisV2NaturalRequestsHideButtonsAndBypassModelForConsent(t *testing.T) {
+func TestErisRequestTransportFailureDoesNotInviteBlindRetry(t *testing.T) {
 	b, _ := signedCommand(t, "eris")
-	b.Eris.V2, b.Eris.URL, b.Config.BotAPIURL = true, "http://model.test", "http://api.test"
-	modelCalls, apiCalls := 0, 0
-	choose := "eris:choose:" + strings.Repeat("a", 64)
-	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Host == "model.test" {
-			modelCalls++
-			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"prepare\",\"query\":\"Bronson\",\"kind\":\"movie\"}"}}]}`), nil
-		}
-		apiCalls++
-		var in eris.ToolRequest
-		_ = json.NewDecoder(req.Body).Decode(&in)
-		if in.ChannelID != "33333" || in.MessageID == "" {
-			t.Error("lost message proof")
-		}
-		var result eris.ToolReply
-		switch apiCalls {
-		case 1:
-			if in.Plan.Action != "prepare" || in.Choice != "" {
-				t.Error(in)
-			}
-			result = eris.ToolReply{Content: "1. Bronson (2009)", Buttons: []eris.Button{{ID: choose, Label: "Choisir 1", Title: "Bronson", Number: 1}}}
-		case 2:
-			if in.Choice != choose || in.Plan.Action != "" {
-				t.Error(in)
-			}
-			result = eris.ToolReply{Content: "Demande créée."}
-		default:
-			t.Error("extra API call")
-		}
-		raw, _ := json.Marshal(result)
-		return botResponse(200, string(raw)), nil
-	})
-	b.Eris.HTTP.Transport = b.Client.Transport
-	for _, q := range []string{"demande Bronson", "prends le premier"} {
-		result := b.erisMediaReply(context.Background(), "23456:11111:33333", q, false, eris.ToolRequest{ChannelID: "33333", MessageID: "99999"})
-		if len(result.Buttons) != 0 {
-			t.Fatal("v2 still displays buttons")
-		}
-		if apiCalls == 2 && result.Content != "Demande créée." {
-			t.Fatal("selection did not finish the request")
-		}
-		b.Eris.Delivered("23456:11111:33333", "88888", result.Content)
-	}
-	if modelCalls != 1 || apiCalls != 2 {
-		t.Fatal(modelCalls, apiCalls)
-	}
-}
-
-func TestErisPublicSelectionCreatesPublicReplyWithoutOverwritingOriginal(t *testing.T) {
-	body := `{"id":"99999","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:choose:` + strings.Repeat("a", 64) + `","component_type":2}}`
-	b, r := signedInteraction(t, body)
 	b.Config.BotAPIURL = "http://api.test"
 	calls := 0
-	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
-		calls++
-		raw, _ := io.ReadAll(req.Body)
-		switch {
-		case strings.HasSuffix(req.URL.Path, "/callback"):
-			if string(raw) != `{"type":5}` {
-				t.Error("public selection must create a separate public reply", string(raw))
-			}
-		case req.URL.Host == "api.test":
-			return botResponse(200, `{"content":"Confirmer Hot Fuzz ?","buttons":[{"id":"eris:confirm:`+strings.Repeat("b", 64)+`","label":"Confirmer"}]}`), nil
-		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
-			if strings.Contains(string(raw), `"flags":64`) || !strings.Contains(string(raw), "eris:confirm:") || !strings.Contains(string(raw), `"parse":[]`) {
-				t.Error("public confirmation missing or mentions enabled")
-			}
-		default:
-			t.Error("unexpected model or message call", req.URL.Path)
-		}
-		return botResponse(204, ""), nil
-	})
-	w := httptest.NewRecorder()
-	b.Handler().ServeHTTP(w, r)
-	b.Wait()
-	if w.Code != 202 || calls != 3 {
-		t.Fatal(w.Code, calls)
-	}
-}
-
-func TestErisV2CanReplyInTextAfterAnOldPublicButton(t *testing.T) {
-	confirm := "eris:confirm:" + strings.Repeat("b", 64)
-	body := `{"id":"99999","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"token":"interaction-token","member":{"user":{"id":"11111"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":"eris:choose:` + strings.Repeat("a", 64) + `","component_type":2}}`
-	b, r := signedInteraction(t, body)
-	b.Eris.V2, b.Eris.URL, b.Config.BotAPIURL = true, "http://model.test", "http://api.test"
-	apiCalls := 0
-	b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
-		switch {
-		case strings.HasSuffix(req.URL.Path, "/callback"):
-			return botResponse(204, ""), nil
-		case req.URL.Host == "api.test":
-			apiCalls++
-			if apiCalls == 1 {
-				return botResponse(200, `{"content":"Je demande Bronson ?","buttons":[{"id":"`+confirm+`","label":"Confirmer"}]}`), nil
-			}
-			var in eris.ToolRequest
-			_ = json.NewDecoder(req.Body).Decode(&in)
-			if in.Choice != confirm {
-				t.Error(in)
-			}
-			return botResponse(200, `{"content":"Demande créée."}`), nil
-		case strings.HasSuffix(req.URL.Path, "/messages/@original"):
-			raw, _ := io.ReadAll(req.Body)
-			var delivered struct {
-				Components []any `json:"components"`
-			}
-			if json.Unmarshal(raw, &delivered) != nil || len(delivered.Components) != 0 {
-				t.Error("v2 still displays buttons")
-			}
-			return botResponse(200, `{"id":"88888"}`), nil
-		default:
-			t.Error("unexpected model call")
-			return botResponse(500, `{}`), nil
-		}
-	})
-	b.Eris.HTTP.Transport = b.Client.Transport
-	w := httptest.NewRecorder()
-	b.Handler().ServeHTTP(w, r)
-	b.Wait()
-	result := b.erisContextReply(context.Background(), "23456:11111:33333", "oui, vas-y", false, eris.ToolRequest{ChannelID: "33333", MessageID: "77777"}, "Eris (message 88888) : Je demande Bronson ?")
-	if w.Code != 202 || apiCalls != 2 || result.Content != "Demande créée." || len(result.Buttons) != 0 {
-		t.Fatal(w.Code, apiCalls, result)
-	}
-}
-
-func TestErisConfirmationBypassesModelAndPreservesVisibility(t *testing.T) {
-	for _, private := range []bool{true, false} {
-		flags := 0
-		if private {
-			flags = 64
-		}
-		body, _ := json.Marshal(map[string]any{"id": "99999", "application_id": "12345", "guild_id": "23456", "channel_id": "33333", "type": 3, "token": "interaction-token", "member": map[string]any{"user": map[string]string{"id": "11111"}}, "message": map[string]any{"flags": flags, "author": map[string]string{"id": "12345"}}, "data": map[string]any{"custom_id": "eris:confirm:" + strings.Repeat("a", 64), "component_type": 2}})
-		b, r := signedInteraction(t, string(body))
-		b.Config.BotAPIURL = "http://api.test"
-		b.Eris.URL = "http://model.test"
-		calls := 0
-		b.Client.Transport = transportFunc(func(req *http.Request) (*http.Response, error) {
-			calls++
-			if strings.HasSuffix(req.URL.Path, "/callback") {
-				raw, _ := io.ReadAll(req.Body)
-				want := `{"type":5}`
-				if private {
-					want = `{"type":6}`
-				}
-				if string(raw) != want {
-					t.Error("wrong acknowledgement", string(raw))
-				}
-			}
-			if strings.HasSuffix(req.URL.Path, "/messages/@original") {
-				raw, _ := io.ReadAll(req.Body)
-				if strings.Contains(string(raw), `"flags":64`) != private {
-					t.Error("wrong visibility", string(raw))
-				}
-			}
-			if req.URL.Host == "model.test" {
-				t.Error("model participated in confirmation")
-			}
-			if req.URL.Host == "api.test" {
-				return botResponse(200, `{"content":"Demande créée."}`), nil
-			}
-			return botResponse(204, ""), nil
-		})
-		b.Eris.HTTP.Transport = b.Client.Transport
-		w := httptest.NewRecorder()
-		b.Handler().ServeHTTP(w, r)
-		b.Wait()
-		if w.Code != 202 || calls != 3 {
-			t.Fatal(w.Code, calls)
-		}
+	b.Client.Transport = transportFunc(func(*http.Request) (*http.Response, error) { calls++; return botResponse(502, `{}`), nil })
+	result := b.erisTool(context.Background(), eris.ToolRequest{Plan: eris.Plan{Action: "request", MediaID: 12, Kind: "movie"}, CallID: "tool-1"})
+	if calls != 1 || !strings.Contains(result.Content, "request_outcome_unknown") {
+		t.Fatal("unsafe retry after an ambiguous write", result)
 	}
 }

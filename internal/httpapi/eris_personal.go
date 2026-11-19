@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -16,63 +15,40 @@ import (
 )
 
 func (s *Server) erisFollows(ctx context.Context, u store.User, g upstream.Grant, p eris.Plan) eris.ToolReply {
-	failure := func(err error) eris.ToolReply { return eris.ToolReply{Content: followErrorMessage(err)} }
+	failure := func(err error) eris.ToolReply { return erisFailure("follow_unavailable") }
 	if p.Validate() != nil {
 		return failure(upstream.ErrDenied)
 	}
 	if !s.subscriptionsEnabled() {
-		return eris.ToolReply{Content: "Les suivis ne sont pas encore configurés."}
+		return erisFailure("follows_not_configured")
 	}
 	if p.Action == "unfollow" && p.SubscriptionID == 0 {
 		items, _, err := s.listFollows(ctx, u, 0)
 		if err != nil {
 			return failure(err)
 		}
-		reply := eris.ToolReply{Content: "Quel suivi veux-tu retirer ?"}
-		if len(items) == 0 {
-			reply.Content = "Tu n’as aucun suivi à retirer."
-		}
+		var candidates []map[string]any
 		for i, item := range items {
-			if i == 3 {
+			if i == 10 {
 				break
 			}
-			plan := eris.Plan{Action: "unfollow", SubscriptionID: item.ID}
-			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: u.DiscordID, GuildID: s.Config.DiscordGuildID, Stage: "choose", PersonalPlan: &plan, Expires: time.Now().Add(10 * time.Minute)}
-			key := s.saveErisPending(pending)
-			if key == "" {
-				return failure(upstream.ErrUnavailable)
-			}
-			title := safeText(item.Title)
-			if item.Season != nil {
-				title += fmt.Sprintf(" · saison %d", *item.Season)
-			}
-			reply.Content += fmt.Sprintf("\n%d. %s", i+1, title)
-			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Retirer %d", i+1), Title: title, Number: i + 1, Operation: "unfollow"})
+			candidates = append(candidates, map[string]any{"subscriptionId": item.ID, "title": item.Title, "season": item.Season})
 		}
-		return reply
+		return erisData(map[string]any{"status": "identify_subscription", "candidates": candidates})
 	}
 	if p.Action == "follows" {
 		items, total, err := s.listFollows(ctx, u, 0)
 		if err != nil {
 			return failure(err)
 		}
-		text := "Tu n’as aucun suivi de disponibilité."
-		if len(items) > 0 {
-			text = "**Tes suivis de disponibilité**"
-		}
+		projected := []map[string]any{}
 		for i, item := range items {
-			if i == 5 {
+			if i == 10 {
 				break
 			}
-			text += fmt.Sprintf("\n• #%d · %s", item.ID, safeText(item.Title))
-			if item.Season != nil {
-				text += fmt.Sprintf(" · saison %d", *item.Season)
-			}
+			projected = append(projected, map[string]any{"subscriptionId": item.ID, "title": item.Title, "season": item.Season})
 		}
-		if total > 5 {
-			text += "\nLa suite : " + s.Config.PublicOrigin + "/demandes"
-		}
-		return eris.ToolReply{Content: text}
+		return erisData(map[string]any{"subscriptions": projected, "total": total, "partial": total > len(projected)})
 	}
 	select {
 	case s.reminderGate <- struct{}{}:
@@ -83,37 +59,26 @@ func (s *Server) erisFollows(ctx context.Context, u store.User, g upstream.Grant
 	if p.Action == "unfollow" {
 		err := s.erisPersonalMutation(ctx, u, g, func() error { return s.Store.DeleteSubscription(ctx, u.ID, p.SubscriptionID) })
 		if errors.Is(err, sql.ErrNoRows) {
-			return eris.ToolReply{Content: "Je ne trouve pas ce suivi sur ton compte. Je n’ai rien retiré."}
+			return erisFailure("subscription_not_found_not_removed")
 		}
 		if err != nil {
 			return failure(err)
 		}
-		return eris.ToolReply{Content: fmt.Sprintf("Suivi #%d retiré. La demande Seerr et le média sont conservés.", p.SubscriptionID)}
+		return erisData(map[string]any{"status": "removed", "subscriptionId": p.SubscriptionID, "mediaDeleted": false, "requestCancelled": false})
 	}
 	member, err := s.resolveSeerr(ctx, u)
 	if err != nil {
 		return failure(err)
 	}
-	m, choices, err := s.Upstream.ResolveMediaReference(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, member, p.Query, p.Kind, p.Year)
+	var m upstream.RequestCandidate
+	var choices []upstream.RequestCandidate
+	if p.MediaID > 0 {
+		m, err = s.Upstream.MediaByID(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, member, p.MediaID, p.Kind)
+	} else {
+		m, choices, err = s.Upstream.ResolveMediaReference(ctx, s.Config.SeerrURL, s.Config.SeerrAPIKey, member, p.Query, p.Kind, p.Year)
+	}
 	if errors.Is(err, upstream.ErrMediaReference) {
-		reply := eris.ToolReply{Content: "Quel contenu veux-tu suivre ?"}
-		if len(choices) == 0 {
-			reply.Content = "Précise le titre, l’année et le type du contenu à suivre."
-		}
-		for i, c := range choices {
-			if i == 3 {
-				break
-			}
-			plan := p
-			pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: u.DiscordID, GuildID: s.Config.DiscordGuildID, SeerrID: member, Candidate: c, Stage: "choose", PersonalPlan: &plan, Expires: time.Now().Add(10 * time.Minute)}
-			key := s.saveErisPending(pending)
-			if key == "" {
-				return failure(upstream.ErrUnavailable)
-			}
-			reply.Content += fmt.Sprintf("\n%d. %s (%s) · %s", i+1, safeText(c.Title), c.Year, c.Kind)
-			reply.Buttons = append(reply.Buttons, eris.Button{ID: "eris:choose:" + key, Label: fmt.Sprintf("Suivre %d", i+1), Title: c.Title, Year: c.Year, Number: i + 1, Operation: "follow"})
-		}
-		return reply
+		return erisData(map[string]any{"status": "ambiguous", "candidates": choices})
 	}
 	if err != nil {
 		return failure(err)
@@ -122,7 +87,7 @@ func (s *Server) erisFollows(ctx context.Context, u store.User, g upstream.Grant
 }
 
 func (s *Server) erisFollowCandidate(ctx context.Context, u store.User, p eris.Plan, m upstream.RequestCandidate) eris.ToolReply {
-	failure := func(err error) eris.ToolReply { return eris.ToolReply{Content: followErrorMessage(err)} }
+	failure := func(err error) eris.ToolReply { return erisFailure("follow_unavailable") }
 	target := store.SubscriptionTarget{Type: m.Kind, TMDBID: m.ID}
 	if len(p.Seasons) == 1 {
 		target.Season = &p.Seasons[0]
@@ -133,22 +98,15 @@ func (s *Server) erisFollowCandidate(ctx context.Context, u store.User, p eris.P
 	}
 	result, err := s.createFollow(ctx, u, subscriptionInput{SubscriptionTarget: target, Channel: channel})
 	if errors.Is(err, errSubscriptionChannel) {
-		return eris.ToolReply{Content: "Le suivi en DM nécessite ton consentement aux notifications et aux messages privés, ainsi que leur activation sur le serveur. Règle-les en privé avec /eris ou dans Mon compte ; je n’ai pas activé de DM."}
+		return erisData(map[string]any{"error": "discord_dm_consent_or_configuration_required", "consentChanged": false})
 	}
 	if err != nil {
 		return failure(err)
 	}
 	if result.Status == "already_available" {
-		return eris.ToolReply{Content: "**" + safeText(result.Title) + "** est déjà accessible dans ton Plex. Aucun suivi en attente n’a été créé."}
+		return erisData(map[string]any{"status": "already_available", "title": result.Title, "pendingFollowCreated": false})
 	}
-	text := fmt.Sprintf("Suivi #%d enregistré pour **%s** dans le Hub. La disponibilité sera vérifiée à l’ouverture de tes suivis.", result.Subscription.ID, safeText(result.Title))
-	if channel == "discord" {
-		text = fmt.Sprintf("Suivi #%d enregistré pour **%s** avec alerte Discord en DM lorsque la disponibilité sera confirmée. Le DM n’a pas encore été envoyé.", result.Subscription.ID, safeText(result.Title))
-	}
-	if target.Type == "tv" {
-		text += " Pour une série ou une saison, la disponibilité correspond au premier épisode accessible."
-	}
-	return eris.ToolReply{Content: text}
+	return erisData(map[string]any{"status": "created", "subscriptionId": result.Subscription.ID, "title": result.Title, "channel": channel, "dmSent": false, "availabilityScope": "first_accessible_episode_for_series"})
 }
 
 // Called under the delivery gate; authorization and identity cannot change mid-write.
@@ -164,7 +122,7 @@ func (s *Server) erisPersonalMutation(ctx context.Context, u store.User, g upstr
 }
 
 func (s *Server) erisPreferences(ctx context.Context, u store.User, g upstream.Grant, p eris.Plan) eris.ToolReply {
-	failure := eris.ToolReply{Content: "Je n’ai pas pu vérifier tes réglages. Aucune modification confirmée."}
+	failure := erisFailure("preferences_outcome_unverified")
 	if p.Validate() != nil {
 		return failure
 	}
@@ -226,21 +184,14 @@ func (s *Server) erisPreferences(ctx context.Context, u store.User, g upstream.G
 		return nil
 	})
 	if errors.Is(err, errSubscriptionChannel) {
-		return eris.ToolReply{Content: "Les DM ne sont pas activés sur le serveur ou Discord n’est plus lié. Aucune modification confirmée."}
+		return erisFailure("discord_dm_unavailable_not_changed")
 	}
 	if err != nil {
 		return failure
 	}
-	onoff := func(b bool) string {
-		if b {
-			return "activé"
-		}
-		return "désactivé"
-	}
-	text := "**Tes réglages de notifications**"
+	status := "read"
 	if p.Setting != "" {
-		text = "Réglage enregistré et relu dans le Hub."
+		status = "saved_and_verified"
 	}
-	text += fmt.Sprintf("\nNotifications : %s · DM Discord : %s\nHeures calmes : %d h–%d h (Europe/Paris) · plafond du récapitulatif : %d\nRappels avant retrait : %v jours · tous les non-vus : %s\nRelances de demandes disponibles non vues : %s", onoff(preferences.Enabled), onoff(preferences.DiscordDM), preferences.QuietStartHour, preferences.QuietEndHour, preferences.DailyCap, preferences.DaysBefore, onoff(preferences.AllUnwatched), onoff(preferences.AvailableUnwatched))
-	return eris.ToolReply{Content: text}
+	return erisData(map[string]any{"status": status, "preferences": preferences, "timezone": "Europe/Paris"})
 }

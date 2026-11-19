@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -134,16 +133,15 @@ func (s *Server) ouicheurFailure(w http.ResponseWriter, err error) {
 	problem(w, 503, "ouicheur_unavailable", "Ouicheur est indisponible ou son contrat a changé.")
 }
 func (s *Server) erisGifts(ctx context.Context, u store.User, p eris.Plan, private bool) eris.ToolReply {
-	message := func(text string) eris.ToolReply { return eris.ToolReply{Content: text} }
 	if !private {
-		return message("Utilise /eris pour consulter tes listes et idées de cadeaux en privé.")
+		return erisFailure("private_conversation_required")
 	}
 	if s.Config.OuicheurURL == "" {
-		return message("Ouicheur n’est pas encore connecté au Concierge.")
+		return erisFailure("ouicheur_not_configured")
 	}
 	g, ok := s.currentOuicheurGrant(u.ID)
 	if !ok || g.Session.Cookie == "" {
-		return message("Relie ton compte personnel Ouicheur dans Mon compte sur le Hub, sans m’envoyer ton mot de passe : " + s.Config.PublicOrigin + "/compte")
+		return erisData(map[string]any{"error": "ouicheur_link_required", "accountURL": s.Config.PublicOrigin + "/compte"})
 	}
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
@@ -153,7 +151,7 @@ func (s *Server) erisGifts(ctx context.Context, u store.User, p eris.Plan, priva
 	}
 	var selected []upstream.GiftList
 	for _, list := range lists {
-		if strings.EqualFold(list.Name, p.Query) {
+		if strings.EqualFold(list.Name, p.Query) || list.ID == p.Query {
 			selected = append(selected, list)
 		}
 	}
@@ -166,59 +164,48 @@ func (s *Server) erisGifts(ctx context.Context, u store.User, p eris.Plan, priva
 	}
 	var result eris.ToolReply
 	if p.Query == "" || len(selected) != 1 {
-		text := "Précise le nom de la liste Ouicheur à consulter."
+		candidates := []map[string]any{}
 		for i, list := range lists {
 			if i == 8 {
-				text += "\nAutres listes dans Ouicheur."
 				break
 			}
-			text += "\n• " + safeText(list.Name)
+			candidates = append(candidates, map[string]any{"id": list.ID, "name": list.Name})
 		}
-		if len(lists) == 0 {
-			text = "Aucune liste accessible trouvée. Ouvre Ouicheur pour vérifier tes accès."
-		}
-		result = message(text)
+		result = erisData(map[string]any{"status": "identify_list", "lists": candidates, "partial": len(lists) > 8})
 	} else {
 		list := selected[0]
 		ideas, more, err := s.Upstream.OuicheurIdeas(ctx, s.Config.OuicheurURL, g.Session, list.ID, p.Text)
 		if err != nil {
 			return s.erisGiftFailure(u.ID, g, err)
 		}
-		text := "Liste " + list.Name + ". Descriptions d’envies uniquement ; aucun état de réservation, d’achat, de contribution ou identité de donateur n’est fourni. Ne déduis jamais qu’un cadeau est libre. Pour réserver, ouvrir Ouicheur."
+		projected := []map[string]any{}
 		for i, idea := range ideas {
 			if i == 5 {
 				more = true
 				break
 			}
-			text += "\n• " + string([]rune(idea.Title)[:min(80, len([]rune(idea.Title)))])
+			item := map[string]any{"title": string([]rune(idea.Title)[:min(80, len([]rune(idea.Title)))]), "description": string([]rune(idea.Description)[:min(120, len([]rune(idea.Description)))])}
 			if idea.Target > 0 && len(idea.Currency) == 3 {
-				text += fmt.Sprintf(" (budget total déclaré : %.2f %s ; pas un prix marchand vérifié)", idea.Target/100, idea.Currency)
+				item["declaredBudget"] = idea.Target / 100
+				item["currency"] = idea.Currency
 			}
-			if idea.Description != "" {
-				text += " : " + string([]rune(idea.Description)[:min(120, len([]rune(idea.Description)))])
-			}
+			projected = append(projected, item)
 		}
-		if len(ideas) == 0 {
-			text += " Aucun résultat lisible pour cette recherche."
-		}
-		if more {
-			text += " Échantillon partiel de la liste ; consulter Ouicheur pour la suite."
-		}
-		if len([]rune(text)) > 1800 {
-			text = string([]rune(text)[:1800])
-		}
-		evidence := websearch.Result{RetrievedAt: time.Now().UTC().Format(time.RFC3339), Sources: []websearch.Source{{Title: list.Name, URL: s.Config.OuicheurURL + "/lists/" + list.ID, Text: text, Kind: "metadata"}}}
+		raw, _ := json.Marshal(map[string]any{"list": list.Name, "ideas": projected, "partial": more, "reservationStatusExposed": false, "merchantPriceVerified": false})
+		evidence := websearch.Result{RetrievedAt: time.Now().UTC().Format(time.RFC3339), Sources: []websearch.Source{{Title: list.Name, URL: s.Config.OuicheurURL + "/lists/" + list.ID, Text: string(raw), Kind: "metadata"}}}
 		if !evidence.Validate() {
-			return message("Ouvre Ouicheur pour consulter cette liste : " + s.Config.OuicheurURL)
+			return erisFailure("gift_evidence_invalid")
 		}
-		result = eris.ToolReply{Content: evidence.Fallback(), Web: &evidence}
+		result = erisData(map[string]any{"status": "evidence_found", "scope": "gift_descriptions_only"})
+		result.Web = &evidence
 	}
 	current, ok := s.currentOuicheurGrant(u.ID)
 	if !ok || current.Revision != g.Revision {
-		return message("Ta connexion Ouicheur a changé. Relance depuis Mon compte.")
+		return erisFailure("ouicheur_access_changed")
 	}
 	return result
 }
+
 func (s *Server) erisGiftFailure(id string, g ouicheurGrant, err error) eris.ToolReply {
 	if errors.Is(err, upstream.ErrDenied) {
 		s.mu.Lock()
@@ -226,7 +213,7 @@ func (s *Server) erisGiftFailure(id string, g ouicheurGrant, err error) eris.Too
 			s.clearOuicheurGrantLocked(id)
 		}
 		s.mu.Unlock()
-		return eris.ToolReply{Content: "Ta connexion Ouicheur a expiré ou été révoquée. Relie ton compte dans Mon compte sur le Hub."}
+		return erisFailure("ouicheur_link_expired")
 	}
-	return eris.ToolReply{Content: "Je ne peux pas vérifier cette liste Ouicheur pour le moment. Aucun cadeau n’a été réservé."}
+	return erisFailure("ouicheur_unavailable_nothing_reserved")
 }

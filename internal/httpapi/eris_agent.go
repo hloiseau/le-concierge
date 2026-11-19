@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/hloiseau/le-concierge/internal/eris"
 	"github.com/hloiseau/le-concierge/internal/store"
@@ -45,8 +44,10 @@ func (s *Server) erisAgentMedia(ctx context.Context, u store.User, caller erisCa
 	if _, err = s.grant(ctx, current); err != nil {
 		return erisData(map[string]string{"error": "access_expired", "outcome": "not_sent"})
 	}
-	pending := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: caller.UserID, GuildID: s.Config.DiscordGuildID, SeerrID: member, Candidate: candidate, Seasons: p.Seasons, Private: caller.Private, Expires: time.Now().Add(10 * time.Minute)}
+	request := erisMediaRequest{UserID: u.ID, SeerrID: member, Candidate: candidate, Seasons: p.Seasons}
 	// Identity and grant were verified by erisTool; submit retains the durable
 	// idempotency receipt and member permissions, with no human-choice state.
-	return s.submitErisRequest(ctx, pending)
+	return s.submitErisRequest(ctx, request)
 }
+
+func erisFailure(code string) eris.ToolReply { return erisData(map[string]any{"error": code}) }

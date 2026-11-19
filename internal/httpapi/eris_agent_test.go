@@ -4,11 +4,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/hloiseau/le-concierge/internal/eris"
 )
+
+func TestErisRejectsOldChoicesAndUntrackedCallsBeforeAnyUpstream(t *testing.T) {
+	s := fixture(t)
+	s.Config.BotAPISecret = strings.Repeat("s", 32)
+	s.Upstream.HTTP.Transport = transportFunc(func(*http.Request) (*http.Response, error) { t.Fatal("invalid call reached upstream"); return nil, nil })
+	for _, body := range []string{
+		`{"plan":{"action":"lookup","query":"Madagascar"}}`,
+		`{"plan":{"action":"lookup","query":"Madagascar"},"callId":"tool-0"}`,
+		`{"plan":{"action":"lookup","query":"Madagascar"},"callId":"tool-100"}`,
+		`{"plan":{"action":"prepare","query":"Madagascar"},"callId":"tool-1"}`,
+		`{"choice":"eris:choose:old","callId":"tool-1"}`,
+	} {
+		r := httptest.NewRequest("POST", "/internal/eris", strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+s.Config.BotAPISecret)
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		if w.Code != 400 {
+			t.Fatal("old or untracked call accepted", w.Code, w.Body)
+		}
+	}
+}
 
 func TestNativeMediaToolsReadResolveAndRequestWithoutChoices(t *testing.T) {
 	s := fixture(t)
@@ -55,7 +77,7 @@ func TestNativeMediaToolsReadResolveAndRequestWithoutChoices(t *testing.T) {
 			t.Fatalf("tool %d: %d %s", index, w.Code, w.Body)
 		}
 		var reply eris.ToolReply
-		if json.Unmarshal(w.Body.Bytes(), &reply) != nil || len(reply.Buttons) > 0 || len(s.erisPending) > 0 {
+		if json.Unmarshal(w.Body.Bytes(), &reply) != nil {
 			t.Fatal("human choice state created", w.Body)
 		}
 		if index == 0 && !strings.Contains(reply.Content, `"id":953`) {
@@ -64,7 +86,7 @@ func TestNativeMediaToolsReadResolveAndRequestWithoutChoices(t *testing.T) {
 		if index == 1 && (!strings.Contains(reply.Content, `"id":80321`) || strings.Contains(reply.Content, "Pingouins")) {
 			t.Fatal("wrong collection", reply)
 		}
-		if index == 2 && !strings.Contains(reply.Content, "#411") {
+		if index == 2 && !strings.Contains(reply.Content, `"requestId":411`) {
 			t.Fatal("missing receipt", reply)
 		}
 		if again := callErisTool(s, in); again.Code != 403 {

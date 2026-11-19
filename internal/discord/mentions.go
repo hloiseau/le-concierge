@@ -185,25 +185,24 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		if question == "" && len(event.Attachments) == 0 && len(event.Embeds) == 0 {
 			question = "Eris ?"
 		}
-		var components []discordgo.MessageComponent
 		if utf8.RuneCountInString(question) > 500 {
-			reply = "Fais un peu plus court : 500 caractères maximum par message."
+			reply, _ = b.Eris.Explain(ctx, "", map[string]any{"error": "input_too_long", "maxCharacters": 500})
+			if reply == "" {
+				reply = "⚠️ `ERIS_INPUT_TOO_LONG`"
+			}
 		} else if question != "" || len(event.Attachments) > 0 || len(event.Embeds) > 0 {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
 			incoming := b.erisDiscordInput(ctx, s, event.Message)
 			result := b.erisDiscordReply(ctx, owner, question, false, proof, reference, incoming)
 			reply = result.Content
-			for _, button := range result.Buttons {
-				components = append(components, discordgo.ActionsRow{Components: []discordgo.MessageComponent{discordgo.Button{Style: discordgo.SecondaryButton, Label: button.Label, CustomID: button.ID}}})
-			}
 		}
 		// Deliberate silence is a valid public turn.
 		if reply == "" || (!ok && !b.currentErisTurn(event.ChannelID, event.ID)) {
 			return
 		}
 		sent, err := s.ChannelMessageSendComplex(event.ChannelID, &discordgo.MessageSend{
-			Content: reply, Reference: event.Reference(), Components: components,
+			Content: reply, Reference: event.Reference(),
 			AllowedMentions: &discordgo.MessageAllowedMentions{},
 		}, discordgo.WithContext(ctx))
 		if err != nil {

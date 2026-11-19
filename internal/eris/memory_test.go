@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
+
 	"path/filepath"
 	"strings"
 	"testing"
@@ -107,7 +107,7 @@ func TestCharacterMetadataCannotBecomeAnAction(t *testing.T) {
 	}
 	for _, raw := range []string{
 		`{"action":"chat","text":"Bonjour","memory":{"topic":"grille pain","quote":"phrase jamais dite"}}`,
-		`{"action":"prepare","query":"Moon","kind":"movie","memory":{"topic":"grille pain","quote":"Je défends les grille-pain."}}`,
+		`{"action":"lookup","query":"Moon","kind":"movie","memory":{"topic":"grille pain","quote":"Je défends les grille-pain."}}`,
 		`{"action":"chat","text":"Bonjour","memory":{"topic":"grille pain","retire":true}}`,
 	} {
 		_, w, err := parseCharacterPlan(raw, nil)
@@ -122,11 +122,11 @@ func TestCharacterMetadataCannotBecomeAnAction(t *testing.T) {
 
 func TestPublicReferenceGroundsTitleWithoutImportingOtherHistory(t *testing.T) {
 	var prompt []Message
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct{ Messages []Message }
 		json.NewDecoder(r.Body).Decode(&body)
 		prompt = body.Messages
-		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"prepare","query":"Coherence","kind":"movie"}`}}}})
+		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"lookup","query":"Coherence","kind":"movie"}`}}}})
 	}))
 	defer server.Close()
 	c := New(server.URL, "", "model")
@@ -154,7 +154,7 @@ func TestMemoryOnlyAfterDeliveryAndNotTitleGrounding(t *testing.T) {
 	}
 	defer m.Close()
 	raw := `{"action":"chat","text":"Je défends les grille-pain.","memory":{"topic":"grille pain","quote":"Je défends les grille-pain."}}`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: raw}}}})
 	}))
 	defer server.Close()
@@ -180,7 +180,7 @@ func TestMemoryOnlyAfterDeliveryAndNotTitleGrounding(t *testing.T) {
 	if got, _ := m.recall("g:b:c", "grille pain", time.Now()); got == nil {
 		t.Fatal("not saved after delivery")
 	}
-	raw = `{"action":"prepare","query":"grille pain","kind":"movie"}`
+	raw = `{"action":"lookup","query":"grille pain","kind":"movie"}`
 	text, err = c.ReplyWithTools(context.Background(), "g:b:c", "demande ça, grille pain", false, func(context.Context, Plan) (ToolReply, error) {
 		return ToolReply{Content: "allowed explicit title"}, nil
 	})
@@ -194,7 +194,7 @@ func TestMemoryOnlyAfterDeliveryAndNotTitleGrounding(t *testing.T) {
 		t.Fatal(err)
 	}
 	text, err = c.ReplyWithTools(context.Background(), "g:d:c", "demande ça, ces cornichons", false, run)
-	if err != nil || !strings.Contains(text, "Quel titre") {
+	if err != ErrUnavailable || text != "" {
 		t.Fatal(text, err)
 	}
 }
@@ -204,10 +204,11 @@ func TestForgetCancelsPendingDeliveryAndReportsStorageFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer m.Close()
 	c := New("", "", "")
 	c.Memory = m
 	c.sessions["g:a:c"] = &conversation{expires: time.Now().Add(time.Hour), delivery: "reply", whim: &whim{Topic: "grille pain", Quote: "Je défends les grille-pain."}}
-	if _, err = c.Reply(context.Background(), "g:a", "", true); err != nil {
+	if _, err = c.Reply(context.Background(), "g:a", "", true); err != ErrUnavailable {
 		t.Fatal(err)
 	}
 	c.Delivered("g:a:c", "1", "reply")
@@ -216,7 +217,7 @@ func TestForgetCancelsPendingDeliveryAndReportsStorageFailure(t *testing.T) {
 	}
 	m.Close()
 	text, err := c.Reply(context.Background(), "g:a", "", true)
-	if err != nil || !strings.Contains(text, "ne peux pas confirmer") {
+	if err != ErrUnavailable || text != "" {
 		t.Fatal("false erasure confirmation", text, err)
 	}
 }
@@ -228,7 +229,7 @@ func TestForgetDuringAnotherMembersGenerationCannotResurrectMemory(t *testing.T)
 	}
 	defer m.Close()
 	started, release := make(chan struct{}), make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		close(started)
 		<-release
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"chat","text":"Je défends les grille-pain.","memory":{"topic":"grille pain","quote":"Je défends les grille-pain."}}`}}}})

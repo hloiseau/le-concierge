@@ -12,6 +12,13 @@ import (
 )
 
 func TestAgentRequestsMadagascarWithoutHumanChoices(t *testing.T) {
+	for _, model := range []string{"dolly2-security", "other-chat-model"} {
+		t.Run(model, func(t *testing.T) { testAgentRequest(t, model) })
+	}
+}
+
+func testAgentRequest(t *testing.T, modelName string) {
+	t.Helper()
 	rounds, tools := 0, 0
 	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rounds++
@@ -24,7 +31,7 @@ func TestAgentRequestsMadagascarWithoutHumanChoices(t *testing.T) {
 			t.Error("JSON-only response mode disables native calls on the configured provider")
 		}
 		if rounds == 3 {
-			dollyCompletion(w, "dolly2-security", "stop", `{"action":"chat","text":"C’est demandé, Madagascar (2005)."}`)
+			json.NewEncoder(w).Encode(map[string]any{"model": modelName, "choices": []any{map[string]any{"finish_reason": "stop", "message": Message{Role: "assistant", Content: `{"action":"chat","text":"C’est demandé, Madagascar (2005)."}`}}}})
 			return
 		}
 		name, arguments := "lookup_media", `{"query":"Madagascar","kind":"movie"}`
@@ -37,7 +44,7 @@ func TestAgentRequestsMadagascarWithoutHumanChoices(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"model": "dolly2-security", "choices": []any{map[string]any{"finish_reason": "tool_calls", "message": map[string]any{"role": "assistant", "content": nil, "tool_calls": []any{map[string]any{"id": "call_" + name, "type": "function", "function": map[string]string{"name": name, "arguments": arguments}}}}}}})
 	}))
 	defer model.Close()
-	c := New(model.URL, "sk-"+strings.Repeat("z", 22), "dolly2-security")
+	c := New(model.URL, "sk-"+strings.Repeat("z", 22), modelName)
 	c.V2 = true
 	reply, err := c.ReplyWithTools(context.Background(), "guild:member:channel", "Demande Madagascar stp", false, func(_ context.Context, p Plan) (ToolReply, error) {
 		tools++
@@ -51,9 +58,6 @@ func TestAgentRequestsMadagascarWithoutHumanChoices(t *testing.T) {
 	})
 	if err != nil || tools != 2 || rounds != 3 || reply != "C’est demandé, Madagascar (2005)." {
 		t.Fatalf("reply=%q error=%v tools=%d rounds=%d", reply, err, tools, rounds)
-	}
-	if len(c.sessions["guild:member:channel"].choices) != 0 {
-		t.Fatal("human choice state created")
 	}
 }
 

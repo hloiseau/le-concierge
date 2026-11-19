@@ -60,7 +60,7 @@ func TestErisRequestStatusDoesNotRequirePrivateConversation(t *testing.T) {
 				if err := json.Unmarshal(w.Body.Bytes(), &reply); err != nil {
 					t.Fatal(err)
 				}
-				if w.Code != 200 || !strings.Contains(reply.Content, "Billions") || !strings.Contains(reply.Content, statusLabel("processing")) || !strings.Contains(reply.Content, "saisons [1]") || strings.Contains(reply.Content, "privé") || strings.Contains(reply.Content, "secret-account") {
+				if w.Code != 200 || !strings.Contains(reply.Content, "Billions") || !strings.Contains(reply.Content, `"status":"processing"`) || !strings.Contains(reply.Content, `"seasons":[1]`) || strings.Contains(reply.Content, "privé") || strings.Contains(reply.Content, "secret-account") {
 					t.Fatalf("request status hidden or unsafe: %d %s", w.Code, w.Body)
 				}
 			})

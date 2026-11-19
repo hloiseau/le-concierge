@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Opt-in synthetic lab only. The bridge must be the local tools/eris_dialogue_eval.py.
@@ -27,9 +26,7 @@ func TestLunaDialogue(t *testing.T) {
 	owner := "synthetic:alice:salon"
 	ask := func(q string) string {
 		t.Helper()
-		if s := c.sessions[owner]; s != nil {
-			s.next = time.Time{}
-		}
+
 		text, err := c.ReplyWithTools(context.Background(), owner, q, false, func(_ context.Context, p Plan) (ToolReply, error) {
 			t.Errorf("unexpected action: %+v", p)
 			return ToolReply{Content: "Synthetic tool result"}, nil

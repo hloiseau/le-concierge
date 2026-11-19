@@ -11,14 +11,12 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
+
 	"testing"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/hloiseau/le-concierge/internal/eris"
-	"github.com/hloiseau/le-concierge/internal/upstream"
 )
 
 func signedErisTool(t *testing.T, s *Server, plan eris.Plan, body string) eris.ToolRequest {
@@ -30,6 +28,9 @@ func signedErisTool(t *testing.T, s *Server, plan eris.Plan, body string) eris.T
 }
 
 func callErisTool(s *Server, in eris.ToolRequest) *httptest.ResponseRecorder {
+	if in.CallID == "" {
+		in.CallID = "tool-1"
+	}
 	raw, _ := json.Marshal(in)
 	r := httptest.NewRequest("POST", "/internal/eris", strings.NewReader(string(raw)))
 	r.Header.Set("Authorization", "Bearer "+s.Config.BotAPISecret)
@@ -118,78 +119,13 @@ func TestErisPublicWatchFiltersNeverReadMedia(t *testing.T) {
 			return response(200, fmt.Sprintf(`{"id":"99999","channel_id":"33333","timestamp":%q,"content":"<@12345> question","author":{"id":"11111"},"mentions":[{"id":"12345"}]}`, time.Now().Format(time.RFC3339))), nil
 		})
 		w := callErisTool(s, eris.ToolRequest{Plan: plan, ChannelID: "33333", MessageID: "99999"})
-		if w.Code != 200 || !strings.Contains(w.Body.String(), "en privé") {
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "private_conversation_required") {
 			t.Fatalf("privacy boundary %d %s", w.Code, w.Body)
 		}
 	}
 }
 
-func TestErisMissingSeasonAsksBeforeReadingOrCreatingRequest(t *testing.T) {
-	s := fixture(t)
-	seed(t, s, "11111", true)
-	u, _ := s.Store.User(context.Background(), "11111")
-	s.Upstream.HTTP.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
-		t.Fatal("missing season reached upstream")
-		return nil, nil
-	})
-	reply := s.runErisTool(context.Background(), u, s.grants[u.ID], u.DiscordID, eris.Plan{Action: "prepare", Query: "Severance", Kind: "show"}, true)
-	if !strings.Contains(reply.Content, "Quelle saison") || len(reply.Buttons) > 0 {
-		t.Fatal("invented season")
-	}
-}
-
-func TestErisPublicRequestOffersChoicesWithoutPrivateHandoff(t *testing.T) {
-	s := fixture(t)
-	s.Config.BotAPISecret = strings.Repeat("s", 32)
-	seed(t, s, "11111", true)
-	seed(t, s, "22222", true)
-	u, _ := s.Store.User(context.Background(), "11111")
-	reads := 0
-	s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
-		reads++
-		if r.Method != "GET" {
-			t.Fatal("request created before confirmation")
-		}
-		switch r.URL.Path {
-		case "/api/v1/user":
-			return response(200, `{"pageInfo":{"results":1},"results":[{"id":2,"plexId":11111}]}`), nil
-		case "/api/v1/auth/me":
-			return response(200, `{"id":2}`), nil
-		case "/api/v1/search":
-			if r.URL.Query().Get("query") != "Hot Fuzz" {
-				t.Error("lost conversation title")
-			}
-			return response(200, `{"results":[{"id":4638,"mediaType":"movie","title":"Hot Fuzz","releaseDate":"2007-02-14"}]}`), nil
-		default:
-			t.Errorf("unexpected route %s", r.URL.Path)
-			return response(500, `{}`), nil
-		}
-	})
-	reply := s.runErisTool(context.Background(), u, s.grants[u.ID], "11111", eris.Plan{Action: "prepare", Query: "Hot Fuzz", Kind: "movie"}, false)
-	if reads != 3 || len(reply.Buttons) != 1 || !strings.HasPrefix(reply.Buttons[0].ID, "eris:choose:") || !strings.Contains(reply.Content, "Hot Fuzz") {
-		t.Fatalf("public request did not search Seerr directly: %+v reads=%d", reply, reads)
-	}
-	button := reply.Buttons[0].ID
-	for index, owner := range []string{"22222", "11111", "11111"} {
-		body := fmt.Sprintf(`{"id":"%d","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"member":{"user":{"id":"%s"}},"message":{"flags":0,"author":{"id":"12345"}},"data":{"custom_id":%q,"component_type":2}}`, 99990+index, owner, button)
-		w := callErisTool(s, signedErisTool(t, s, eris.Plan{}, body))
-		if owner == "22222" {
-			if reads != 3 || strings.Contains(w.Body.String(), "Hot Fuzz") {
-				t.Fatal("another member used the owner's choice")
-			}
-			continue
-		}
-		if index == 1 {
-			if reads != 3 || !strings.Contains(w.Body.String(), "Hot Fuzz") || !strings.Contains(w.Body.String(), "eris:confirm:") {
-				t.Fatalf("public selection failed %d %s", w.Code, w.Body)
-			}
-		} else if reads != 3 || strings.Contains(w.Body.String(), "Hot Fuzz") {
-			t.Fatal("selection replay read media again")
-		}
-	}
-}
-
-func TestErisDirectorRecommendationSkipsAvailableAndPendingAndKeepsConfirmation(t *testing.T) {
+func TestErisDirectorRecommendationSkipsAvailableAndPending(t *testing.T) {
 	s := fixture(t)
 	seed(t, s, "11111", true)
 	u, _ := s.Store.User(context.Background(), "11111")
@@ -214,18 +150,17 @@ func TestErisDirectorRecommendationSkipsAvailableAndPendingAndKeepsConfirmation(
 		}
 	})
 	reply := s.runErisTool(context.Background(), u, s.grants[u.ID], "11111", eris.Plan{Action: "recommend", Query: "Hot Fuzz", Relation: "director", Source: "seerr"}, false)
-	if len(reply.Buttons) != 1 || !strings.Contains(reply.Content, "Edgar Wright") || !strings.Contains(reply.Content, "Baby Driver") || strings.Contains(reply.Content, "Available") || strings.Contains(reply.Content, "Pending") {
+	var result struct {
+		Director string
+		Items    []struct {
+			ID    int64
+			Title string
+		}
+	}
+	if json.Unmarshal([]byte(reply.Content), &result) != nil || result.Director != "Edgar Wright" || len(result.Items) != 1 || result.Items[0].ID != 3 || result.Items[0].Title != "Baby Driver" {
 		t.Fatalf("bad recommendation: %+v", reply)
 	}
-	parts := strings.Split(reply.Buttons[0].ID, ":")
-	p := s.erisPending[parts[2]]
-	if p.Private || p.DiscordID != "11111" || p.Candidate.ID != 3 || p.Stage != "choose" {
-		t.Fatal("lost request ownership", p)
-	}
-	confirmed := s.erisConfirmation(context.Background(), u, "11111", reply.Buttons[0].ID, false)
-	if len(confirmed.Buttons) != 2 || !strings.Contains(confirmed.Content, "Je demande **Baby Driver") {
-		t.Fatal("skipped explicit confirmation", confirmed)
-	}
+
 }
 
 func TestErisAPIRevalidatesReplyTargetFromDiscord(t *testing.T) {
@@ -299,130 +234,6 @@ func TestErisGatewayProofRejectsOtherGuildBotMissingMentionAndStaleMessages(t *t
 		})
 		if w := callErisTool(s, eris.ToolRequest{Plan: eris.Plan{Action: "recent"}, ChannelID: "33333", MessageID: "99999"}); w.Code != 403 {
 			t.Fatalf("accepted %s", state)
-		}
-	}
-}
-
-func TestErisConfirmationIsOwnerBoundExpiringAndExactlyOnce(t *testing.T) {
-	for _, state := range []string{"created", "other owner", "expired", "cancel", "changed account", "uncertain"} {
-		t.Run(state, func(t *testing.T) {
-			s := fixture(t)
-			seed(t, s, "11111", true)
-			seed(t, s, "22222", true)
-			u, _ := s.Store.User(context.Background(), "11111")
-			var posts atomic.Int32
-			s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
-				if r.URL.Path == "/api/v1/user" {
-					return response(200, `{"pageInfo":{"results":1},"results":[{"id":2,"plexId":11111}]}`), nil
-				}
-				if r.URL.Path == "/api/v1/auth/me" {
-					return response(200, `{"id":2}`), nil
-				}
-				if r.Method != "POST" || r.URL.Path != "/api/v1/request" || r.Header.Get("X-Api-User") != "2" {
-					t.Errorf("wrong request scope %s", r.URL.Path)
-					return response(500, `{}`), nil
-				}
-				posts.Add(1)
-				if state == "uncertain" {
-					return response(500, `{}`), nil
-				}
-				return response(201, `{"id":9,"type":"movie","requestedBy":{"id":2},"media":{"tmdbId":123}}`), nil
-			})
-			p := erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: "11111", GuildID: s.Config.DiscordGuildID, SeerrID: 2, Candidate: upstream.RequestCandidate{ID: 123, Title: "Arrival", Kind: "movie", Year: "2016"}, Stage: "choose", Expires: time.Now().Add(time.Minute)}
-			key := s.saveErisPending(p)
-			chosen := s.erisConfirmation(context.Background(), u, "11111", "eris:choose:"+key, false)
-			if posts.Load() != 0 || len(chosen.Buttons) != 2 || !strings.Contains(chosen.Content, "Je demande **Arrival (2016)") {
-				t.Fatal("selection wrote without confirmation")
-			}
-			confirm := chosen.Buttons[0].ID
-			switch state {
-			case "other owner":
-				u, _ = s.Store.User(context.Background(), "22222")
-			case "expired":
-				key = strings.Split(confirm, ":")[2]
-				entry := s.erisPending[key]
-				entry.Expires = time.Now().Add(-time.Minute)
-				s.erisPending[key] = entry
-			case "cancel":
-				confirm = chosen.Buttons[1].ID
-			case "changed account":
-				u.PlexID = "77777"
-			}
-			var wg sync.WaitGroup
-			results := make(chan eris.ToolReply, 2)
-			for range 2 {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					results <- s.erisConfirmation(context.Background(), u, u.DiscordID, confirm, false)
-				}()
-			}
-			wg.Wait()
-			close(results)
-			want := int32(0)
-			if state == "created" || state == "uncertain" {
-				want = 1
-			}
-			if posts.Load() != want {
-				t.Fatalf("posts %d want %d", posts.Load(), want)
-			}
-			for r := range results {
-				if state != "created" && strings.Contains(r.Content, "créée") {
-					t.Fatal("false success")
-				}
-			}
-		})
-	}
-}
-
-func TestErisSignedConfirmationKeepsItsVisibilityAndOwner(t *testing.T) {
-	for _, private := range []bool{false, true} {
-		s := fixture(t)
-		s.Config.BotAPISecret = strings.Repeat("s", 32)
-		seed(t, s, "11111", true)
-		seed(t, s, "22222", true)
-		u, _ := s.Store.User(context.Background(), "11111")
-		posts := 0
-		s.Upstream.HTTP.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
-			switch r.URL.Path {
-			case "/api/v1/user":
-				return response(200, `{"pageInfo":{"results":1},"results":[{"id":2,"plexId":11111}]}`), nil
-			case "/api/v1/auth/me":
-				return response(200, `{"id":2}`), nil
-			case "/api/v1/request":
-				if r.Method != "POST" || r.Header.Get("X-Api-User") != "2" {
-					t.Fatal("wrong request owner")
-				}
-				posts++
-				return response(201, `{"id":9,"type":"movie","requestedBy":{"id":2},"media":{"tmdbId":4638}}`), nil
-			default:
-				t.Fatal("unexpected upstream", r.URL.Path)
-				return nil, nil
-			}
-		})
-		key := s.saveErisPending(erisPending{UserID: u.ID, PlexID: u.PlexID, DiscordID: "11111", GuildID: s.Config.DiscordGuildID, SeerrID: 2, Candidate: upstream.RequestCandidate{ID: 4638, Title: "Hot Fuzz", Kind: "movie", Year: "2007"}, Stage: "confirm", Private: private, Expires: time.Now().Add(time.Minute)})
-		for index, attempt := range []struct {
-			owner   string
-			private bool
-			created bool
-		}{
-			{"22222", private, false}, {"11111", !private, false}, {"11111", private, true}, {"11111", private, false},
-		} {
-			flags := 0
-			if attempt.private {
-				flags = 64
-			}
-			body := fmt.Sprintf(`{"id":"%d","application_id":"12345","guild_id":"23456","channel_id":"33333","type":3,"member":{"user":{"id":%q}},"message":{"flags":%d,"author":{"id":"12345"}},"data":{"custom_id":%q,"component_type":2}}`, 99990+index, attempt.owner, flags, "eris:confirm:"+key)
-			w := callErisTool(s, signedErisTool(t, s, eris.Plan{}, body))
-			if w.Code != 200 || strings.Contains(w.Body.String(), "créée") != attempt.created {
-				t.Fatalf("private=%v attempt=%+v: %d %s", private, attempt, w.Code, w.Body)
-			}
-			if index < 2 && (posts != 0 || strings.Contains(w.Body.String(), "Hot Fuzz")) {
-				t.Fatal("wrong owner or visibility used pending request")
-			}
-		}
-		if posts != 1 {
-			t.Fatal("request not exactly once", posts)
 		}
 	}
 }

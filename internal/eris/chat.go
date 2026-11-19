@@ -4,6 +4,7 @@ package eris
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -20,38 +21,34 @@ var (
 )
 
 type Message struct {
-	Role             string     `json:"role"`
-	Content          string     `json:"content"`
-	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID       string     `json:"tool_call_id,omitempty"`
-	ReasoningContent string     `json:"reasoning_content,omitempty"`
-	Images           []string   `json:"-"`
+	Role             string            `json:"role"`
+	Content          string            `json:"content"`
+	ToolCalls        []ToolCall        `json:"tool_calls,omitempty"`
+	ToolCallID       string            `json:"tool_call_id,omitempty"`
+	ReasoningContent string            `json:"reasoning_content,omitempty"`
+	ResponseItems    []json.RawMessage `json:"-"`
+	Images           []string          `json:"-"`
 	historyID        uint64
 	unconfirmed      bool
 	toolResult       bool
 }
 
 type conversation struct {
-	messages     []Message
-	expires      time.Time
-	next         time.Time
-	busy         bool
-	pending      bool
-	choices      []Button
-	choiceUntil  time.Time
-	choiceSource string
-	whim         *whim
-	recalled     *rememberedWhim
-	delivery     string
-	epoch        uint64
-	lastTopic    string
-	discord      DiscordInput
-	turnID       int64
-	notes        []memoryNote
-	chatReply    bool
-	turns        []int64
-	summary      rollingSummary
-	historySeq   uint64
+	messages   []Message
+	expires    time.Time
+	busy       bool
+	whim       *whim
+	recalled   *rememberedWhim
+	delivery   string
+	epoch      uint64
+	lastTopic  string
+	discord    DiscordInput
+	turnID     int64
+	notes      []memoryNote
+	chatReply  bool
+	turns      []int64
+	summary    rollingSummary
+	historySeq uint64
 }
 
 type Chat struct {
@@ -99,21 +96,19 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		return "", ErrUnavailable
 	}
 	c.mu.Lock()
-	if c.NativeTools() {
-		// Queue short follow-ups behind the active turn instead of discarding them.
-		for {
-			active := c.sessions[owner]
-			if (active == nil || !active.busy) && len(c.slots) < cap(c.slots) {
-				break
-			}
-			c.mu.Unlock()
-			select {
-			case <-ctx.Done():
-				return "", ErrUnavailable
-			case <-time.After(25 * time.Millisecond):
-			}
-			c.mu.Lock()
+	// Queue short follow-ups behind the active turn instead of discarding them.
+	for {
+		active := c.sessions[owner]
+		if (active == nil || !active.busy) && len(c.slots) < cap(c.slots) {
+			break
 		}
+		c.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return "", ErrUnavailable
+		case <-time.After(25 * time.Millisecond):
+		}
+		c.mu.Lock()
 	}
 	now := time.Now()
 	for key, s := range c.sessions {
@@ -137,7 +132,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		if c.Memory != nil {
 			if err := c.Memory.forget(owner); err != nil {
 				c.mu.Unlock()
-				return "Je ne peux pas confirmer l’oubli de ma mémoire. Réessaie plus tard.", nil
+				return c.Explain(ctx, question, map[string]any{"operation": "forget", "status": "failed"})
 			}
 		}
 		if c.Memory != nil || (c.V2 && len(c.publicRooms) > 0) {
@@ -157,7 +152,6 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				cached.whim = nil
 				cached.recalled = nil
 				cached.delivery = ""
-				cached.choices = nil
 				cached.discord = DiscordInput{}
 				cached.turnID, cached.notes = 0, nil
 				cached.turns = nil
@@ -173,44 +167,11 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	}
 	if question == "" {
 		c.mu.Unlock()
-		return "Conversation oubliée. On reprend depuis le début.", nil
-	}
-	if !c.V2 && run != nil && s != nil && s.pending && confirmationText(question) {
-		c.mu.Unlock()
-		return "Utilise les boutons de ma réponse précédente pour choisir, confirmer ou annuler. Aucun envoi ne se fait avec une simple réponse dans le chat.", nil
+		return c.Explain(ctx, question, map[string]any{"operation": "forget", "status": "completed"})
 	}
 	if c.URL == "" {
 		c.mu.Unlock()
-		return "Mon moteur de conversation n’est pas encore connecté. Mes commandes restent disponibles avec /aide.", nil
-	}
-	if !c.NativeTools() && s != nil && now.Before(s.next) {
-		c.mu.Unlock()
-		return "", ErrBusy
-	}
-	var direct *Plan
-	unfollowChoice := false
-	if s != nil && len(s.choices) > 0 && s.choices[0].Operation == "unfollow" && now.Before(s.choiceUntil) {
-		id, matched := MatchChoice(question, s.choices)
-		unfollowChoice = matched && id != ""
-	}
-	if !c.NativeTools() && run != nil && !incoming.ChatOnly && IsMediaRemoval(question) && !unfollowChoice {
-		direct = &Plan{Action: "chat", Text: RemovalExplanation}
-	}
-	if !c.NativeTools() && direct == nil && c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
-		// A reply to an unrelated old message must not confirm the current request.
-		if reference == "" || strings.HasPrefix(reference, "Eris (message "+s.choiceSource+") : ") {
-			if id, matched := MatchChoice(question, s.choices); matched {
-				if id == "" {
-					clarification := ChoiceClarification
-					s.delivery, s.epoch = clarification, c.memoryEpoch
-					s.discord = DiscordInput{}
-					s.choiceSource = ""
-					c.mu.Unlock()
-					return clarification, nil
-				}
-				direct = &Plan{Action: "continue", Query: id}
-			}
-		}
+		return "", ErrUnavailable
 	}
 	select {
 	case c.slots <- struct{}{}:
@@ -239,10 +200,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	}
 	s.busy = true
 	s.expires = now.Add(30 * time.Minute)
-	s.next = now.Add(10 * time.Second)
+
 	s.whim, s.recalled, s.delivery = nil, nil, ""
 	s.turnID, s.notes, s.chatReply = 0, nil, false
-	s.choices, s.choiceSource = nil, ""
 	epoch := c.memoryEpoch
 	persona := c.instructions(incoming.Speaker.ID != "", run != nil)
 	if incoming.ChatOnly {
@@ -319,9 +279,6 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	defer func() {
 		c.mu.Lock()
 		s.busy = false
-		if c.NativeTools() {
-			s.next = time.Time{}
-		}
 		c.mu.Unlock()
 		<-c.slots
 	}()
@@ -335,7 +292,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			return "", ErrUnavailable
 		}
 		var changed bool
-		history, summary, changed = c.compactHistory(ctx, history, summary, budget, direct == nil)
+		history, summary, changed = c.compactHistory(ctx, history, summary, budget, true)
 		c.mu.Lock()
 		if epoch != c.memoryEpoch {
 			c.mu.Unlock()
@@ -350,13 +307,6 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			messages = append(messages, Message{Role: "user", Content: summary.context()})
 		}
 	}
-	// Only raw recent exchanges and a verified reference ground media titles.
-	// A summary can explain the past but cannot authorize a media action.
-	grounding := append([]Message(nil), history...)
-	if c.V2 && reference != "" && utf8.RuneCountInString(reference) <= 1800 {
-		grounding = append(grounding, Message{Role: "assistant", Content: reference})
-	}
-	grounding = append(grounding, Message{Role: "user", Content: question})
 	if c.V2 {
 		// Compact first: an evicted exchange may still need its durable citation.
 		durable = durable.withoutRecent(incoming.Speaker.ID, history)
@@ -370,155 +320,87 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	var reply string
 	var err error
 	agentUsed := false
-	recallOnly := false
-	if direct == nil {
-		if c.NativeTools() && run != nil && !incoming.ChatOnly {
-			reply, agentUsed, err = c.agentReply(ctx, c.dialoguePrompt(messages), run)
-		} else {
-			reply, err = c.complete(ctx, c.dialoguePrompt(messages), run != nil)
+	if run != nil && !incoming.ChatOnly {
+		reply, agentUsed, err = c.agentReply(ctx, c.dialoguePrompt(messages), run)
+	} else if run != nil {
+		reply, agentUsed, err = c.agentReply(ctx, c.dialoguePrompt(messages), nil)
+	} else {
+		reply, err = c.complete(ctx, c.dialoguePrompt(messages), false)
+	}
+	if err != nil {
+		return "", err
+	}
+	// A memory lookup is local and read-only; never forward it to media tools.
+	if query := parseRecall(reply); c.V2 && c.Memory != nil && run != nil && query != "" {
+		c.mu.Lock()
+		if epoch != c.memoryEpoch {
+			c.mu.Unlock()
+			return "", ErrUnavailable
 		}
+		bundle, searchErr := c.Memory.recallDurable(owner, query, incoming, s.turnID)
+		if searchErr == nil {
+			searchErr = c.Memory.derive(s.turnID, owner, bundle)
+		}
+		c.mu.Unlock()
+		if searchErr != nil {
+			return c.Explain(ctx, question, map[string]any{"operation": "recall", "status": "unavailable"})
+		}
+		messages = append(messages, Message{Role: "assistant", Content: reply}, Message{Role: "user", Content: bundle.context()}, Message{Role: "system", Content: "Recherche mémoire terminée. Réponds à la question actuelle avec action chat uniquement. Aucun autre outil, aucune nouvelle recherche. N'invente pas un souvenir absent."})
+		reply, err = c.complete(ctx, c.dialoguePrompt(messages), true)
 		if err != nil {
 			return "", err
-		}
-		// A memory lookup is local and read-only; never forward it to media tools.
-		if query := parseRecall(reply); c.V2 && c.Memory != nil && run != nil && query != "" {
-			c.mu.Lock()
-			if epoch != c.memoryEpoch {
-				c.mu.Unlock()
-				return "", ErrUnavailable
-			}
-			bundle, searchErr := c.Memory.recallDurable(owner, query, incoming, s.turnID)
-			if searchErr == nil {
-				searchErr = c.Memory.derive(s.turnID, owner, bundle)
-			}
-			c.mu.Unlock()
-			if searchErr != nil {
-				return "Je ne peux pas consulter mes souvenirs pour le moment.", nil
-			}
-			messages = append(messages, Message{Role: "assistant", Content: reply}, Message{Role: "user", Content: bundle.context()}, Message{Role: "system", Content: "Recherche mémoire terminée. Réponds à la question actuelle avec action chat uniquement. Aucun autre outil, aucune nouvelle recherche. N'invente pas un souvenir absent."})
-			reply, err = c.complete(ctx, c.dialoguePrompt(messages), true)
-			if err != nil {
-				return "", err
-			}
-			recallOnly = true
 		}
 	}
 	var change *whim
 	var notes []memoryNote
 	chatReply := run == nil
-	pending := false
-	var choices []Button
 	if run != nil {
 		plan, err := ParsePlan(reply)
-		if direct != nil {
-			plan, err = *direct, nil
-		} else if c.V2 {
+		if c.V2 {
 			plan, change, notes, err = parseDurablePlan(reply, recalled, question)
 		}
 		if err != nil {
-			if c.NativeTools() {
-				return "", ErrUnavailable
-			}
-			if incoming.ChatOnly {
-				return "Je n’ai pas bien compris. Tu peux reformuler ?", nil
-			}
-			return "Je n’ai pas bien compris. Précise un titre ou un genre, et ce que tu veux vérifier ou demander.", nil
+			return "", ErrUnavailable
 		}
 		if plan.Action == "silent" {
 			if c.V2 && publicScope(owner) != "" && incoming.Speaker.ID != "" {
 				c.mu.Lock()
 				if epoch == c.memoryEpoch {
-					s.next = time.Time{}
 					c.appendHistory(s, Message{Role: "user", Content: question})
 				}
 				c.mu.Unlock()
 				return "", nil
 			}
-			plan = Plan{Action: "chat", Text: "D’accord."}
+			return "", ErrUnavailable
 		}
-		if recallOnly && plan.Action != "chat" {
-			return "Je n’ai pas retrouvé de souvenir assez précis pour te répondre.", nil
+		if plan.Action != "chat" {
+			return "", ErrUnavailable
 		}
-		if incoming.ChatOnly && plan.Action != "chat" {
-			plan = Plan{Action: "chat", Text: ChatOnlyExplanation}
-			change, notes = nil, nil
-		}
-		plan = plan.WithQuestionConstraints(question)
-		if plan.Action == "prepare" && len(plan.Seasons) > 0 {
-			plan.Seasons = groundedSeasons(plan.Query, plan.Seasons, question, history)
-		}
-		if plan.Action == "web" && plan.URL != "" {
-			grounded := false
-			for _, message := range grounding {
-				grounded = grounded || strings.Contains(message.Content, plan.URL)
-			}
-			if !grounded {
-				plan = Plan{Action: "chat", Text: "Quel lien public veux-tu que je lise ?"}
-			}
-		}
-		if incoming.MediaOnly && plan.Action != "chat" {
-			plan = Plan{Action: "chat", Text: "Tu m’as envoyé un média. Précise ce que tu veux que j’en fasse."}
-			change = nil
-		}
-		// A bare title following the capability explanation is not a new add intent.
-		if plan.Query != "" && choiceText(question) == choiceText(plan.Query) && len(grounding) > 1 && strings.HasSuffix(grounding[len(grounding)-2].Content, RemovalExplanation) {
-			plan = Plan{Action: "chat", Text: RemovalExplanation}
-			change = nil
-		}
-		if plan.Unwatched {
-			requested := false
-			for _, message := range grounding {
-				requested = requested || (message.Role == "user" && unseenWords.MatchString(message.Content))
-			}
-			plan.Unwatched = requested
-		}
-		if plan.Action == "prepare" && !prepareTitleMentioned(plan.Query, grounding) {
-			plan = Plan{Action: "chat", Text: "Quel titre veux-tu demander dans Seerr ? Donne-moi le nom du film ou de la série, et la saison si nécessaire."}
-		}
-		if plan.Action == "follow" && !requestTitleMentioned(plan.Query, grounding) {
-			plan = Plan{Action: "chat", Text: "Quel contenu souhaites-tu suivre ? Précise son titre et la saison si nécessaire."}
-		}
-		if plan.Action == "unfollow" && plan.SubscriptionID > 0 && !subscriptionMentioned(plan.SubscriptionID, grounding) {
-			plan = Plan{Action: "chat", Text: "Quel numéro de suivi veux-tu retirer ? Tu peux me demander la liste de tes suivis."}
-		}
-		if plan.Action == "chat" {
-			if command := preferenceCommand(question); c.V2 && c.dolly() && direct == nil && command != "" {
-				correction := command == "corrige" || command == "mets a jour"
-				var topics []string
-				for _, note := range durable.Notes {
-					if note.Author.ID == incoming.Speaker.ID && note.Kind == "preference" {
-						topics = append(topics, note.Topic)
-					}
-				}
-				notes = preferenceNote(notes, topics, correction)
-				switch {
-				case c.Memory == nil || turnID == 0:
-					plan.Text, notes = "Je peux en tenir compte ici. Ma mémoire durable est indisponible pour ce tour.", nil
-				case len(notes) == 0:
-					plan.Text, notes = c.extractPreference(ctx, question, topics, correction)
+		if command := preferenceCommand(question); c.V2 && command != "" {
+			correction := command == "corrige" || command == "mets a jour"
+			var topics []string
+			for _, note := range durable.Notes {
+				if note.Author.ID == incoming.Speaker.ID && note.Kind == "preference" {
+					topics = append(topics, note.Topic)
 				}
 			}
-			reply = plan.Text
-			chatReply = !agentUsed
-			if agentUsed {
+			notes = preferenceNote(notes, topics, correction)
+			switch {
+			case c.Memory == nil || turnID == 0:
+				plan.Text, err = c.Explain(ctx, question, map[string]any{"operation": "remember_preference", "status": "unavailable"})
+				if err != nil {
+					return "", err
+				}
 				notes = nil
-				change = nil
+			case len(notes) == 0:
+				plan.Text, notes = c.extractPreference(ctx, question, topics, correction)
 			}
-		} else {
-			var result ToolReply
-			result, err = run(ctx, plan)
-			reply, pending = result.Content, len(result.Buttons) > 0
-			choices = append([]Button(nil), result.Buttons...)
-			if err != nil {
-				return "", ErrUnavailable
-			}
-			if (plan.Action == "web" || plan.Action == "anime" || plan.Action == "gifts") && result.Web != nil {
-				reply = c.webAnswer(ctx, question, *result.Web)
-			} else if c.V2 && canNarrate(plan, result) {
-				reply = c.toolAnswer(ctx, question, result)
-			} else if plan.Action == "prepare" || plan.Action == "continue" {
-				reply = c.MediaReply(ctx, question, result.Content)
-			}
+		}
+		reply = plan.Text
+		chatReply = !agentUsed
+		if agentUsed {
+			notes = nil
+			change = nil
 		}
 		if reply == "" || utf8.RuneCountInString(reply) > 1500 {
 			return "", ErrUnavailable
@@ -528,11 +410,6 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	if epoch != c.memoryEpoch {
 		c.mu.Unlock()
 		return reply, nil
-	}
-	s.pending = pending
-	if c.V2 {
-		s.choices = choices
-		s.choiceUntil = now.Add(10 * time.Minute)
 	}
 	if c.V2 && run != nil {
 		if stopWhim(question) && recalled != nil {
@@ -549,38 +426,4 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	c.appendHistory(s, Message{Role: "user", Content: question}, Message{Role: "assistant", Content: reply, unconfirmed: c.V2 && (run != nil || incoming.Speaker.ID != ""), toolResult: !chatReply})
 	c.mu.Unlock()
 	return reply, nil
-}
-
-func confirmationText(text string) bool {
-	switch strings.ToLower(strings.Trim(strings.TrimSpace(text), ".! ?")) {
-	case "oui", "ok", "oui vas-y", "vas-y", "confirme", "je confirme", "yes", "confirm", "annule", "annuler", "cancel", "non":
-		return true
-	}
-	return false
-}
-
-// Remember legacy button results; v2 can continue their choices in text.
-func (c *Chat) RememberRequest(owner string, result ToolReply) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	now := time.Now()
-	for key, s := range c.sessions {
-		if !s.busy && now.After(s.expires) {
-			delete(c.sessions, key)
-		}
-	}
-	if c.sessions[owner] == nil && len(c.sessions) < 256 {
-		c.sessions[owner] = &conversation{expires: now.Add(30 * time.Minute)}
-	}
-	if s := c.sessions[owner]; s != nil && !s.busy && now.Before(s.expires) {
-		s.pending = len(result.Buttons) > 0
-		s.discord = DiscordInput{}
-		if c.V2 {
-			s.choices = append([]Button(nil), result.Buttons...)
-			s.choiceUntil = now.Add(10 * time.Minute)
-			s.choiceSource = ""
-			s.delivery, s.epoch = result.Content, c.memoryEpoch
-		}
-		c.appendHistory(s, Message{Role: "user", Content: "J’ai utilisé un bouton de demande."}, Message{Role: "assistant", Content: result.Content, unconfirmed: c.V2, toolResult: true})
-	}
 }

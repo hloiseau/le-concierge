@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,12 +87,12 @@ func TestParticipationUsesOneCallAndCannotProduceTools(t *testing.T) {
 	for _, raw := range []string{`{"text":""}`, `{"text":"Ça ressemble à Arrival."}`, `{"action":"prepare","query":"Arrival"}`, `{"text":"ok","action":"search"}`, `{"text":null}`, `{"text":"ok"} {}`} {
 		t.Run(raw, func(t *testing.T) {
 			calls := 0
-			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			s := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				var payload struct{ Messages []Message }
 				json.NewDecoder(r.Body).Decode(&payload)
 				encoded, _ := json.Marshal(payload)
-				if len(payload.Messages) != 3 || strings.Contains(string(encoded), "PRIVATE") || strings.Contains(payload.Messages[0].Content, ToolInstructions) {
+				if len(payload.Messages) != 3 || strings.Contains(string(encoded), "PRIVATE") || strings.Contains(payload.Messages[0].Content, agentInstructions) {
 					t.Error("borrowed private context/tools")
 				}
 				if !strings.Contains(payload.Messages[0].Content, CharacterCanon) {

@@ -17,16 +17,11 @@ import (
 
 func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRequest) {
 	options, _ := CommandOptions(i)
-	if i.Type != 3 && options.ChatMessage == "" && !options.Forget && !b.Eris.NativeTools() {
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Mentionne @Eris, puis utilise Répondre sur mes messages pour continuer dans le salon. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer ma mémoire de nos conversations.")})
-		return
-	}
-	if i.Type != 3 && options.ChatMessage == "" && !options.Forget {
+	if options.ChatMessage == "" && !options.Forget {
 		options.ChatMessage = "Eris ?"
 	}
-	// Separate capacity keeps a slow model from occupying the media workers.
 	if !b.reserveEris() {
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("⚠️ Eris · trop de requêtes simultanées.")})
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("⚠️ `ERIS_BUSY`")})
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -39,41 +34,16 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 		if !b.acknowledge(ctx, i) {
 			return
 		}
-		var result eris.ToolReply
 		owner := i.GuildID + ":" + i.Member.User.ID
-		public := i.Type == 3 && i.Message.Flags&64 == 0
-		if public {
-			owner += ":" + i.ChannelID
+		if options.Forget {
+			b.clearPublicErisGuildTurns(i.GuildID, i.Member.User.ID)
 		}
-		if i.Type == 3 {
-			result = b.erisTool(ctx, proof)
-			if b.Eris.V2 {
-				result = eris.NaturalChoices(result)
-				result.Content = b.Eris.MediaReply(ctx, "Je viens de choisir un bouton de demande.", result.Content)
+		result := b.erisDiscordReply(ctx, owner, options.ChatMessage, options.Forget, proof, "", eris.DiscordInput{MessageID: i.ID, Speaker: discordSpeaker(i.Member.User.ID, i.Member.Nick, i.Member.User.GlobalName, i.Member.User.Username)})
+		if id, ok := b.webhookReply(ctx, i, "PATCH", "/messages/@original", Message(result.Content)); ok {
+			if id == "" {
+				id = i.ID
 			}
-			b.Eris.RememberRequest(owner, result)
-		} else {
-			if options.Forget {
-				b.clearPublicErisGuildTurns(i.GuildID, i.Member.User.ID)
-			}
-			result = b.erisDiscordReply(ctx, owner, options.ChatMessage, options.Forget, proof, "", eris.DiscordInput{MessageID: i.ID, Speaker: discordSpeaker(i.Member.User.ID, i.Member.Nick, i.Member.User.GlobalName, i.Member.User.Username)})
-		}
-		reply := Message(result.Content)
-		if public {
-			delete(reply, "flags")
-		}
-		if !b.Eris.V2 && len(result.Buttons) > 0 {
-			buttons := []map[string]any{}
-			for _, button := range result.Buttons {
-				buttons = append(buttons, map[string]any{"type": 2, "style": 2, "label": button.Label, "custom_id": button.ID})
-			}
-			reply["components"] = []map[string]any{{"type": 1, "components": buttons}}
-		}
-		if messageID, ok := b.webhookReply(ctx, i, "PATCH", "/messages/@original", reply); ok {
-			if messageID == "" && !public {
-				messageID = i.ID
-			}
-			b.Eris.Delivered(owner, messageID, result.Content)
+			b.Eris.Delivered(owner, id, result.Content)
 		}
 	}()
 }
@@ -85,66 +55,34 @@ func (b *Bot) erisContextReply(ctx context.Context, owner, message string, forge
 	return b.erisDiscordReply(ctx, owner, message, forget, proof, reference, eris.DiscordInput{})
 }
 func (b *Bot) erisDiscordReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string, incoming eris.DiscordInput) eris.ToolReply {
-	var result eris.ToolReply
 	guild, _, _ := strings.Cut(owner, ":")
 	incoming.ChatOnly = guild != b.Config.DiscordGuildID
-	chatOnly := incoming.ChatOnly
 	calls := 0
 	text, err := b.Eris.ReplyWithDiscordContext(ctx, owner, message, forget, reference, incoming, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
-		// Enforce this at the transport boundary as well as in the model prompt.
-		if chatOnly {
-			return eris.ToolReply{Content: eris.ChatOnlyExplanation}, nil
+		if incoming.ChatOnly {
+			return eris.ToolReply{Content: `{"error":"tools_unavailable_on_this_server"}`}, nil
 		}
 		if proof.ContextMessageID != "" && !b.currentErisTurn(proof.ChannelID, proof.MessageID) {
 			return eris.ToolReply{}, eris.ErrUnavailable
 		}
+		calls++
+		proof.CallID = fmt.Sprintf("tool-%d", calls)
 		proof.Plan = plan
-		if b.Eris.NativeTools() {
-			calls++
-			proof.CallID = fmt.Sprintf("tool-%d", calls)
-		}
-		if plan.Action == "continue" {
-			proof.Plan, proof.Choice = eris.Plan{}, plan.Query
-		}
-		result = b.erisTool(ctx, proof)
-		if b.Eris.V2 && !b.Eris.NativeTools() {
-			result = eris.NaturalChoices(result)
-		}
-		if b.Eris.NativeTools() {
-			result.Buttons = nil
-		}
-		return result, nil
+		return b.erisTool(ctx, proof), nil
 	})
 	if errors.Is(err, eris.ErrBusy) {
-		if b.Eris.NativeTools() {
-			return eris.ToolReply{Content: "⚠️ Eris · service temporairement occupé."}
-		}
-		return eris.ToolReply{Content: "Je termine une conversation. Réessaie dans quelques secondes."}
+		return eris.ToolReply{Content: "⚠️ `ERIS_BUSY`"}
 	}
 	if err != nil {
-		if b.Eris.NativeTools() {
-			return eris.ToolReply{Content: "⚠️ Eris · réponse du modèle indisponible."}
-		}
-		return eris.ToolReply{Content: "Mon moteur de conversation ne répond pas pour le moment. Mes commandes restent disponibles avec /aide."}
+		return eris.ToolReply{Content: "⚠️ `ERIS_UNAVAILABLE`"}
 	}
-	result.Content = text
-	if b.Eris.V2 {
-		result.Buttons = nil
-	}
-	return result
+	return eris.ToolReply{Content: text}
 }
 
 func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolReply {
-	failure := eris.ToolReply{Content: "Je ne peux pas vérifier les données du Hub pour le moment. Réessaie plus tard."}
-	if input.CallID != "" {
-		failure.Content = `{"error":"hub_unavailable"}`
-	}
+	failure := eris.ToolReply{Content: `{"error":"hub_unavailable"}`}
 	if input.Plan.Action == "request" {
 		failure.Content = `{"error":"request_outcome_unknown","automaticRetry":false,"next":"check_status"}`
-	}
-	var interaction Interaction
-	if input.Plan.Action == "prepare" || strings.HasPrefix(input.Choice, "eris:choose:") || strings.HasPrefix(input.Choice, "eris:confirm:") || (json.Unmarshal(input.Interaction, &interaction) == nil && strings.HasPrefix(interaction.Data.CustomID, "eris:confirm:")) {
-		failure.Content = "Je ne peux pas confirmer l’enregistrement. Vérifie /mes-demandes ou Seerr avant de réessayer ; je ne renvoie pas automatiquement la demande."
 	}
 	body, _ := json.Marshal(input)
 	req, err := http.NewRequestWithContext(ctx, "POST", b.Config.BotAPIURL+"/internal/eris", bytes.NewReader(body))
@@ -162,23 +100,14 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 	}
 	defer resp.Body.Close()
 	var result eris.ToolReply
-	limit := 1500
-	if input.CallID != "" {
-		limit = 12000
-	}
-	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result) != nil || result.Content == "" || !utf8.ValidString(result.Content) || utf8.RuneCountInString(result.Content) > limit || len(result.Buttons) > 3 {
+	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result) != nil || result.Content == "" || !utf8.ValidString(result.Content) || utf8.RuneCountInString(result.Content) > 12000 {
 		return failure
 	}
-	if result.Web != nil && ((input.Plan.Action != "web" && input.Plan.Action != "anime" && input.Plan.Action != "gifts") || len(result.Buttons) != 0 || !result.Web.Validate()) {
+	if result.Web != nil && ((input.Plan.Action != "web" && input.Plan.Action != "anime" && input.Plan.Action != "gifts") || !result.Web.Validate()) {
 		return failure
 	}
-	if result.Diagnostic != nil && (input.Plan.Action != "diagnostic" || !result.Narrate || result.Web != nil || len(result.Buttons) > 0 || !result.Diagnostic.Valid()) {
+	if result.Diagnostic != nil && (input.Plan.Action != "diagnostic" || result.Web != nil || !result.Diagnostic.Valid()) {
 		return failure
-	}
-	for _, button := range result.Buttons {
-		if !ValidErisButton(button.ID) || button.Label == "" || utf8.RuneCountInString(button.Label) > 80 || (button.Operation != "" && button.Operation != "follow" && button.Operation != "unfollow") {
-			return failure
-		}
 	}
 	return result
 }
@@ -186,11 +115,7 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 func (b *Bot) reserveEris() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	limit := 2
-	if b.Eris != nil && b.Eris.NativeTools() {
-		limit = 8
-	}
-	if b.erisWorkers >= limit {
+	if b.erisWorkers >= 8 {
 		return false
 	}
 	b.erisWorkers++

@@ -37,18 +37,53 @@ func TestErisChannelCommandRequiresSignedAdministratorAndPersists(t *testing.T) 
 			body := fmt.Sprintf(`{"id":"99999","application_id":"12345","guild_id":"23456","channel_id":"33333","type":2,"token":"private-interaction-token","member":{"permissions":%q,"user":{"id":"11111"}},"data":{"name":"eris-salon","options":[{"name":"participation","type":3,"value":%q}]}}`, tc.permissions, tc.action)
 			b, r := signedInteraction(t, body)
 			participationMemory(t, b)
+			b.Eris.URL = "http://model.test"
+			modelCalls, replies := 0, 0
+			b.Client.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host == "model.test" {
+					modelCalls++
+					var input struct {
+						Messages []eris.Message
+						Tools    json.RawMessage
+					}
+					json.NewDecoder(r.Body).Decode(&input)
+					if len(input.Tools) != 0 || !strings.Contains(input.Messages[len(input.Messages)-1].Content, "channel_participation") {
+						t.Error("channel outcome missing or tools exposed")
+					}
+					return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"text\":\"Le modèle explique le réglage.\"}"}}]}`), nil
+				}
+				if strings.HasSuffix(r.URL.Path, "/callback") {
+					return botResponse(204, ""), nil
+				}
+				if strings.HasSuffix(r.URL.Path, "/messages/@original") {
+					replies++
+					var payload struct {
+						Content string
+						Flags   int
+					}
+					json.NewDecoder(r.Body).Decode(&payload)
+					if payload.Content != "Le modèle explique le réglage." || payload.Flags != 64 {
+						t.Error("model reply lost or public", payload)
+					}
+					return botResponse(200, `{}`), nil
+				}
+				t.Error("unexpected remote action", r.URL)
+				return botResponse(500, `{}`), nil
+			})
+			b.Eris.HTTP.Transport = b.Client.Transport
 			if tc.action == "desactiver" {
 				b.Eris.Memory.SetParticipation("23456", "33333", true)
 			}
 			w := httptest.NewRecorder()
 			b.Handler().ServeHTTP(w, r)
-			if tc.invalid {
+			b.Wait()
+			if tc.invalid || tc.permissions != "8" {
 				if w.Code != 403 {
 					t.Fatal(w.Code)
 				}
 				return
 			}
-			if w.Code != 200 || !strings.Contains(w.Body.String(), `"flags":64`) {
+			if w.Code != 202 || modelCalls != 1 || replies != 1 {
 				t.Fatal(w.Code, w.Body)
 			}
 			if got, err := b.Eris.Memory.Participation("23456", "33333"); err != nil || got != tc.want {

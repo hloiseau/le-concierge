@@ -58,14 +58,6 @@ func (r Result) Links(ids []int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (r Result) Fallback() string {
-	var ids []int
-	for i := range r.Sources {
-		ids = append(ids, i+1)
-	}
-	return "Voici les sources trouvées ; je n’ai pas pu en faire une synthèse fiable.\n" + r.Links(ids)
-}
-
 type Client struct {
 	endpoint string
 	search   *http.Client

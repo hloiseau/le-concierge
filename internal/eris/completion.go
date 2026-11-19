@@ -43,8 +43,7 @@ func (c *Chat) completeMessage(ctx context.Context, messages []Message, withTool
 		if c.dolly() {
 			return Message{}, ErrUnavailable
 		}
-		text, err := c.responses(ctx, messages, rawLimit)
-		return Message{Role: "assistant", Content: text}, err
+		return c.responseMessage(ctx, messages, withTools, definitions, rawLimit)
 	}
 	for _, message := range messages {
 		if len(message.Images) > 0 {

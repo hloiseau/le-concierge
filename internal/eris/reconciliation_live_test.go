@@ -74,9 +74,7 @@ func TestLiveErisReconciliation(t *testing.T) {
 				if input.Forget {
 					_, err = c.Reply(context.Background(), owner, "", true)
 				} else {
-					if session := c.sessions[owner]; session != nil {
-						session.next = time.Time{}
-					}
+
 					incoming := DiscordInput{MessageID: fmt.Sprintf("%05d", 40000+i), Speaker: Speaker{ID: input.Member, Name: input.Name, Username: "synthetic_" + input.Member}}
 					start := time.Now()
 					row.Reply, err = c.ReplyWithDiscordContext(context.Background(), owner, input.Input, false, "", incoming, func(_ context.Context, plan Plan) (ToolReply, error) {

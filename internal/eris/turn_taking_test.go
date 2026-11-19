@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+
 	"strings"
 	"testing"
 	"time"
@@ -16,8 +16,8 @@ func TestPublicClosuresSilenceAndExplicitReentry(t *testing.T) {
 	owner := "10000:20000:30000"
 	c.observePublic(owner, "salut", memoryInput("40001", "20000"), time.Now())
 	for _, text := range []string{"oui", "ouai, c'est ça", "👍", "jpp", "merci", "ah pas mal"} {
-		if !c.SkipPublicFollowup(owner, text, false) {
-			t.Fatal("unwanted followup", text)
+		if c.SkipPublicFollowup(owner, text, false) {
+			t.Fatal("model did not receive contextual followup", text)
 		}
 	}
 	for _, text := range []string{"oui, demande-le", "mais pourquoi ?", "?", "demande le deuxième", "non je voulais la série"} {
@@ -28,9 +28,8 @@ func TestPublicClosuresSilenceAndExplicitReentry(t *testing.T) {
 	if c.SkipPublicFollowup(owner, "merci", true) {
 		t.Fatal("explicit mention suppressed")
 	}
-	c.sessions[owner] = &conversation{pending: true, choiceUntil: time.Now().Add(time.Minute)}
 	if c.SkipPublicFollowup(owner, "oui", false) {
-		t.Fatal("active choice suppressed")
+		t.Fatal("short followup suppressed")
 	}
 	if !c.SkipPublicFollowup(owner, "tu peux fermer ta gueule ?", false) || !c.SkipPublicFollowup(owner, "encore une chose", false) {
 		t.Fatal("quiet state ignored")
@@ -51,8 +50,8 @@ func TestTeasingReassuranceIsNotUnconditionallySilenced(t *testing.T) {
 			t.Fatalf("contextual teasing response %q was hard-silenced before the model could read the exchange", text)
 		}
 	}
-	if !c.SkipPublicFollowup(owner, "ok", false) {
-		t.Fatal("unambiguous closure should remain silent")
+	if c.SkipPublicFollowup(owner, "ok", false) {
+		t.Fatal("closure was decided without the model")
 	}
 }
 
@@ -86,7 +85,7 @@ func TestAmbientContextIsTransientActiveRoomOnlyAndNeverAnAction(t *testing.T) {
 }
 
 func TestModelSilenceDoesNotExecuteToolOrBlockNextTurn(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: `{"action":"silent"}`}}}})
 	}))
 	defer server.Close()
@@ -97,11 +96,8 @@ func TestModelSilenceDoesNotExecuteToolOrBlockNextTurn(t *testing.T) {
 			t.Fatal("silent invoked tool")
 			return ToolReply{}, nil
 		})
-		if err != nil || (i == 0 && text != "") || (i == 1 && text == "") {
+		if (i == 0 && (err != nil || text != "")) || (i == 1 && (err != ErrUnavailable || text != "")) {
 			t.Fatal(text, err)
-		}
-		if i == 0 && !c.sessions[owner].next.IsZero() {
-			t.Fatal("silence throttled next real question")
 		}
 	}
 }

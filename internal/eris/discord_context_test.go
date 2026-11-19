@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
+
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +15,7 @@ func discordContextChat(t *testing.T) (*Chat, chan []Message, *string) {
 	t.Helper()
 	prompts := make(chan []Message, 32)
 	raw := `{"action":"chat","text":"Réponse visible."}`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct{ Messages []Message }
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		prompts <- body.Messages
@@ -117,38 +117,15 @@ func TestPublicHistoryDoesNotInventDeliveryAndForgettingClearsDerivatives(t *tes
 	}
 }
 
-func TestOtherMembersPublicTitlesCannotAuthorizeAnAddition(t *testing.T) {
+func TestOtherMembersPublicTitlesAreAvailableForNaturalClarification(t *testing.T) {
 	c, prompts, raw := discordContextChat(t)
 	discordContextCall(t, c, "12345:11111:33333", "Mon film préféré est Coherence.", DiscordInput{MessageID: "50001", Speaker: Speaker{ID: "11111", Name: "Alice"}}, true)
 	<-prompts
-	*raw = `{"action":"prepare","query":"Coherence","kind":"movie"}`
+	*raw = `{"action":"chat","text":"Tu parles de Coherence ?"}`
 	reply := discordContextCall(t, c, "12345:22222:33333", "Demande ce film.", DiscordInput{MessageID: "50002", Speaker: Speaker{ID: "22222", Name: "Bob"}}, true)
 	data := discordData(t, <-prompts)
-	if !strings.Contains(string(data["other_public_exchanges"]), "Coherence") || !strings.Contains(reply, "Quel titre") {
+	if !strings.Contains(string(data["other_public_exchanges"]), "Coherence") || reply != "Tu parles de Coherence ?" {
 		t.Fatal("social context became request authorization", reply)
-	}
-}
-
-func TestMediaWithoutAnExplicitRequestCannotInvokeATool(t *testing.T) {
-	c, prompts, raw := discordContextChat(t)
-	*raw = `{"action":"prepare","query":"Moon","kind":"movie"}`
-	in := DiscordInput{MessageID: "50001", Speaker: Speaker{ID: "11111", Name: "Alice"}, VisualNote: "Aucun aperçu disponible.", MediaOnly: true}
-	reply := discordContextCall(t, c, "12345:11111:33333", "https://klipy.com/gifs/moon", in, true)
-	<-prompts
-	if !strings.Contains(reply, "média") {
-		t.Fatal("media-only input was treated as a request", reply)
-	}
-}
-
-func TestButtonDeliveryDoesNotRewriteAnUnrelatedPublicExchange(t *testing.T) {
-	c, prompts, _ := discordContextChat(t)
-	owner := "12345:11111:33333"
-	discordContextCall(t, c, owner, "Bonjour", DiscordInput{MessageID: "50001", Speaker: Speaker{ID: "11111", Name: "Alice"}}, true)
-	<-prompts
-	c.RememberRequest(owner, ToolReply{Content: "BUTTON-RESULT"})
-	c.Delivered(owner, "50002", "BUTTON-RESULT")
-	if c.publicRooms["12345:33333"].exchanges[0].Reply == "BUTTON-RESULT" {
-		t.Fatal("button result attached to unrelated message")
 	}
 }
 
@@ -183,7 +160,7 @@ func TestDiscordContextRejectsImpersonationAndBoundsItsWindow(t *testing.T) {
 
 func TestResponsesCarriesImagesWithoutRetainingTheirBytes(t *testing.T) {
 	payloads := make(chan string, 4)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body json.RawMessage
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		payloads <- string(body)

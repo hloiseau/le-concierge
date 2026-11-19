@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
+
 	"strings"
 	"testing"
 )
@@ -25,7 +25,7 @@ func TestAddressingIsStrictAndDoesNotBorrowPrivateHistory(t *testing.T) {
 		{`{"addressed":true}`, 503, false, true},
 	} {
 		t.Run(fmt.Sprint(tc), func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var body struct{ Messages []Message }
 				_ = json.NewDecoder(r.Body).Decode(&body)
 				raw, _ := json.Marshal(body)

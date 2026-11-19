@@ -112,7 +112,7 @@ func TestErisImplicitWatchFiltersStayPrivate(t *testing.T) {
 			return response(200, string(raw)), nil
 		})
 		w := callErisTool(s, eris.ToolRequest{Plan: plan, ChannelID: "33333", MessageID: "99999", ContextMessageID: "88888"})
-		if w.Code != 200 || !strings.Contains(w.Body.String(), "en privé") {
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "private_conversation_required") {
 			t.Fatalf("privacy boundary %d %s", w.Code, w.Body)
 		}
 	}

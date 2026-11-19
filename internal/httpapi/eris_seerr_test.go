@@ -40,16 +40,16 @@ func TestErisSeerrRetryAfterUncertainWriteAndRestart(t *testing.T) {
 		case "/api/v1/user/2/requests":
 			return response(200, `{"pageInfo":{"results":1},"results":[{"id":9,"type":"movie","is4k":false,"requestedBy":{"id":2},"media":{"tmdbId":123}}]}`), nil
 		case "/api/v1/movie/123":
-			return response(200, `{"title":"Veilleurs Orbitaux"}`), nil
+			return response(200, `{"id":123,"title":"Veilleurs Orbitaux"}`), nil
 		default:
 			t.Errorf("unexpected route: %s", r.URL.Path)
 			return response(500, "{}"), nil
 		}
 	})
 	body := strings.Replace(erisSlash, `"value":"Arrival"`, `"value":"Demande le film Veilleurs Orbitaux dans Seerr"`, 1)
-	plan := eris.Plan{Action: "prepare", Query: "Veilleurs Orbitaux", Kind: "movie"}
+	plan := eris.Plan{Action: "request", MediaID: 123, Kind: "movie"}
 	w := callErisTool(s, signedErisTool(t, s, plan, body))
-	if w.Code != 200 || posts != 1 || !strings.Contains(w.Body.String(), "Vérifie /mes-demandes") {
+	if w.Code != 200 || posts != 1 || !strings.Contains(w.Body.String(), "outcome_unknown_do_not_retry") {
 		t.Fatalf("first result did not represent an uncertain write: status=%d posts=%d", w.Code, posts)
 	}
 	if err := db.Close(); err != nil {
@@ -63,7 +63,7 @@ func TestErisSeerrRetryAfterUncertainWriteAndRestart(t *testing.T) {
 	s.Store = reopened
 	second := strings.Replace(body, "99999", "99998", 1)
 	w = callErisTool(s, signedErisTool(t, s, plan, second))
-	if w.Code != 200 || posts != 1 || !strings.Contains(w.Body.String(), "retrouvé la demande #9") {
+	if w.Code != 200 || posts != 1 || !strings.Contains(w.Body.String(), "already_created") {
 		t.Fatalf("retry should read the matching receipt without a POST: status=%d posts=%d result=%s", w.Code, posts, w.Body)
 	}
 }

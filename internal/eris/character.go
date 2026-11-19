@@ -48,10 +48,7 @@ func (c *Chat) Delivered(owner, source, text string) {
 	}
 	if c.V2 {
 		c.publicReply(owner, s.discord, text)
-		s.next = time.Time{}
-		if len(s.choices) > 0 {
-			s.choiceSource = source
-		}
+
 	}
 	if c.Memory == nil {
 		s.delivery = ""

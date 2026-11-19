@@ -70,9 +70,7 @@ func TestLiveErisPersonality(t *testing.T) {
 		c.V2, c.Protocol, c.KeyFile, c.Memory = true, "responses", os.Getenv("ERIS_PERSONALITY_TOKEN_FILE"), m
 		owner := "10000:20000:30000"
 		for index, question := range scenario.Inputs {
-			if session := c.sessions[owner]; session != nil {
-				session.next = time.Time{}
-			}
+
 			row := turn{CaseID: scenario.ID, Input: question}
 			c.HTTP.Transport = personalityStatusTransport{status: &row.HTTPStatus}
 			start := time.Now()
@@ -115,10 +113,10 @@ func TestLiveErisPersonality(t *testing.T) {
 			if scenario.ID == "server" && (row.Plan == nil || row.Plan.Action != "monitoring") {
 				t.Error("server metrics not routed to monitoring")
 			}
-			if outsidePlex.MatchString(question) && (row.Plan == nil || row.Plan.Source != "seerr") {
+			if strings.Contains(strings.ToLower(question), "pas encore sur plex") && (row.Plan == nil || row.Plan.Source != "seerr") {
 				t.Error("outside-Plex constraint lost")
 			}
-			if scenario.ID == "media" && sameDirector.MatchString(question) && (row.Plan == nil || row.Plan.Relation != "director" || row.Plan.Source != "seerr") {
+			if scenario.ID == "media" && strings.Contains(strings.ToLower(question), "même réal") && (row.Plan == nil || row.Plan.Relation != "director" || row.Plan.Source != "seerr") {
 				t.Error("director follow-up lost catalogue context")
 			}
 			if scenario.ID == "cinema-opinion" && row.Plan != nil {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+
 	"reflect"
 	"strings"
 	"testing"
@@ -54,7 +54,7 @@ func TestQuotedLabHistoryKeepsLatestRequestAndPastFacts(t *testing.T) {
 func TestRecentDialogueNotRepeatedAsMemory(t *testing.T) {
 	var prompts [][]Message
 	const previous = "Le réglage Vesper fonctionne mieux."
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := featureModelServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body struct{ Messages []Message }
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
