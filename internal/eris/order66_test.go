@@ -16,7 +16,18 @@ func TestOrder66AsksNaturallyWhenThereIsNoIdentifiableTarget(t *testing.T) {
 		if json.NewDecoder(r.Body).Decode(&payload) != nil || len(payload.Tools) != 0 {
 			t.Error("roleplay gained external tools")
 		}
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"targetDiscordId\":\"\",\"text\":\"Qui est ma cible ?\"}"}}]}`))
+		var facts struct {
+			Result struct {
+				Status           string `json:"status"`
+				Missing          string `json:"missing"`
+				InvokerProtected bool   `json:"invokerProtected"`
+			} `json:"result"`
+		}
+		json.Unmarshal([]byte(payload.Messages[len(payload.Messages)-1].Content), &facts)
+		if facts.Result.Status != "clarification_required" || facts.Result.Missing != "human_interlocutor" || !facts.Result.InvokerProtected {
+			t.Error("model was still asked to choose a target when none exists")
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"{\"text\":\"Qui est ma cible ?\"}"}}]}`))
 	}))
 	defer server.Close()
 	c := New(server.URL, "", "model")

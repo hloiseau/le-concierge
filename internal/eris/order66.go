@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"strings"
 	"unicode/utf8"
 )
@@ -52,6 +53,19 @@ func (c *Chat) Order66(ctx context.Context, actor Speaker, turns []RoleplayTurn)
 	case <-ctx.Done():
 		return "", ErrUnavailable
 	}
+	clarify := func() (string, error) {
+		reply, err := c.Explain(ctx, turns[len(turns)-1].Text, map[string]any{
+			"operation": "ordre66", "status": "clarification_required", "missing": "human_interlocutor",
+			"invokerProtected": true, "eligibleTargetCount": len(eligible), "actionExecuted": false,
+		})
+		if err != nil {
+			slog.Warn("Eris roleplay clarification failed")
+		}
+		return reply, err
+	}
+	if len(eligible) == 0 {
+		return clarify()
+	}
 	data, _ := json.Marshal(struct {
 		Invoker      Speaker        `json:"invoker"`
 		Conversation []RoleplayTurn `json:"conversation"`
@@ -63,6 +77,7 @@ Ce registre est un jeu fictif entre personnages, sans adresse, surveillance, agr
 Renvoie uniquement {"targetDiscordId":"ID vérifié de la cible ou chaîne vide si une précision manque","text":"ta réplique ou ta question"}. Aucun ID ni mention technique dans text. 1000 caractères maximum.`
 	raw, err := c.complete(ctx, c.dialoguePrompt([]Message{{Role: "system", Content: prompt}, {Role: "user", Content: string(data)}}), true, completionBudget{Tokens: 1000, Runes: 1800})
 	if err != nil {
+		slog.Warn("Eris roleplay generation failed")
 		return "", err
 	}
 	var result struct {
@@ -71,8 +86,13 @@ Renvoie uniquement {"targetDiscordId":"ID vérifié de la cible ou chaîne vide 
 	}
 	d := json.NewDecoder(strings.NewReader(raw))
 	d.DisallowUnknownFields()
-	if d.Decode(&result) != nil || d.Decode(new(any)) != io.EOF || strings.TrimSpace(result.Text) == "" || utf8.RuneCountInString(result.Text) > 1000 || result.TargetDiscordID != "" && !eligible[result.TargetDiscordID] {
+	if d.Decode(&result) != nil || d.Decode(new(any)) != io.EOF || strings.TrimSpace(result.Text) == "" || utf8.RuneCountInString(result.Text) > 1000 {
+		slog.Warn("Eris roleplay response invalid")
 		return "", ErrUnavailable
+	}
+	if result.TargetDiscordID != "" && !eligible[result.TargetDiscordID] {
+		slog.Warn("Eris roleplay target rejected")
+		return clarify()
 	}
 	if result.TargetDiscordID != "" {
 		return "<@" + result.TargetDiscordID + "> " + result.Text, nil
