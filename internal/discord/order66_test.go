@@ -81,7 +81,7 @@ func TestOrder66TargetsTheInterlocutorAndNeverItsInvoker(t *testing.T) {
 				if len(payload.Tools) != 0 || !strings.Contains(string(all), "Keftcha") || !strings.Contains(string(all), "Hugo") {
 					t.Error("roleplay lost its real interlocutors or exposed external tools")
 				}
-				answer, _ := json.Marshal(map[string]string{"targetDiscordId": target, "text": "Keftcha, dans cette scène, Eris surgit comme une furie."})
+				answer, _ := json.Marshal(map[string]string{"targetDiscordId": target, "text": "Je te plaque au sol."})
 				raw, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"message": eris.Message{Role: "assistant", Content: string(answer)}}}})
 				return botResponse(200, string(raw)), nil
 			})
@@ -98,10 +98,17 @@ func TestOrder66TargetsTheInterlocutorAndNeverItsInvoker(t *testing.T) {
 				}
 				sends++
 				raw, _ := io.ReadAll(r.Body)
-				if target == "22222" && !strings.Contains(string(raw), "Eris surgit") {
+				if target == "22222" && !strings.Contains(string(raw), "Je te plaque") {
 					t.Error("valid scene was not delivered", string(raw))
 				}
-				if target != "22222" && strings.Contains(string(raw), "Eris surgit") {
+				var sent struct {
+					Content string `json:"content"`
+				}
+				json.Unmarshal(raw, &sent)
+				if target == "22222" && !strings.HasPrefix(sent.Content, "<@22222> ") {
+					t.Error("second-person roleplay still appears addressed to the invoker", sent.Content)
+				}
+				if target != "22222" && strings.Contains(string(raw), "Je te plaque") {
 					t.Error("unverified or self-targeted roleplay was published")
 				}
 				return botResponse(200, `{"id":"88888"}`), nil
