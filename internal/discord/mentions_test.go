@@ -306,18 +306,20 @@ func TestMentionsGatewayReceivesResumesAndStops(t *testing.T) {
 	}
 }
 
-func TestBareAndOversizedMentionsDoNotCallTheModel(t *testing.T) {
+func TestBareMentionGetsModelReplyAndOversizedMentionIsRejected(t *testing.T) {
 	for _, question := range []string{"", strings.Repeat("é", 501)} {
 		b, _ := signedCommand(t, "eris")
+		calls := 0
+		b.Eris.URL = "https://model.example"
 		b.Eris.HTTP.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
-			t.Error("unexpected inference")
-			return botResponse(500, ""), nil
+			calls++
+			return botResponse(200, `{"choices":[{"message":{"role":"assistant","content":"{\"action\":\"chat\",\"text\":\"Oui, je t’écoute.\"}"}}]}`), nil
 		})
 		s, _ := discordgo.New("Bot fixture-token")
 		count := 0
 		s.Client = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
 			count++
-			if !strings.HasSuffix(r.URL.Path, "/messages") {
+			if !strings.HasSuffix(r.URL.Path, "/messages") && !strings.HasSuffix(r.URL.Path, "/typing") {
 				t.Error("unexpected route")
 			}
 			return botResponse(200, `{"id":"88888"}`), nil
@@ -326,8 +328,17 @@ func TestBareAndOversizedMentionsDoNotCallTheModel(t *testing.T) {
 		m.Content = "<@12345> " + question
 		b.handleMention(context.Background(), s, m)
 		b.Wait()
-		if count != 1 {
-			t.Fatal("missing guidance")
+		want := 1
+		if question == "" {
+			want = 2
+			if calls != 1 {
+				t.Fatal("bare mention did not reach the model", calls)
+			}
+		} else if calls != 0 {
+			t.Fatal("oversized input reached the model")
+		}
+		if count != want {
+			t.Fatal("missing response", count, want)
 		}
 	}
 }

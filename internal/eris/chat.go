@@ -20,12 +20,15 @@ var (
 )
 
 type Message struct {
-	Role        string   `json:"role"`
-	Content     string   `json:"content"`
-	Images      []string `json:"-"`
-	historyID   uint64
-	unconfirmed bool
-	toolResult  bool
+	Role             string     `json:"role"`
+	Content          string     `json:"content"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	Images           []string   `json:"-"`
+	historyID        uint64
+	unconfirmed      bool
+	toolResult       bool
 }
 
 type conversation struct {
@@ -96,6 +99,22 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		return "", ErrUnavailable
 	}
 	c.mu.Lock()
+	if c.NativeTools() {
+		// Queue short follow-ups behind the active turn instead of discarding them.
+		for {
+			active := c.sessions[owner]
+			if (active == nil || !active.busy) && len(c.slots) < cap(c.slots) {
+				break
+			}
+			c.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return "", ErrUnavailable
+			case <-time.After(25 * time.Millisecond):
+			}
+			c.mu.Lock()
+		}
+	}
 	now := time.Now()
 	for key, s := range c.sessions {
 		if !s.busy && now.After(s.expires) {
@@ -164,7 +183,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		c.mu.Unlock()
 		return "Mon moteur de conversation n’est pas encore connecté. Mes commandes restent disponibles avec /aide.", nil
 	}
-	if s != nil && now.Before(s.next) {
+	if !c.NativeTools() && s != nil && now.Before(s.next) {
 		c.mu.Unlock()
 		return "", ErrBusy
 	}
@@ -174,10 +193,10 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 		id, matched := MatchChoice(question, s.choices)
 		unfollowChoice = matched && id != ""
 	}
-	if run != nil && !incoming.ChatOnly && IsMediaRemoval(question) && !unfollowChoice {
+	if !c.NativeTools() && run != nil && !incoming.ChatOnly && IsMediaRemoval(question) && !unfollowChoice {
 		direct = &Plan{Action: "chat", Text: RemovalExplanation}
 	}
-	if direct == nil && c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
+	if !c.NativeTools() && direct == nil && c.V2 && run != nil && s != nil && s.choiceSource != "" && now.Before(s.choiceUntil) {
 		// A reply to an unrelated old message must not confirm the current request.
 		if reference == "" || strings.HasPrefix(reference, "Eris (message "+s.choiceSource+") : ") {
 			if id, matched := MatchChoice(question, s.choices); matched {
@@ -297,7 +316,15 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	}
 	tail = append(tail, Message{Role: "user", Content: question, Images: incoming.Images})
 	c.mu.Unlock()
-	defer func() { c.mu.Lock(); s.busy = false; c.mu.Unlock(); <-c.slots }()
+	defer func() {
+		c.mu.Lock()
+		s.busy = false
+		if c.NativeTools() {
+			s.next = time.Time{}
+		}
+		c.mu.Unlock()
+		<-c.slots
+	}()
 	if c.V2 {
 		budget := recentTextBudget
 		available := contextTextLimit - textRunes(messages) - textRunes(tail) - durable.promptBudget() - utf8.RuneCountInString(conversationVoice) - summaryTextBudget - recallTextReserve
@@ -342,9 +369,14 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 
 	var reply string
 	var err error
+	agentUsed := false
 	recallOnly := false
 	if direct == nil {
-		reply, err = c.complete(ctx, c.dialoguePrompt(messages), run != nil)
+		if c.NativeTools() && run != nil && !incoming.ChatOnly {
+			reply, agentUsed, err = c.agentReply(ctx, c.dialoguePrompt(messages), run)
+		} else {
+			reply, err = c.complete(ctx, c.dialoguePrompt(messages), run != nil)
+		}
 		if err != nil {
 			return "", err
 		}
@@ -384,6 +416,9 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			plan, change, notes, err = parseDurablePlan(reply, recalled, question)
 		}
 		if err != nil {
+			if c.NativeTools() {
+				return "", ErrUnavailable
+			}
 			if incoming.ChatOnly {
 				return "Je n’ai pas bien compris. Tu peux reformuler ?", nil
 			}
@@ -464,7 +499,11 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 				}
 			}
 			reply = plan.Text
-			chatReply = true
+			chatReply = !agentUsed
+			if agentUsed {
+				notes = nil
+				change = nil
+			}
 		} else {
 			var result ToolReply
 			result, err = run(ctx, plan)

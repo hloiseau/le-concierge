@@ -35,6 +35,9 @@ func (c *Chat) SkipPublicFollowup(owner, text string, explicit bool) bool {
 	if room != nil && room.quiet {
 		return true
 	}
+	if c.NativeTools() {
+		return false
+	}
 	if s := c.sessions[owner]; s != nil && s.pending && time.Now().Before(s.choiceUntil) {
 		return false
 	}

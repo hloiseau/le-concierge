@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -33,6 +34,8 @@ type erisPending struct {
 	PersonalPlan                              *eris.Plan
 }
 
+var erisToolCallID = regexp.MustCompile(`^tool-[1-9][0-9]?$`)
+
 func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	if len(s.Config.BotAPISecret) < 32 || subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+s.Config.BotAPISecret)) != 1 {
 		problem(w, 401, "unauthorized", "Service non autorisé.")
@@ -43,6 +46,10 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	d.DisallowUnknownFields()
 	if d.Decode(&input) != nil || d.Decode(new(any)) != io.EOF {
 		problem(w, 400, "invalid_body", "Requête invalide.")
+		return
+	}
+	if input.CallID != "" && (!erisToolCallID.MatchString(input.CallID) || input.Choice != "") {
+		problem(w, 400, "invalid_call", "Appel invalide.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
@@ -63,11 +70,11 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	}
 	write := func(reply eris.ToolReply) { jsonOut(w, 200, reply) }
 	message := func(text string) { write(eris.ToolReply{Content: text}) }
-	if component == "" && eris.IsMediaRemoval(caller.Question) && !s.erisUnfollowChoice(caller, input.Choice) {
+	if input.CallID == "" && component == "" && eris.IsMediaRemoval(caller.Question) && !s.erisUnfollowChoice(caller, input.Choice) {
 		message(eris.RemovalExplanation)
 		return
 	}
-	if component == "" && !eris.PersonalWriteRequested(caller.Question, input.Plan) {
+	if input.CallID == "" && component == "" && !eris.PersonalWriteRequested(caller.Question, input.Plan) {
 		message("Précise le suivi ou le réglage que tu veux modifier. Je n’ai rien changé.")
 		return
 	}
@@ -119,7 +126,15 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 	} else if component != "" {
 		reply = s.erisConfirmation(ctx, u, userID, component, private)
 	} else {
-		reply = s.runErisTool(ctx, u, grant, userID, input.Plan, private)
+		if input.Plan.Action == "lookup" || input.Plan.Action == "collection" || input.Plan.Action == "request" {
+			if input.CallID == "" {
+				problem(w, 400, "native_call_required", "Appel outil requis.")
+				return
+			}
+			reply = s.erisAgentMedia(ctx, u, caller, input.Plan)
+		} else {
+			reply = s.runErisTool(ctx, u, grant, userID, input.Plan, private)
+		}
 		if input.Plan.Action == "prepare" && len(reply.Buttons) == 1 {
 			parts := strings.Split(reply.Buttons[0].ID, ":")
 			s.mu.Lock()
@@ -140,8 +155,23 @@ func (s *Server) erisTool(w http.ResponseWriter, r *http.Request) {
 		message("Ton accès a expiré. Reconnecte-toi au Hub avec Plex.")
 		return
 	}
-	if utf8.RuneCountInString(reply.Content) > 1500 {
+	if input.CallID == "" && utf8.RuneCountInString(reply.Content) > 1500 {
 		reply.Content = string([]rune(reply.Content)[:1490]) + "…"
+	}
+	if input.CallID != "" {
+		s.mu.Lock()
+		for _, button := range reply.Buttons {
+			if parts := strings.Split(button.ID, ":"); len(parts) == 3 {
+				delete(s.erisPending, parts[2])
+			}
+		}
+		s.mu.Unlock()
+		reply.Buttons = nil
+		if utf8.RuneCountInString(reply.Content) > 12000 {
+			reply = erisData(map[string]string{"error": "tool_result_too_large"})
+		}
+		write(reply)
+		return
 	}
 	// Bind the entire offered set to the verified channel, never caller metadata.
 	s.mu.Lock()
@@ -200,7 +230,7 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 			}
 			component = i.Data.CustomID
 		}
-		if !s.erisEvent("eris:" + i.ID) {
+		if !s.erisEvent("eris:" + i.ID + ":" + in.CallID) {
 			return erisCallerContext{}, upstream.ErrDenied
 		}
 		options, _ := discord.CommandOptions(i)
@@ -243,7 +273,7 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 		reference = anchor.Content
 		referenceByEris = true
 	}
-	if !addressed || strings.TrimSpace(question) == "" || !s.erisEvent("eris:mention:"+m.ID) {
+	if !addressed || strings.TrimSpace(question) == "" || !s.erisEvent("eris:mention:"+m.ID+":"+in.CallID) {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
 	if in.ContextMessageID == "" && m.ReferencedMessage != nil {

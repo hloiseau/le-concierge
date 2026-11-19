@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -16,13 +17,16 @@ import (
 
 func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRequest) {
 	options, _ := CommandOptions(i)
-	if i.Type != 3 && options.ChatMessage == "" && !options.Forget {
+	if i.Type != 3 && options.ChatMessage == "" && !options.Forget && !b.Eris.NativeTools() {
 		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Mentionne @Eris, puis utilise Répondre sur mes messages pour continuer dans le salon. Utilise /eris message:… pour me parler en privé, ou /eris oublier:true pour effacer ma mémoire de nos conversations.")})
 		return
 	}
+	if i.Type != 3 && options.ChatMessage == "" && !options.Forget {
+		options.ChatMessage = "Eris ?"
+	}
 	// Separate capacity keeps a slow model from occupying the media workers.
 	if !b.reserveEris() {
-		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("Je termine une conversation. Réessaie dans un instant.")})
+		_ = json.NewEncoder(w).Encode(map[string]any{"type": 4, "data": Message("⚠️ Eris · trop de requêtes simultanées.")})
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -85,6 +89,7 @@ func (b *Bot) erisDiscordReply(ctx context.Context, owner, message string, forge
 	guild, _, _ := strings.Cut(owner, ":")
 	incoming.ChatOnly = guild != b.Config.DiscordGuildID
 	chatOnly := incoming.ChatOnly
+	calls := 0
 	text, err := b.Eris.ReplyWithDiscordContext(ctx, owner, message, forget, reference, incoming, func(ctx context.Context, plan eris.Plan) (eris.ToolReply, error) {
 		// Enforce this at the transport boundary as well as in the model prompt.
 		if chatOnly {
@@ -94,19 +99,32 @@ func (b *Bot) erisDiscordReply(ctx context.Context, owner, message string, forge
 			return eris.ToolReply{}, eris.ErrUnavailable
 		}
 		proof.Plan = plan
+		if b.Eris.NativeTools() {
+			calls++
+			proof.CallID = fmt.Sprintf("tool-%d", calls)
+		}
 		if plan.Action == "continue" {
 			proof.Plan, proof.Choice = eris.Plan{}, plan.Query
 		}
 		result = b.erisTool(ctx, proof)
-		if b.Eris.V2 {
+		if b.Eris.V2 && !b.Eris.NativeTools() {
 			result = eris.NaturalChoices(result)
+		}
+		if b.Eris.NativeTools() {
+			result.Buttons = nil
 		}
 		return result, nil
 	})
 	if errors.Is(err, eris.ErrBusy) {
+		if b.Eris.NativeTools() {
+			return eris.ToolReply{Content: "⚠️ Eris · service temporairement occupé."}
+		}
 		return eris.ToolReply{Content: "Je termine une conversation. Réessaie dans quelques secondes."}
 	}
 	if err != nil {
+		if b.Eris.NativeTools() {
+			return eris.ToolReply{Content: "⚠️ Eris · réponse du modèle indisponible."}
+		}
 		return eris.ToolReply{Content: "Mon moteur de conversation ne répond pas pour le moment. Mes commandes restent disponibles avec /aide."}
 	}
 	result.Content = text
@@ -118,6 +136,12 @@ func (b *Bot) erisDiscordReply(ctx context.Context, owner, message string, forge
 
 func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolReply {
 	failure := eris.ToolReply{Content: "Je ne peux pas vérifier les données du Hub pour le moment. Réessaie plus tard."}
+	if input.CallID != "" {
+		failure.Content = `{"error":"hub_unavailable"}`
+	}
+	if input.Plan.Action == "request" {
+		failure.Content = `{"error":"request_outcome_unknown","automaticRetry":false,"next":"check_status"}`
+	}
 	var interaction Interaction
 	if input.Plan.Action == "prepare" || strings.HasPrefix(input.Choice, "eris:choose:") || strings.HasPrefix(input.Choice, "eris:confirm:") || (json.Unmarshal(input.Interaction, &interaction) == nil && strings.HasPrefix(interaction.Data.CustomID, "eris:confirm:")) {
 		failure.Content = "Je ne peux pas confirmer l’enregistrement. Vérifie /mes-demandes ou Seerr avant de réessayer ; je ne renvoie pas automatiquement la demande."
@@ -138,7 +162,11 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 	}
 	defer resp.Body.Close()
 	var result eris.ToolReply
-	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 32*1024)).Decode(&result) != nil || result.Content == "" || !utf8.ValidString(result.Content) || utf8.RuneCountInString(result.Content) > 1500 || len(result.Buttons) > 3 {
+	limit := 1500
+	if input.CallID != "" {
+		limit = 12000
+	}
+	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result) != nil || result.Content == "" || !utf8.ValidString(result.Content) || utf8.RuneCountInString(result.Content) > limit || len(result.Buttons) > 3 {
 		return failure
 	}
 	if result.Web != nil && ((input.Plan.Action != "web" && input.Plan.Action != "anime" && input.Plan.Action != "gifts") || len(result.Buttons) != 0 || !result.Web.Validate()) {
@@ -158,7 +186,11 @@ func (b *Bot) erisTool(ctx context.Context, input eris.ToolRequest) eris.ToolRep
 func (b *Bot) reserveEris() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.erisWorkers >= 2 {
+	limit := 2
+	if b.Eris != nil && b.Eris.NativeTools() {
+		limit = 8
+	}
+	if b.erisWorkers >= limit {
 		return false
 	}
 	b.erisWorkers++

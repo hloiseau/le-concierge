@@ -35,35 +35,16 @@ func canNarrate(plan Plan, result ToolReply) bool {
 	return false
 }
 
-var erisMediaOpenings = [...]string{"Bon, voilà.", "On en est là.", "Allez, on fait le point."}
-
-// MediaReply keeps the receipt and every choice intact. The model selects a
-// short transition and does not receive the receipt or have any tools here.
+// Legacy interaction receipts also get a freely written response from the facts.
 func (c *Chat) MediaReply(ctx context.Context, question, facts string) string {
-	if !c.dolly() || facts == "" || utf8.RuneCountInString(facts) > 1460 {
+	if !c.dolly() || !c.V2 || facts == "" {
 		return facts
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	instructions := c.instructions(false, false) + fmt.Sprintf(`
-Pour introduire un résultat d'outil avant l'affichage des faits vérifiés, choisis la transition qui te ressemble le plus dans cet échange : 1 = %s, 2 = %s, 3 = %s. Tu peux répondre 0 si une introduction serait de trop. Produis uniquement {"opening":1} avec le numéro choisi.`, erisMediaOpenings[0], erisMediaOpenings[1], erisMediaOpenings[2])
-	raw, err := c.complete(ctx, c.dialoguePrompt([]Message{{Role: "system", Content: instructions}, {Role: "user", Content: question}}), true)
-	var answer struct {
-		Opening int `json:"opening"`
-	}
-	if err != nil || json.Unmarshal([]byte(raw), &answer) != nil || answer.Opening < 1 || answer.Opening > len(erisMediaOpenings) {
-		return facts
-	}
-	return erisMediaOpenings[answer.Opening-1] + "\n\n" + facts
+	return c.toolAnswer(ctx, question, ToolReply{Content: facts})
 }
 
 // MediaReplyFacts is used only on verified replies authored by Eris.
 func MediaReplyFacts(text string) string {
-	for _, opening := range erisMediaOpenings {
-		if rest, found := strings.CutPrefix(text, opening+"\n\n"); found {
-			return rest
-		}
-	}
 	return text
 }
 

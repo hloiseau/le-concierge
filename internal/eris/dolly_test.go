@@ -127,26 +127,24 @@ func TestDollyRepairsMissedMemoryCorrectionOnDelivery(t *testing.T) {
 	}
 }
 
-func TestDollySeasonGroundingAndReceiptVoice(t *testing.T) {
+func TestLegacySeasonGroundingAndReceiptVoice(t *testing.T) {
 	responses := make(chan string, 4)
 	for _, reply := range []string{
 		`{"action":"prepare","query":"Les Veilleurs d’Orbite","kind":"show","seasons":[2]}`,
-		`{"opening":1}`,
 		`{"action":"prepare","query":"Les Veilleurs d’Orbite","kind":"show","seasons":[2]}`,
-		`{"opening":99}`,
 	} {
 		responses <- reply
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case reply := <-responses:
-			dollyCompletion(w, "dolly2-security", "stop", reply)
+			json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": Message{Role: "assistant", Content: reply}}}})
 		default:
 			w.WriteHeader(500)
 		}
 	}))
 	defer server.Close()
-	chat := New(server.URL, "sk-"+strings.Repeat("z", 22), "dolly2-security")
+	chat := New(server.URL, "sk-"+strings.Repeat("z", 22), "legacy")
 	chat.V2 = true
 	const owner = "12345:23456:34567"
 	const facts = "Quelle saison veux-tu ?"
@@ -160,7 +158,7 @@ func TestDollySeasonGroundingAndReceiptVoice(t *testing.T) {
 		}
 		return ToolReply{Content: facts}, nil
 	})
-	if err != nil || got == facts || MediaReplyFacts(got) != facts {
+	if err != nil || got != facts {
 		t.Fatalf("fact changed or voice missing: %q, %v", got, err)
 	}
 	chat.Delivered(owner, "45670", got)

@@ -28,6 +28,7 @@ query=titre seul. Résous les pronoms avec la conversation. Omet les filtres non
 type Plan struct {
 	Action         string   `json:"action"`
 	Query          string   `json:"query,omitempty"`
+	MediaID        int64    `json:"mediaId,omitempty"`
 	Relation       string   `json:"relation,omitempty"`
 	Source         string   `json:"source,omitempty"`
 	Kind           string   `json:"kind,omitempty"`
@@ -106,6 +107,34 @@ func ParsePlan(raw string) (Plan, error) {
 
 func (p Plan) Validate() error {
 	invalid := errors.New("invalid media plan")
+	if p.Action == "lookup" || p.Action == "collection" || p.Action == "request" {
+		if p.Text != "" || p.Relation != "" || p.Source != "" || p.Genre != "" || p.MaxMinutes != 0 || p.Unwatched || p.URL != "" || p.RequestID != 0 || p.SubscriptionID != 0 || p.Channel != "" || p.Setting != "" || p.Value != "" || len(p.Options) > 0 || p.DurationHours != 0 || p.Multiselect || p.StartAt != "" || p.EndAt != "" {
+			return invalid
+		}
+		if p.Action == "lookup" {
+			if p.MediaID != 0 || len(p.Seasons) > 0 || strings.TrimSpace(p.Query) != p.Query || strings.ContainsFunc(p.Query, unicode.IsControl) || utf8.RuneCountInString(p.Query) < 2 || utf8.RuneCountInString(p.Query) > 200 || (p.Kind != "" && p.Kind != "movie" && p.Kind != "show") || (p.Year != 0 && (p.Year < 1801 || p.Year > 2999)) {
+				return invalid
+			}
+			return nil
+		}
+		if p.MediaID <= 0 || p.MediaID > 2147483647 || p.Query != "" || p.Year != 0 || (p.Kind != "movie" && p.Kind != "show") || len(p.Seasons) > 20 {
+			return invalid
+		}
+		if p.Action == "collection" && (p.Kind != "movie" || len(p.Seasons) > 0) || p.Kind == "movie" && len(p.Seasons) > 0 || p.Action == "request" && p.Kind == "show" && len(p.Seasons) == 0 {
+			return invalid
+		}
+		seen := map[int]bool{}
+		for _, season := range p.Seasons {
+			if season < 1 || season > 1000 || seen[season] {
+				return invalid
+			}
+			seen[season] = true
+		}
+		return nil
+	}
+	if p.MediaID != 0 {
+		return invalid
+	}
 	if (len(p.Options) > 0 || p.DurationHours != 0 || p.Multiselect) && p.Action != "poll" || (p.StartAt != "" || p.EndAt != "") && p.Action != "event" {
 		return invalid
 	}
@@ -234,6 +263,7 @@ type ToolRequest struct {
 	ChannelID        string          `json:"channelId,omitempty"`
 	MessageID        string          `json:"messageId,omitempty"`
 	ContextMessageID string          `json:"contextMessageId,omitempty"`
+	CallID           string          `json:"callId,omitempty"`
 }
 
 type Button struct {

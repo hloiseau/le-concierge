@@ -181,7 +181,10 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 			proof.ContextMessageID = anchor.ID
 			reference = "Eris (message " + anchor.ID + ") : " + anchor.Content
 		}
-		reply := "Oui ? Mentionne-moi avec ton message pour discuter ici, ou utilise /eris pour une conversation privée."
+		reply := ""
+		if question == "" && len(event.Attachments) == 0 && len(event.Embeds) == 0 {
+			question = "Eris ?"
+		}
 		var components []discordgo.MessageComponent
 		if utf8.RuneCountInString(question) > 500 {
 			reply = "Fais un peu plus court : 500 caractères maximum par message."

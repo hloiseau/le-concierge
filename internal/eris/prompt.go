@@ -48,7 +48,11 @@ func (c *Chat) instructions(discord, tools bool) string {
 		prompt += "\n<contexte_discord>" + discordContextInstructions + "\n</contexte_discord>"
 	}
 	if tools {
-		prompt += "\n<actions>" + ToolInstructions + TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions + DiscordToolInstructions + GiftToolInstructions + "\n</actions>"
+		if c.NativeTools() {
+			prompt += "\n<actions>" + agentInstructions + TurnTakingInstructions + "\n</actions>"
+		} else {
+			prompt += "\n<actions>" + ToolInstructions + TurnTakingInstructions + WebToolInstructions + CinemaToolInstructions + DiagnosticToolInstructions + PersonalToolInstructions + AnimeToolInstructions + DiscordToolInstructions + GiftToolInstructions + "\n</actions>"
+		}
 		if c.Memory != nil {
 			prompt += "\n<memoire>" + MemoryInstructions + DurableMemoryInstructions + "\n</memoire>"
 		}
