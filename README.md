@@ -2,10 +2,10 @@
 
 Bot Discord et API Go commune pour un écosystème multimédia auto-hébergé.
 
-**Statut : application en développement, déjà installée par l’administrateur.** Le parcours Downloadarr initial a été confirmé fonctionnel. Les corrections et intégrations décrites ci-dessous disposent de tests automatisés ; leur présence dans le code ne confirme pas leur configuration ni leur validation sur le NAS. Voir le détail dans la [roadmap](docs/roadmap.md).
+L’[inventaire du 27 novembre 2026](https://github.com/hloiseau/le-concierge/issues/122) identifie les composants en service sur le NAS et leurs révisions.
 
-- [Roadmap et tickets](docs/roadmap.md)
-- [Architecture commune](docs/architecture.md)
+- [Dépôts et tests des parcours Discord, Plex et Seerr](docs/architecture.md#répartition)
+- [Roadmap, bilans datés et expériences archivées](docs/roadmap.md)
 - [Contribuer](CONTRIBUTING.md)
 - [Projet complémentaire : le-hub](https://github.com/hloiseau/le-hub)
 
@@ -17,7 +17,9 @@ Le Hub utilise une connexion Plex obligatoire avec vérification de l’accès a
 
 Voir le [guide de déploiement](docs/deployment.md) pour Go, Discord, Plex, Seerr, Docker, TrueNAS et Caddy. `make test`, `make build`, puis `./bin/api` après chargement de `.env` permettent de tester le backend. Le bot est un second processus : `./bin/bot`. Si son token est configuré, il met à jour automatiquement les commandes au démarrage ; `--register` reste disponible pour une opération ponctuelle.
 
-Le [contrat HTTP 0.10.0](api/openapi.json) décrit l’API du portail. Les réponses réelles des handlers Go sont vérifiées contre ce contrat dans les tests, y compris les erreurs, champs requis, types, statuts et dates UTC. Le Hub utilise une copie synchronisée et des types TypeScript générés. Les [autorisations Plex chiffrées](docs/persistent-plex-authorization.md) permettent aux rappels de continuer après expiration de session ou redémarrage. Les [téléchargements personnels Downloadarr](docs/downloadarr.md) proposent une recherche Plex et réutilisent la connexion du Hub pour obtenir un accès personnel Downloadarr, avec une révision de service explicitement vérifiée ; cette intégration reste désactivée par défaut.
+Le [contrat HTTP du portail](api/openapi.json) est édité dans ce dépôt et vérifié contre les réponses des handlers Go. Après un changement du contrat, recopier `api/openapi.json` dans le Hub au même chemin, puis y lancer `npm run generate:api` et `npm run typecheck`. [Procédure côté Hub](https://github.com/hloiseau/le-hub/blob/main/docs/development.md#validation)
+
+Les [autorisations Plex chiffrées](docs/persistent-plex-authorization.md) permettent aux rappels de continuer après expiration de session ou redémarrage. Les [téléchargements personnels Downloadarr](docs/downloadarr.md) proposent une recherche Plex et réutilisent la connexion du Hub pour obtenir un accès personnel Downloadarr, avec une révision de service explicitement vérifiée ; cette intégration reste désactivée par défaut.
 
 Les nouveautés Plex sont paginées dans le Hub et `/nouveautes`. [Mes demandes](docs/subscriptions.md) regroupe les demandes personnelles Seerr et leurs réglages de notifications ; `/mes-demandes` possède sa navigation Discord. Les anciens suivis ajoutés séparément restent modifiables dans cette même page. Les demandes Seerr et nouveautés Plex disposent d’affiches ; les images Plex exigent une session et un accès personnel encore valides. [`/nouveautes`, `/surprise` et `/recap`](docs/discord-discovery.md) répondent en privé par défaut ; l’option `public:true` partage les titres du catalogue dans le salon sans publier de liens Plex personnels.
 
@@ -36,7 +38,7 @@ Le [catalogue de livres](docs/books-contracts.md) et les [collections](docs/book
 - V4 : `/diagnostic`, réservé aux administrateurs.
 - Socle commun : identité, API, données et intégrations nécessaires au Hub.
 
-Le bot complète Seerr et ses notifications déjà opérationnelles. Deux exécutables Go sont disponibles : API et bot. Le backend reste l’unique propriétaire de la persistance.
+Le bot complète les notifications de Seerr. L’API conserve les données métier dans sa base SQLite. Le bot utilise une base distincte pour la mémoire d’Eris.
 
 ## Suivi
 

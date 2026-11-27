@@ -1,5 +1,13 @@
 # Roadmap — Le Concierge
 
+Le chantier actuel part de l’[audit des dépôts](https://github.com/hloiseau/le-concierge/issues/122). Les issues suivent la [simplification du Concierge](https://github.com/hloiseau/le-concierge/issues/123) et la [mise en place du harness privé](https://github.com/hloiseau/le-concierge/issues/124).
+
+## Archives et recettes
+
+- Les [bilans du 22 octobre](status-2026-10-22.md), [du 24 octobre](status-2026-10-24.md) et [la livraison Eris du 27 octobre](eris-release-2026-10-27.md) décrivent l’installation à ces dates.
+- Les [essais Dolly 2](eris-dolly2-nas.md) et les [résultats des évaluations](../evals/eris/results/) retracent les configurations essayées. Le [guide des évaluations](../evals/eris/README.md) indique les jeux de cas réutilisables et les tests des outils natifs.
+- Les propositions de [voix et choix numérotés #64](https://github.com/hloiseau/le-concierge/pull/64) et de [plans textuels #112](https://github.com/hloiseau/le-concierge/pull/112) ont été archivées lors du passage aux [fonctions natives #120](https://github.com/hloiseau/le-concierge/pull/120). La [réconciliation livrée dans #82](https://github.com/hloiseau/le-concierge/pull/82) a remplacé le [guide de récupération proposé dans #80](https://github.com/hloiseau/le-concierge/pull/80).
+
 ## État vérifié au 22 octobre 2026
 
 Le [bilan de livraison et de recette](status-2026-10-22.md) est la référence datée pour Concierge, le Hub et Eris : révisions installées, PR livrées, autorisations Plex, essais à deux comptes, mesures A310 et limites restantes. Il remplace l’état du 19 octobre, conservé dans l’historique Git.

@@ -48,12 +48,6 @@ func (b *Bot) handleEris(w http.ResponseWriter, i Interaction, proof eris.ToolRe
 	}()
 }
 
-func (b *Bot) erisMediaReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest) eris.ToolReply {
-	return b.erisContextReply(ctx, owner, message, forget, proof, "")
-}
-func (b *Bot) erisContextReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string) eris.ToolReply {
-	return b.erisDiscordReply(ctx, owner, message, forget, proof, reference, eris.DiscordInput{})
-}
 func (b *Bot) erisDiscordReply(ctx context.Context, owner, message string, forget bool, proof eris.ToolRequest, reference string, incoming eris.DiscordInput) eris.ToolReply {
 	guild, _, _ := strings.Cut(owner, ":")
 	incoming.ChatOnly = guild != b.Config.DiscordGuildID
