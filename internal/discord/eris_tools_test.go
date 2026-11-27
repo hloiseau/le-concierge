@@ -54,7 +54,8 @@ func TestErisDeliversModelDiagnosticAfterNativeToolResult(t *testing.T) {
 		return botResponse(200, string(body)), nil
 	})
 	b.Eris.HTTP.Transport = b.Client.Transport
-	got := b.erisMediaReply(context.Background(), "23456:11111:33333", "Pourquoi Toy Story 5 est bloqué ?", false, eris.ToolRequest{ChannelID: "33333", MessageID: "44444"})
+	proof := eris.ToolRequest{ChannelID: "33333", MessageID: "44444"}
+	got := b.erisDiscordReply(context.Background(), "23456:11111:33333", "Pourquoi Toy Story 5 est bloqué ?", false, proof, "", eris.DiscordInput{})
 	if modelCalls != 2 || apiCalls != 1 || got.Content != "Ça bloque à l’import. Faut qu’un admin vérifie le fichier." {
 		t.Fatal(got, modelCalls, apiCalls)
 	}

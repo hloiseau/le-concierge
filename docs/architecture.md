@@ -2,7 +2,7 @@
 
 ## État du projet
 
-Le socle Go, le bot HTTP signé et le Hub Nuxt sont implémentés en première version et testés localement. Les intégrations réelles restent à valider sur l’installation cible. Les fonctionnalités ci-dessous incluent la cible à terme ; les versions V0–V5 désignent des jalons, pas des releases toutes disponibles.
+L’[audit du 27 novembre 2026](https://github.com/hloiseau/le-concierge/issues/122) répertorie les composants en service. Les phases V0–V5 décrites plus bas retracent le plan de livraison initial.
 
 ## Répartition
 
@@ -10,8 +10,17 @@ Le socle Go, le bot HTTP signé et le Hub Nuxt sont implémentés en première v
 | --- | --- |
 | [le-concierge](https://github.com/hloiseau/le-concierge) | API HTTP Go, règles métier, persistance, intégrations et bot Discord Go |
 | [le-hub](https://github.com/hloiseau/le-hub) | Portail Nuxt/TypeScript et client de l’API commune |
+| [Futur dépôt privé du harness](https://github.com/hloiseau/le-concierge/issues/124) | Sessions Linux du propriétaire, pilote web, outils de travail et accès au RAG partagé |
 
-Le Concierge comprendra deux exécutables (`cmd/api`, `cmd/bot`) avec des cycles de vie indépendants. L’API possède la base et les règles métier ; le bot et le portail la consomment. Le contrat HTTP versionné est maintenu dans `le-concierge`. Le Hub n’accède pas directement aux secrets ou à la base des services connectés.
+Le bot et l’API s’exécutent dans deux processus. Le bot conserve sa mémoire de personnage dans une SQLite dédiée. L’API gère les données métier et les accès aux services.
+
+| Parcours | Points d’entrée dans le dépôt |
+| --- | --- |
+| Discord | [Démarrage du bot](../cmd/bot/main.go), [mentions et réponses](../internal/discord/mentions.go), [transmission des demandes d’outils](../internal/discord/eris.go) |
+| Plex | [Démarrage de l’API](../cmd/api/main.go), [vérification du demandeur et choix de l’outil](../internal/httpapi/eris.go), [accès au catalogue avec l’autorisation du membre](../internal/upstream/media_assistant.go) |
+| Seerr | [Réservation de la demande et traitement du reçu](../internal/httpapi/eris_seerr.go), [appel au service média](../internal/upstream/media_assistant.go) |
+
+Pour vérifier ces parcours hors production depuis la racine du dépôt, exécuter `go test ./internal/discord ./internal/httpapi ./internal/upstream`. Les tests utilisent des services simulés pour vérifier la [réponse Discord après un outil](../internal/discord/eris_tools_test.go), les [droits Plex](../internal/upstream/media_assistant_test.go) et la [reprise après une écriture Seerr incertaine](../internal/httpapi/eris_seerr_test.go).
 
 ```mermaid
 flowchart TD
@@ -20,13 +29,14 @@ flowchart TD
     Caddy --> API["API Go"]
     Discord["Discord"] --> Bot["Bot Go"]
     Bot --> API
-    API --> DB["SQLite et migrations"]
+    API --> DB["SQLite métier"]
+    Bot --> Memory["SQLite de mémoire Eris"]
     API --> Media["Plex · Seerr · Tautulli"]
     API --> Books["Grimmory · Shelfmark"]
     API --> Ops["Métriques · diagnostics · conversions"]
 ```
 
-Le bot utilise les interactions HTTP signées Discord : Caddy expose son endpoint /interactions. L’API commune revérifie la signature originale et le secret de service. Une connexion Gateway complémentaire reçoit les mentions explicites d’Eris pour le chat public, sans intent privilégié Message Content. Les routes HTTP et cookies sont décrits dans le guide de déploiement.
+Caddy expose le point d’entrée `/interactions` du bot pour les interactions HTTP signées de Discord. L’API commune revérifie la signature originale et le secret de service. La Gateway reçoit les mentions d’Eris. Le réglage `DISCORD_MESSAGE_CONTENT` active l’intent correspondant pour les relances et le contexte ambiant. [Fonctionnement sur Discord](eris.md)
 
 ## Identité et droits
 
@@ -38,7 +48,7 @@ Le bot transmet une identité issue d’une interaction Discord authentifiée. S
 
 ## Données et événements
 
-SQLite est la cible initiale, avec migrations et sauvegardes cohérentes. Seul le processus API écrit dans la base. PostgreSQL pourra être évalué si les contraintes d’exploitation le justifient ; deux moteurs ne sont pas promis dès la première version.
+L’API écrit dans la base métier SQLite. Le bot écrit ses notes et son journal dans sa [base de mémoire](eris-01-memory.md).
 
 Seerr reste la source des demandes multimédia et conserve ses notifications existantes. Le Concierge ajoute les abonnements collectifs et les notifications ciblées. Une matrice explicite définit quel outil notifie les demandeurs et les abonnés pour éviter les doublons.
 

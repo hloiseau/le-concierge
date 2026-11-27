@@ -10,9 +10,9 @@ La transcription réelle fournie par Hugo sert à cette synthèse. Elle n'est pa
 
 ## Identité permanente
 
-Le dossier original a été retrouvé dans `hloiseau/eris-local-inference-private`, au chemin `src/content/fr/ERIS.md`, blob `242c3cc1f8af5d6b21ef82a7ed9c54101799543b`. Il existe aussi dans l'historique du portfolio `hloiseau-os` au commit `889d7a2b3fb3b78789ab3fa631374ea684a8c84c`, même chemin et même blob. Il porte explicitement la mention fiction.
+La source éditoriale du canon est le dossier de fiction `src/content/fr/ERIS.md` dans `hloiseau/eris-local-inference-private`. Pour faire évoluer un fait canonique, modifier ce dossier puis reporter les éléments utiles au bot dans [canon.go](../internal/eris/canon.go). Cette projection est compilée et [assemblée dans le prompt](../internal/eris/prompt.go).
 
-[canon.go](../internal/eris/canon.go) en retient les éléments nécessaires à la conversation :
+La copie historique du portfolio `hloiseau-os`, au commit `889d7a2b3fb3b78789ab3fa631374ea684a8c84c`, documente la provenance. Les deux dossiers portaient le même blob `242c3cc1f8af5d6b21ef82a7ed9c54101799543b` lors de l’audit.
 
 | Élément | Canon |
 | --- | --- |
