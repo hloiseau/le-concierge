@@ -128,7 +128,9 @@ func (b *Bot) erisDiscordInput(ctx context.Context, session *discordgo.Session, 
 	var quote *discordgo.Message
 	if b.Eris.V2 {
 		quote, in.ReplyContext = b.replyContext(ctx, session, m)
-		in.QuoteUnavailable = m.Type == discordgo.MessageTypeReply && quote == nil && explicitErisMention(m, b.Config.DiscordClientID)
+		if m.Type == discordgo.MessageTypeReply && explicitErisMention(m, b.Config.DiscordClientID) {
+			in.QuoteUnavailable = quote == nil || quote.Content == "" && len(quote.Attachments) == 0 && len(quote.Embeds) == 0
+		}
 	}
 	budget := erisMediaBudget{bytes: maxErisMediaBytes, requests: 2}
 	if quote != nil {

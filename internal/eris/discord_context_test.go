@@ -57,6 +57,26 @@ func discordData(t *testing.T, messages []Message) map[string]json.RawMessage {
 	return nil
 }
 
+func TestQuotedSpeakerCanForgetAnotherMembersDerivedTurn(t *testing.T) {
+	c, _, _ := discordContextChat(t)
+	c.Memory = openTestMemory(t)
+	in := DiscordInput{MessageID: "50001", Speaker: Speaker{ID: "11111", Name: "Alice"},
+		ReplyContext: []DiscordExcerpt{{MessageID: "40001", Author: Speaker{ID: "22222", Name: "Bob"}, Text: "Mon projet", Quoted: true}}}
+	discordContextCall(t, c, "12345:11111:33333", "De quel projet parle-t-il ?", in, true)
+	count := func(want int) {
+		t.Helper()
+		var n int
+		if err := c.Memory.db.QueryRow("SELECT count(*) FROM eris_turns").Scan(&n); err != nil || n != want {
+			t.Fatalf("derived turns=%d want=%d err=%v", n, want, err)
+		}
+	}
+	count(1)
+	if err := c.Memory.forget("12345:22222"); err != nil {
+		t.Fatal(err)
+	}
+	count(0)
+}
+
 func TestDiscordSpeakersAndPublicConversationStayInTheirChannel(t *testing.T) {
 	c, prompts, _ := discordContextChat(t)
 	alice := DiscordInput{MessageID: "50001", Speaker: Speaker{ID: "11111", Name: "Alice [BLEU]", Username: "alice"}, Mentions: []Speaker{{ID: "22222", Name: "Bob", Username: "bob"}}}

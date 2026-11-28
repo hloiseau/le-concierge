@@ -162,7 +162,7 @@ func TestMentionReadsQuotedLinkWithCurrentMessageProof(t *testing.T) {
 			if !found || req.Messages[len(req.Messages)-1].Content != "Tu peux vérifier cette annonce ?" {
 				t.Error("quoted source and active request were not kept separate")
 			}
-			return botResponse(200, `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"read1","type":"function","function":{"name":"web","arguments":"{\"url\":\"https://publisher.example/article\"}"}}]}}]}`), nil
+			return botResponse(200, `{"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","tool_calls":[{"id":"read1","type":"function","function":{"name":"web","arguments":"{\"url\":\"https://publisher.example/article\"}"}}]}}]}`), nil
 		}
 		result := req.Messages[len(req.Messages)-2]
 		if result.Role != "tool" || !strings.Contains(result.Content, "La porte ouvre vendredi.") {
