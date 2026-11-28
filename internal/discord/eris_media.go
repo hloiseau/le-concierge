@@ -125,47 +125,77 @@ func (b *Bot) erisDiscordInput(ctx context.Context, session *discordgo.Session, 
 			in.Mentions = append(in.Mentions, discordSpeaker(u.ID, "", u.GlobalName, u.Username))
 		}
 	}
+	var quote *discordgo.Message
+	if b.Eris.V2 {
+		quote, in.ReplyContext = b.replyContext(ctx, session, m)
+		if m.Type == discordgo.MessageTypeReply && explicitErisMention(m, b.Config.DiscordClientID) {
+			in.QuoteUnavailable = quote == nil || quote.Content == "" && len(quote.Attachments) == 0 && len(quote.Embeds) == 0
+		}
+	}
+	budget := erisMediaBudget{bytes: maxErisMediaBytes, requests: 2}
+	if quote != nil {
+		// The current author may have seen only the inline quote. Fetching more
+		// Discord history requires the separate permission check in replyContext.
+		if note := b.appendDiscordMedia(ctx, nil, quote, &in, &budget); note != "" {
+			in.VisualNote = "Message cité : " + note
+		}
+	}
+	if note := b.appendDiscordMedia(ctx, session, m, &in, &budget); note != "" {
+		if in.VisualNote == "" {
+			in.VisualNote = note
+		} else {
+			in.VisualNote += " Message actuel : " + note
+		}
+	}
+	return in
+}
+
+// One download/frame budget for the entire turn, including the cited message.
+type erisMediaBudget struct{ bytes, requests int }
+
+func (b *Bot) appendDiscordMedia(ctx context.Context, session *discordgo.Session, m *discordgo.Message, in *eris.DiscordInput, budget *erisMediaBudget) string {
 	visual := len(m.Attachments) > 0 || mediaLink(m.Content)
 	for _, e := range m.Embeds {
 		visual = visual || (e != nil && (e.Type == discordgo.EmbedTypeGifv || e.Type == discordgo.EmbedTypeImage || e.Type == discordgo.EmbedTypeVideo))
 	}
 	if !visual {
-		return in
+		return ""
 	}
-	in.VisualNote = "Un média a été envoyé, mais aucune image n'est accessible. Son URL et ses métadonnées ne permettent pas d'en connaître le contenu."
+	unavailable := "Un média a été envoyé, mais aucune image n'est accessible. Son URL et ses métadonnées ne permettent pas d'en connaître le contenu."
 	if b.Config.ErisModel == "dolly2-security" {
-		in.VisualNote = "L'image n'est pas accessible à ton moteur textuel. Si le membre te demande d'y réagir, invite-le à te décrire ce qu'il veut te montrer."
+		unavailable = "L'image n'est pas accessible à ton moteur textuel. Si le membre te demande d'y réagir, invite-le à te décrire ce qu'il veut te montrer."
 	}
-	if !b.Eris.V2 || b.Eris.Protocol != "responses" {
-		return in
+	if !b.Eris.V2 || b.Eris.Protocol != "responses" || len(in.Images) >= 3 || budget.requests == 0 || budget.bytes == 0 {
+		return unavailable
 	}
 	candidates := erisMediaCandidates(m)
 	// Discord may populate a link preview after MESSAGE_CREATE. Re-read only the
-	// addressed message once; never crawl the linked website or the channel.
+	// relevant message once; web pages use the API's separate web reader.
 	if len(candidates) == 0 && mediaLink(m.Content) && session != nil {
 		timer := time.NewTimer(350 * time.Millisecond)
 		defer timer.Stop()
 		select {
 		case <-ctx.Done():
-			return in
+			return unavailable
 		case <-timer.C:
 		}
 		fresh, err := session.ChannelMessage(m.ChannelID, m.ID, discordgo.WithContext(ctx))
 		if err == nil && fresh != nil && fresh.ID == m.ID && fresh.ChannelID == m.ChannelID &&
-			(fresh.GuildID == "" || fresh.GuildID == m.GuildID) && fresh.Author != nil && fresh.Author.ID == m.Author.ID && !fresh.Author.Bot && fresh.WebhookID == "" {
+			(fresh.GuildID == "" || fresh.GuildID == m.GuildID) && fresh.Author != nil && fresh.Author.ID == m.Author.ID && fresh.Author.Bot == m.Author.Bot && fresh.WebhookID == "" && fresh.Flags&discordgo.MessageFlagsEphemeral == 0 {
 			candidates = erisMediaCandidates(fresh)
 		}
 	}
-	used := 0
-	for i, candidate := range candidates {
-		if i >= 2 || len(in.Images) >= 3 || used >= maxErisMediaBytes {
+	var notes []string
+	for _, candidate := range candidates {
+		if budget.requests == 0 || len(in.Images) >= 3 || budget.bytes <= 0 {
 			break
 		}
-		body, err := b.erisMediaBytes(ctx, candidate.url, maxErisMediaBytes-used)
+		budget.requests--
+		body, err := b.erisMediaBytes(ctx, candidate.url, budget.bytes)
 		if err != nil {
 			continue
 		}
-		used += len(body)
+		budget.bytes -= len(body)
 		frames, note, err := erisImageFrames(body)
 		if err != nil {
 			continue
@@ -173,19 +203,17 @@ func (b *Bot) erisDiscordInput(ctx context.Context, session *discordgo.Session, 
 		if candidate.preview && len(frames) == 1 {
 			note = "Une vignette du média est visible ; l'animation complète n'est pas analysée."
 		}
-		before := len(in.Images)
 		for _, frame := range frames {
 			if len(in.Images) < 3 {
 				in.Images = append(in.Images, frame)
 			}
 		}
-		if before == 0 {
-			in.VisualNote = note
-		} else {
-			in.VisualNote += " " + note
-		}
+		notes = append(notes, note)
 	}
-	return in
+	if len(notes) == 0 {
+		return unavailable
+	}
+	return strings.Join(notes, " ")
 }
 
 func (b *Bot) erisMediaBytes(ctx context.Context, raw string, limit int) ([]byte, error) {
