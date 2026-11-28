@@ -193,9 +193,9 @@ func (s *Server) erisCaller(ctx context.Context, in eris.ToolRequest) (erisCalle
 	if !addressed || !s.erisEvent("eris:mention:"+m.ID+":"+in.CallID) {
 		return erisCallerContext{}, upstream.ErrDenied
 	}
-	if in.ContextMessageID == "" && m.ReferencedMessage != nil {
-		reference = m.ReferencedMessage.Content
-		referenceByEris = m.ReferencedMessage.Author != nil && m.ReferencedMessage.Author.ID == s.Config.DiscordClientID
+	if target := discord.VerifiedErisReplyTarget(&m, s.Config.DiscordClientID); in.ContextMessageID == "" && target != nil {
+		reference = target.Content
+		referenceByEris = target.Author.Bot
 	}
 	return erisCallerContext{UserID: m.Author.ID, ChannelID: channel.ID, Question: question, Reference: reference, ReferenceByEris: referenceByEris}, nil
 }

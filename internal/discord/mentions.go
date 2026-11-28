@@ -91,19 +91,10 @@ func ErisQuestion(m *discordgo.Message, botID string) (string, bool) {
 	if m == nil {
 		return "", false
 	}
-	mentioned := false
-	for _, user := range m.Mentions {
-		if user != nil && user.ID == botID {
-			mentioned = true
-		}
-	}
 	normal, nickname := "<@"+botID+">", "<@!"+botID+">"
-	explicit := mentioned && (strings.Contains(m.Content, normal) || strings.Contains(m.Content, nickname))
-	r, ref := m.ReferencedMessage, m.MessageReference
-	reply := m.Type == discordgo.MessageTypeReply && r != nil && ref != nil &&
-		config.Snowflake(ref.MessageID) && ref.MessageID == r.ID && ref.ChannelID == m.ChannelID &&
-		(ref.GuildID == "" || ref.GuildID == m.GuildID) && r.ChannelID == m.ChannelID &&
-		r.Author != nil && r.Author.Bot && r.Author.ID == botID && r.WebhookID == ""
+	explicit := explicitErisMention(m, botID)
+	r := VerifiedErisReplyTarget(m, botID)
+	reply := r != nil && r.Author.Bot
 	named := m.Type == discordgo.MessageTypeDefault && m.MessageReference == nil && len(m.Mentions) == 0 && len(m.MentionRoles) == 0 && !m.MentionEveryone && !strings.Contains(m.Content, "<@") && erisAddress.MatchString(strings.TrimSpace(m.Content))
 	if !explicit && !reply && !named && !order66Invocation(m.Content, botID) {
 		return "", false
@@ -159,7 +150,7 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 		defer cancel()
 		proof := eris.ToolRequest{ChannelID: event.ChannelID, MessageID: event.ID}
-		reference := erisReference(event.Message, b.Config.DiscordClientID)
+		reference := ""
 		if !ok {
 			messages, err := s.ChannelMessages(event.ChannelID, ErisContextLimit, event.ID, "", "", discordgo.WithContext(ctx))
 			if err != nil {
@@ -183,9 +174,6 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 			reference = "Eris (message " + anchor.ID + ") : " + anchor.Content
 		}
 		reply := ""
-		if question == "" && len(event.Attachments) == 0 && len(event.Embeds) == 0 {
-			question = "Eris ?"
-		}
 		if utf8.RuneCountInString(question) > 500 {
 			reply, _ = b.Eris.Explain(ctx, "", map[string]any{"error": "input_too_long", "maxCharacters": 500})
 			if reply == "" {
@@ -194,10 +182,19 @@ func (b *Bot) handleMention(parent context.Context, s *discordgo.Session, event 
 		} else if order66 {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			reply = b.erisOrder66(ctx, s, event.Message)
-		} else if question != "" || len(event.Attachments) > 0 || len(event.Embeds) > 0 {
+		} else {
 			_ = s.ChannelTyping(event.ChannelID, discordgo.WithContext(ctx))
 			owner := event.GuildID + ":" + event.Author.ID + ":" + event.ChannelID
+			if ok {
+				reference = erisReference(event.Message, b.Config.DiscordClientID)
+			}
 			incoming := b.erisDiscordInput(ctx, s, event.Message)
+			if question == "" {
+				question = "Eris ?"
+				if incoming.VisualNote != "" {
+					question, incoming.MediaOnly = "Réagis au média joint.", true
+				}
+			}
 			result := b.erisDiscordReply(ctx, owner, question, false, proof, reference, incoming)
 			reply = result.Content
 		}
@@ -234,11 +231,8 @@ func (b *Bot) observeErisAmbient(event *discordgo.MessageCreate) {
 
 // Even an explicit mention cannot smuggle an unverified referenced author.
 func erisReference(m *discordgo.Message, botID string) string {
-	if m == nil || m.Type != discordgo.MessageTypeReply {
-		return ""
-	}
-	r, ref := m.ReferencedMessage, m.MessageReference
-	if r == nil || ref == nil || !config.Snowflake(ref.MessageID) || ref.MessageID != r.ID || ref.ChannelID != m.ChannelID || (ref.GuildID != "" && ref.GuildID != m.GuildID) || r.ChannelID != m.ChannelID || r.Author == nil || !r.Author.Bot || r.Author.ID != botID || r.WebhookID != "" || r.Flags&64 != 0 || r.Content == "" || utf8.RuneCountInString(r.Content) > 1500 {
+	r := VerifiedErisReplyTarget(m, botID)
+	if r == nil || !r.Author.Bot || r.Content == "" || utf8.RuneCountInString(r.Content) > 1500 {
 		return ""
 	}
 	return "Eris (message " + r.ID + ") : " + r.Content

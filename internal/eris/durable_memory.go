@@ -202,6 +202,13 @@ func (m *Memory) deriveReference(id int64, owner, reference string) error {
 	if !found || !strings.HasPrefix(reference, "Eris (message ") || !discordID(source) {
 		return nil
 	}
+	return m.deriveReplySource(id, owner, source)
+}
+
+func (m *Memory) deriveReplySource(id int64, owner, source string) error {
+	if id == 0 {
+		return nil
+	}
 	scope, _ := memoryScope(owner)
 	_, err := m.db.Exec(`INSERT OR IGNORE INTO eris_turn_members SELECT ?,p.member FROM eris_turn_members p JOIN eris_turns t ON t.id=p.turn_id WHERE t.scope=? AND t.reply_source=?`, id, scope, source)
 	return err

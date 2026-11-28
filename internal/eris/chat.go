@@ -240,6 +240,15 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 			if room := c.publicRooms[publicScope(owner)]; room != nil {
 				var dependencies memoryBundle
 				var authors []Speaker
+				for _, excerpt := range incoming.ReplyContext {
+					if excerpt.ByEris {
+						if c.Memory.deriveReplySource(s.turnID, owner, excerpt.MessageID) != nil {
+							s.turnID = 0
+						}
+					} else {
+						authors = append(authors, excerpt.Author)
+					}
+				}
 				for _, entry := range room.exchanges {
 					dependencies.Episodes = append(dependencies.Episodes, memoryTurn{Source: entry.ID})
 					authors = append(authors, entry.Author)
@@ -420,6 +429,7 @@ func (c *Chat) ReplyWithDiscordContext(ctx context.Context, owner, question stri
 	}
 	if c.V2 && incoming.Speaker.ID != "" {
 		incoming.Images = nil
+		incoming.ReplyContext = nil
 		s.discord, s.delivery, s.epoch = incoming, reply, epoch
 		s.notes, s.chatReply = notes, chatReply
 	}
